@@ -1,0 +1,10 @@
+# Local run state from the gang skill and agent worktrees.
+.planning/
+.claude/worktrees/
+
+# Build output of the gang CLI.
+skills/gang/cli/gang
+
+# Python bytecode and macOS metadata.
+__pycache__/
+.DS_Store
