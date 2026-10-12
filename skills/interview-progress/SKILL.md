@@ -1,11 +1,15 @@
 ---
 name: interview-progress
-description: Generate an interactive HTML dashboard showing interview prep progress -- score trends, dimension histories, and automatic weak area detection across all practice sessions. Use when the user asks to view progress, check stats, see their dashboard, or track interview prep improvement over time.
+description: Use when the user asks to view progress, check stats, see their dashboard, or track interview prep improvement over time. Generates an interactive HTML dashboard showing interview prep progress, with score trends, dimension histories, and automatic weak area detection across all practice sessions.
 ---
+
+## Data dir
+
+The data dir is `${user_config.data_dir}`. If the data dir above is empty or starts with `${user_config`, it isn't configured, so use `~/.config/monet`. Below, `<data dir>` stands for that path, and sessions live in `<data dir>/interview-prep/`. In Bash, write `<data dir>` unquoted, so a leading `~` expands. For the Write tool, expand a leading `~` to the home directory.
 
 ## Preconditions
 
-- Session data directory `~/.config/interview-prep/` must exist and contain at least one `.json` session file.
+- Session data directory `<data dir>/interview-prep/` must exist and contain at least one `.json` session file.
 - If the directory does not exist or contains no JSON files, tell the user: "No sessions recorded yet. Run a mock interview session first to start tracking progress."
 
 ## Step 1: Load and parse all sessions
@@ -13,7 +17,7 @@ description: Generate an interactive HTML dashboard showing interview prep progr
 1. Run the following to find all session files:
 
    ```bash
-   ls -1 ~/.config/interview-prep/*.json 2>/dev/null
+   ls -1 <data dir>/interview-prep/*.json 2>/dev/null
    ```
 
 2. Read each JSON file using the Read tool. Parse the JSON content. Skip any file that fails to parse and log a warning: "Skipping {filename}: invalid JSON."
@@ -72,7 +76,7 @@ Domain labels for suggestions: `sd` = "system design", `bq` = "behavioral", `cod
 
 ## Step 3: Generate HTML dashboard
 
-Generate a self-contained HTML file at `~/.config/interview-prep/dashboard.html`. Write the file using the Write tool.
+Generate a self-contained HTML file at `<data dir>/interview-prep/dashboard.html`. Write the file using the Write tool.
 
 The HTML file must be fully self-contained with all CSS inline. The only external resource allowed is Chart.js loaded from CDN: `https://cdn.jsdelivr.net/npm/chart.js`.
 
@@ -185,10 +189,10 @@ new Chart(ctx, {
 
 ## Step 4: Open dashboard in browser
 
-1. After writing the HTML to `~/.config/interview-prep/dashboard.html` using the Write tool, open it:
+1. After writing the HTML to `<data dir>/interview-prep/dashboard.html` using the Write tool, open it:
 
    ```bash
-   open ~/.config/interview-prep/dashboard.html
+   open <data dir>/interview-prep/dashboard.html
    ```
 
 2. Print a CLI summary to the conversation:
@@ -198,7 +202,7 @@ new Chart(ctx, {
 
    Sessions: {total} ({sd_count} SD, {bq_count} BQ, {code_count} Coding)
    Weak areas: {count} detected ({comma-separated list of dimension names, or "none"})
-   Dashboard: ~/.config/interview-prep/dashboard.html
+   Dashboard: <data dir>/interview-prep/dashboard.html
    ```
 
    Replace placeholders with actual computed values.
@@ -210,7 +214,7 @@ new Chart(ctx, {
 - All-time window by default. Do NOT implement date filtering.
 - If Chart.js CDN is unreachable, the dashboard must gracefully degrade (show tables without charts, not a blank page).
 - Weak area detection must be automatic -- no manual tagging by the user.
-- The dashboard file (`~/.config/interview-prep/dashboard.html`) is overwritten each time the skill runs. It is a generated artifact, not persistent data.
+- The dashboard file (`<data dir>/interview-prep/dashboard.html`) is overwritten each time the skill runs. It is a generated artifact, not persistent data.
 - Skip malformed JSON files silently (log a warning but continue processing).
 - If a session's `scores` object is missing expected dimensions for its domain, still include the session but only chart the dimensions that are present.
 - Domain dimension reference (from interview-tracker schema):
