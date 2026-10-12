@@ -17,6 +17,6 @@ Write all prose in STE-lite: plain, short sentences for an expert reader. First 
 
 Code, commands, paths, and quoted text such as errors and logs stay exactly as they are. Put an error or a log line in a code span or in double quotes.
 
-A draft that goes out under my name follows the voice skill instead.
+A draft that goes out under the user's name follows the voice skill instead.
 
 ASD-STE100 is a Copyright and a Trademark of ASD, Brussels, Belgium. This card adapts Issue 9 and does not claim compliance.

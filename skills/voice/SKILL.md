@@ -1,6 +1,14 @@
 ---
 name: voice
-description: Use when prose will go out under Wayne's name and must not read as generated (PR descriptions, review replies, commit bodies, design docs, Slack, peer feedback), or when asked whether a draft sounds like him. Governs how the prose reads, not what goes in it. For a PR body's structure and sections, git-draft-pr owns that. In STE mode, which /monet:voice turns on by default, it applies the STE-lite card.
+description: Use when prose will go out under the user's name and must not read as generated (PR descriptions, review replies, commit bodies, design docs, Slack, peer feedback), or when asked whether a draft sounds like the user. Governs how the prose reads, not what goes in it. For a PR body's structure and sections, git-draft-pr owns that. In STE mode, which /monet:voice turns on by default, it applies the STE-lite card.
+argument-hint: "[target: session (default) | draft text | path | PR #/URL] [--check] [--no-ste] [--persona <name>] [--list]"
+allowed-tools:
+  - Read
+  - Bash
+  - Glob
+  - Grep
+  - Edit
+  - AskUserQuestion
 ---
 
 <!-- This file contains no em-dashes and no semicolons, on purpose. A skill that bans
@@ -8,12 +16,13 @@ description: Use when prose will go out under Wayne's name and must not read as 
 
 ## Overview
 
-Prose going out under Wayne's name should read as though he typed it.
+Prose going out under the user's name should read as though they typed it.
 
 This file holds the **method** and the **invariants**, which are stable. The **flavor** that is
-applied lives in persona files under `reference/personas/`, derived from real corpora and rewritten on
-re-distill. Keeping the two apart is the whole design. The method never changes when a persona is
-re-derived, and the persona is never invented to patch a hole in the method.
+applied lives in persona files: the user's own in their data dir, derived from real corpora and
+rewritten on re-distill, or the bundled synthetic sample. Keeping the two apart is the whole
+design. The method never changes when a persona is re-derived, and the persona is never invented
+to patch a hole in the method.
 
 The split also draws the line this skill exists to hold:
 
@@ -22,49 +31,79 @@ The split also draws the line this skill exists to hold:
 - **Flavor** is personal. It applies only when a persona file says so, with a sample beside it.
 
 Promoting a flavor rule into an invariant is how the agent quietly starts writing in someone else's
-voice and calling it Wayne's.
+voice and calling it the user's.
 
-## Why this is included, not just invoked
+## How other skills load this one
 
-Two failures on 2026-08-05, the second logged in `.claude/lessons.md`:
-
-1. AI-sounding code comments shipped in a work PR. The reviewer flagged them directly.
-2. A four-paragraph PR body written by hand while holding a memory that said to draft it through
-   `/monet:ship`. Fixed only after being told.
-
-In both cases the rule was already in context. Holding it was not the same as applying it. So the
-prose producers include this file rather than relying on the agent to remember to invoke it.
+Another skill that writes prose loads this one with the Skill tool as `monet:voice`. It never
+reads this file by path. Such a caller passes `--no-ste` in the Skill args to stay on plain voice,
+unless it asks for STE-lite. The prose producers `git-draft-pr`, `pr`, and `paint` work this way.
+Holding a rule in context is not the same as applying it, so a producer loads this skill rather
+than relying on the agent to remember it.
 
 ## When to use / not
 
 - Use for: PR descriptions and review replies, commit bodies, design and strategy docs, Slack,
-  peer feedback, agent instructions, any first-person text going out under Wayne's name.
-- Use for: "does this sound like me?" on a draft that already exists.
-- Use for: STE-lite (Step 2d). `/monet:voice` applies the card in `reference/ste-lite.md` by
-  default, and `--no-ste` turns it off. Answers to Wayne get the same card through the `ste-lite`
-  output style, not through this skill.
+  peer feedback, agent instructions, any first-person text going out under the user's name.
+- Use for: a check of whether a draft that already exists sounds like the user.
+- Use for: STE-lite (Step 2d). `/monet:voice` applies the card in
+  `${CLAUDE_SKILL_DIR}/reference/ste-lite.md` by default, and `--no-ste` turns it off. Answers to
+  the user get the same card through the `ste-lite` output style, not through this skill.
 - Not for: deciding **what** a PR body contains. `git-draft-pr` owns the template, the section
   caps, and the diagram rule. This skill only governs how the words read inside them.
-- Not for: **deriving** the voice. That is `distill-voice`, which writes persona files under
-  `reference/personas/` from real corpora. This skill only reads them.
+- Not for: **deriving** the voice. That is `distill-voice`, which writes persona files to the
+  user's data dir from real corpora. This skill only reads them.
+
+## Arguments
+
+Target: $ARGUMENTS
+
+- Empty: the prose most recently produced in this session. This is the common case, because the
+  usual trigger is a fresh draft that needs fixing before it goes out.
+- Quoted or pasted text: the text itself is the draft.
+- A file or directory path: read it and treat its prose as the draft. For a code file, that means
+  the comments and doc strings, not the code.
+- A PR number or URL: the PR body, plus any review comments by the user on it.
+- `--check` anywhere: check mode only. Report violations and change nothing.
+- `--list` anywhere: list mode, below. Ignore every other argument, including a target.
+- `--no-ste` anywhere: plain voice. Skip Step 2d, and check with the Step 3 greps instead of the script.
+- `--ste` anywhere: no change, because STE-lite is already the default.
+- `--persona <name>`: use that persona instead of the surface map's result (Preconditions).
+
+Name the surface when the target does not make it obvious: `PR description`, `PR reply, own PR`,
+`Commit message`, `Design or strategy doc`, `Slack`, `Peer feedback`.
+
+With `--list`, do only this and stop. Read the surface map as Preconditions step 3 does, data dir
+first, and print both its tables: the roster and the surface map. Then, for each persona in the
+roster, read `personas/<name>.md` in the data dir, or `${CLAUDE_SKILL_DIR}/reference/personas/<name>.md`
+when the data dir has none, and add its move count and total sample count. Name a roster entry as
+missing only when neither file exists. Do not resolve a surface, and do not touch a draft.
+
+Editing a file in place needs the user's explicit confirmation first. Show the before and after,
+then ask. Check mode never edits anything.
 
 ## Preconditions
 
 Resolve a persona before applying any flavor. Resolution is by surface, unless a persona is named
-explicitly. Resolve `reference/` paths relative to this skill's directory, not the
-working directory. Read these files explicitly with the client's file-reading tool.
+explicitly. Each lookup tries the user's data dir first, then the bundled copy in this skill. Read
+these files explicitly with the client's file-reading tool.
 
 1. Determine the surface using Step 1.
-2. If a persona is named explicitly (for example, via `--persona <name>`), read
-   `reference/personas/<name>.md` directly and skip the map. Go to step 4.
-3. Otherwise, look the surface up in the surface map in `reference/personas.md`.
-4. If a persona is found, read `reference/personas/<name>.md` and apply Step 2b from it.
+2. If a persona is named explicitly (for example, via `--persona <name>`), skip the map. Go to
+   step 4.
+3. Otherwise, read the surface map in `${user_config.data_dir}/personas/personas.md`. If the data dir above is empty or starts with `${user_config`, it isn't configured, so use `~/.config/monet`.
+   When that file does not exist, read the bundled `${CLAUDE_SKILL_DIR}/reference/personas.md`,
+   which maps no surface. Look the surface up in the map.
+4. If a persona is named or found, read `${user_config.data_dir}/personas/<name>.md`. If the data dir above is empty or starts with `${user_config`, it isn't configured, so use `~/.config/monet`.
+   When that file does not exist, read `${CLAUDE_SKILL_DIR}/reference/personas/<name>.md`. So
+   with no `sample.md` in the data dir, `--persona sample` applies the bundled synthetic example.
+   Apply Step 2b from the persona.
 5. If the map gives none, apply the Step 2a invariants only and say so once per session, naming
    the surface:
 
 > No persona is mapped for this surface (commit message), so this pass applies invariants only.
 
-6. If the named persona's file is missing, stop and say so. Never guess.
+6. If the named persona's file is missing in both places, stop and say so. Never guess.
 
 A surface with no persona is not a gap to fill from intuition. It means no source evidences that
 surface yet. Filling it anyway is the agent inventing a voice, which is the failure this skill
@@ -138,20 +177,21 @@ rewrite.
 ## Step 2d: STE-lite (STE mode)
 
 STE-lite is a register, not a persona. It is 8 rules adapted from ASD-STE100, the controlled
-English of aircraft maintenance manuals, and they live in `reference/ste-lite.md`. STE mode is the
-default when Wayne runs `/monet:voice`, on every surface, and `--no-ste` turns it off. A skill that
-includes this file, such as `git-draft-pr`, `pr`, or `paint`, stays on plain voice unless it asks
-for STE mode.
+English of aircraft maintenance manuals, and they live in `${CLAUDE_SKILL_DIR}/reference/ste-lite.md`.
+STE mode is the default when the user runs `/monet:voice`, on every surface, and `--no-ste` turns
+it off. A skill that loads this one, such as `git-draft-pr`, `pr`, or `paint`, passes `--no-ste`
+to stay on plain voice unless it asks for STE mode.
 
 The same file is the `ste-lite` output style, through the relative symlink
-`.claude/output-styles/ste-lite.md`. Edit `reference/ste-lite.md` only, and both readers change.
+`output-styles/ste-lite.md` at the plugin root. Edit `reference/ste-lite.md` only, and both
+readers change.
 
 1. Resolve the persona as usual. A runbook, a procedure, or test steps has no surface row, so it
    resolves to no persona unless `--persona` names one. The notice then says that the pass
    applies the invariants and the STE-lite card.
-2. Read `reference/ste-lite.md`. Apply its numbered rules, its rule to keep every fact and caveat,
+2. Read the card. Apply its numbered rules, its rule to keep every fact and caveat,
    and the paragraph that starts "Code, commands". Skip the frontmatter, the line about drafts
-   under Wayne's name, and the copyright line. They only frame the output style.
+   under the user's name, and the copyright line. They only frame the output style.
 3. The card wins every conflict. It replaces the Step 2a contractions rule, so contractions are 0
    on every surface. It also beats conflicting persona moves, even ones with a sample.
 4. The card also beats Step 2c. Turning a procedure into numbered steps, putting the condition
@@ -162,7 +202,7 @@ The same file is the `ste-lite` output style, through the relative symlink
 
 ## Step 3: Check before it goes out
 
-Runs on its own too, when the ask is "does this sound like me?".
+Runs on its own too, when the user asks whether a draft sounds like them.
 
 **Count the mechanical ones, do not eyeball them.** For a draft on disk:
 
@@ -176,7 +216,7 @@ In STE mode, run the checker instead of the three greps. Give it absolute paths,
 context to it with `-` as the path:
 
 ```bash
-python3 <this skill's directory>/scripts/ste_check.py <absolute path>
+python3 ${CLAUDE_SKILL_DIR}/scripts/ste_check.py <absolute path>
 ```
 
 It prints each violation with its line number. It reads the file as GitHub renders it: it checks
@@ -233,12 +273,11 @@ because they carry different confidence:
 
 These are the tells, in rough order of how reliably they give the game away.
 
-- **Em-dashes.** The agent's default has many. Wayne's has none. This one is absolute.
+- **Em-dashes.** The agent's default has many. This one is absolute.
 - **The exhaustive auto-reply.** "Good catch, fixed in `a1b2c3d`. The function now does X, mirroring
   the pattern in Y, and I added a test covering Z." That cadence of acknowledge plus SHA plus
-  multi-sentence mechanism is a generated reply. It was used twice on one work PR and the reviewer
-  did not consider it worth flagging, which is worse than being flagged. A reply is "done" or
-  "updated".
+  multi-sentence mechanism is a generated reply. A reviewer may not flag it, which is worse than
+  being flagged. A reply is "done" or "updated".
 - **Padding a template.** Filling each section of a PR or doc template with three polished
   paragraphs. The padding is the tell, not the headers. Fill each section concisely.
 - **Restating the diff in prose.** Listing every file touched, or explaining how the new code
