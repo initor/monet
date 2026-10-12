@@ -1,6 +1,12 @@
 ---
 name: roadmap
 description: Use when the user asks to refresh, regenerate, or update a work stream's roadmap page, says "refresh the roadmap", or asks for a roadmap.html for a stream. Not for general visualization (that is paint). For building a plan's tasks with agents, use gang instead.
+argument-hint: "[stream-dir] --plan <path>"
+allowed-tools:
+  - Read
+  - Bash
+  - Write
+  - AskUserQuestion
 ---
 
 ## Overview
@@ -15,27 +21,33 @@ Roadmap pages are deliberately living documents at a fixed path.
 ## When to use / not
 
 - Use for: "refresh the roadmap", "regenerate the roadmap page", "update roadmap.html for <stream>".
-- Not for: "visualize this", "make this visual", "paint me a page" → those are **paint**. This skill
-  only ever emits `roadmap.html`.
+- Not for: "visualize this", "make this visual", "paint me a page" → those are **`monet:paint`**. This
+  skill only ever emits `roadmap.html`.
 
 ## Step 1: Resolve inputs
+
+Arguments: $ARGUMENTS
 
 ```
 /monet:roadmap [<stream-dir>] --plan <path>
 ```
 
-- `<stream-dir>` is **the directory that holds, or will hold, `roadmap.html`**. Defaults to cwd.
-- `--plan <path>` is **required**. Do not infer it. The two existing streams place the plan
-  differently (envtest keeps it one level *above* the stream dir, PV/PVC keeps it in a `plan/`
-  subdirectory), so any convention guess fails silently on one of them.
+- The first positional argument is `<stream-dir>`: **the directory that holds, or will hold,
+  `roadmap.html`**. Defaults to cwd.
+- `--plan <path>` is **required**. Do not infer it. Streams place the plan differently (one level
+  *above* the stream dir, or in a `plan/` subdirectory), so any convention guess fails silently on
+  some of them.
+- There is no `--repo` argument (Step 3 infers the repo), and the grouping of items is decided here,
+  not passed in.
 
 If `--plan` is missing, stop and ask for it. If the file does not exist, stop and say so.
 
 ## Step 2: Parse the plan into items
 
-Read `reference/plan-parsing.md` and apply it: match the plan's table on column *names* (formats differ
-across streams), build the `Item` array, and **fail loudly** if no table carries both a recognizable ID
-column and a recognizable status column. Never render a half-empty page: it reads as authoritative.
+Read `${CLAUDE_SKILL_DIR}/reference/plan-parsing.md` and apply it: match the plan's table on column
+*names* (formats differ across streams), build the `Item` array, and **fail loudly** if no table carries
+both a recognizable ID column and a recognizable status column. Never render a half-empty page: it
+reads as authoritative.
 
 Relationships are lane membership plus prose in the caption, **never drawn edges**.
 
@@ -59,32 +71,33 @@ A state change updates three things **together** (partial updates are the observ
 3. the verified-on date
 
 Emit **exactly one** freshness element with one class carrying the stamp. Do not scatter the date across
-hero subtitle, footnote, and eyebrow the way the existing family does.
+hero subtitle, footnote, and eyebrow.
 
 ## Step 4: Compute geometry
 
-Read `reference/geometry.md` and apply it. Nothing in it is optional; the `viewBox` height and every box
-width are computed. Run the per-lane capacity check before emitting and stop on overflow rather than
-shrinking or truncating.
+Read `${CLAUDE_SKILL_DIR}/reference/geometry.md` and apply it. Nothing in it is optional; the `viewBox`
+height and every box width are computed. Run the per-lane capacity check before emitting and stop on
+overflow rather than shrinking or truncating. Do not hand-place a coordinate or shrink a box to make
+content fit.
 
 ## Step 5: Emit
 
-- Start from `reference/template.html`. Substitute `{{TITLE}}` and, if the stream declares states beyond
-  `done`/`now`/`later`, `{{EXTRA_STATE_RULES}}`.
+- Start from `${CLAUDE_SKILL_DIR}/reference/template.html`. Substitute `{{TITLE}}` and, if the stream
+  declares states beyond `done`/`now`/`later`, `{{EXTRA_STATE_RULES}}`.
 - Generate the `aria-label` narration **from the same items array** that produces the SVG. Never
-  hand-write it: the current 619-character hand-written one drifts the first time an item changes lane.
+  hand-write it: a hand-written narration drifts the first time an item changes lane.
 - Write `<stream-dir>/roadmap.html`, overwriting in place.
 - If the file already exists, warn before every overwrite, whoever authored it: regeneration can change
-  the layout, most visibly for PV/PVC, whose irregular lane pitch becomes uniform.
+  the layout, most visibly on a hand-tuned page, whose irregular lane pitch becomes uniform.
 
 Report: item count, box count, lane count, computed `viewBox`, which items were grouped into one box,
 and which PRs were re-verified.
 
 ## Constraints
 
-- Never re-derive the preamble from the paint skill. `reference/template.html` encodes about a dozen
-  deliberate deltas from the flavor defaults (`--max-width:960px`, `--section-pad-y:40px`,
-  `--card-pad:16px`, dropped tokens) that a fresh derivation would lose.
+- Never re-derive the preamble from the paint skill. The template encodes about a dozen deliberate
+  deltas from the flavor defaults (`--max-width:960px`, `--section-pad-y:40px`, `--card-pad:16px`,
+  dropped tokens) that a fresh derivation would lose.
 - Every number on the page comes from the plan or from `gh`. Never invent state.
 - No publishing to claude.ai. These pages live under a gitignored `.planning/` and are local-only.
 

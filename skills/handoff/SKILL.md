@@ -1,6 +1,9 @@
 ---
 name: handoff
 description: Use when the user is running out of context and needs to continue in a fresh session ("I'm at 80% context", "I have to start a new session", "draft me a prompt to pick up this work", "hand this off"). Writes the state to a file, then prints a short paste-ready prompt pointing at it. For resuming a gang run, use gang instead.
+allowed-tools:
+  - Bash
+  - Write
 ---
 
 ## Overview
@@ -38,7 +41,7 @@ Skip failures silently: not every stream is a repo, not every branch has a PR.
 
 `mkdir -p .planning/tmp/handoff`, then write `<YYYY-MM-DD-HHMM>.md` using the timestamp from Step 1
 (minute-stamped, so two handoffs in one day never collide). If cwd isn't writable, fall back to
-`~/.claude/handoffs/`.
+`${user_config.data_dir}/handoffs/`. If the data dir above is empty or starts with `${user_config`, it isn't configured, so use `~/.config/monet`.
 
 Sections, in order. Omit any that is genuinely empty; don't pad.
 
@@ -68,7 +71,7 @@ Continue <one-line goal> in <repo> (branch <branch>, <PR state>).
 Read <ABSOLUTE path from Step 2> first: full state, decisions, gotchas.
 
 Then: <single most immediate next action, named not described>.
-<Any standing agreement, e.g. "don't push or comment without my go-ahead".>
+<Any standing agreement, e.g. "don't push or comment without an explicit go-ahead".>
 ━━━━━━━━━━━━━━━━━━━━━ END PROMPT ━━━━━━━━━━━━━━━━━━━━━
 ```
 

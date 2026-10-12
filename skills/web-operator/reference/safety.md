@@ -1,6 +1,6 @@
 # web-operator: safety model
 
-The whole point of this skill is that the agent operates inside *your*
+The whole point of this skill is that the agent operates inside *the user's*
 authenticated browser session. That's powerful and it's exactly why the
 guarantees below are non-negotiable. Don't add an automation path that
 breaks one.
@@ -14,19 +14,19 @@ browser silently. If login is needed, the user performs it directly.
 ## G2: Tab-group isolation
 
 The agent is confined to its own MCP-tracked tab group: new tabs it opens
-itself, never your regular browsing tabs. It only reuses a tab you're already
-on if you explicitly ask for that. Closing tabs it's done with keeps the
-group tidy.
+itself, never the user's regular browsing tabs. It only reuses a tab the user
+is already on if the user explicitly asks for that. Closing tabs it's done with
+keeps the group tidy.
 
 ## G3: Visible by design
 
-Every action renders in your real browser, in real time: you can watch it
-happen. This is a deliberate trade against the old design's "hidden by
+Every action renders in the user's real browser, in real time: the user can
+watch it happen. This is a deliberate trade against the old design's "hidden by
 default, never raise the window" model: invisibility bought nothing here once
-the human wants to watch, and it cost us an entire debugging session hunting
+the human wants to watch, and it cost an entire debugging session hunting
 for a window that had no reliable way to surface itself.
 
-Visibility does not mean the agent grabs for your attention. It still never
+Visibility does not mean the agent grabs for the user's attention. It still never
 shells out to AppleScript, `cliclick`, or `open -a` to force focus or bring a
 window to the front: the extension drives pages over its own channel and
 does not need OS-level input automation to do it. If a task seems to need
@@ -56,7 +56,7 @@ support from a different backend.
 
 There's no dedicated rich-paste primitive in the Claude backend. The workaround
 (`javascript_tool` clipboard write + `computer` `cmd+v`) should attempt to
-save your existing clipboard before writing and restore it after, but this
+save the user's existing clipboard before writing and restore it after, but this
 is best-effort, not guaranteed, since the browser's clipboard permissions
 can be flakier from a background-scripted write than from a real user
 gesture. Don't treat a restore failure as fatal; just don't silently drop it
