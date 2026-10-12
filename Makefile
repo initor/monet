@@ -96,6 +96,13 @@ gang:
 
 test: gang
 
+# The portability, privacy, and prose scans (FND-5, FND-6, FND-7).
+check: scan
+.PHONY: scan
+scan:
+	@echo "==> scan: python3 tools/scan.py"
+	@python3 tools/scan.py
+
 # The skill lint (FND-4).
 check: lint
 .PHONY: lint
