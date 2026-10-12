@@ -1,6 +1,6 @@
 ---
 name: hairline-create
-description: Use when someone asks for a new Hairline figure, or runs /hairline-create with an idea. Draws one isometric line figure that answers the pointer, in the style and on the engine of @lucasmarkes/hairline, and hands it over as a single self-contained HTML file.
+description: Use when someone asks for a new Hairline figure, or runs /monet:hairline-create with an idea. Draws one isometric line figure that answers the pointer, in the style and on the engine of @lucasmarkes/hairline, and hands it over as a single self-contained HTML file.
 argument-hint: "[idea]"
 ---
 
@@ -10,7 +10,7 @@ You are making one figure in the Hairline style: an isometric line drawing, buil
 
 You write one thing: the figure. The engine (`kernel.js`) and the page (`bench.html`) are fixed. Never edit them, never paste a changed copy of them, and never write again what the kernel already gives you.
 
-Every file named below is in this skill's folder. The figure and the page are written in the person's working directory: run `build.mjs`, `validate.mjs` and `look.mjs` from there, by their path in this folder.
+Every file named below is in this skill's folder, `${CLAUDE_SKILL_DIR}`. The figure and the page are written in the person's working directory: run `build.mjs`, `validate.mjs` and `look.mjs` from there, by their path in this folder: `${CLAUDE_SKILL_DIR}/build.mjs`, `${CLAUDE_SKILL_DIR}/validate.mjs` and `${CLAUDE_SKILL_DIR}/look.mjs`.
 
 ## 1. Concept
 
@@ -32,14 +32,14 @@ One figure, one idea. A concept that needs a label to be understood is not a con
    - `means`: one sentence, 140 characters at most, saying what the figure shows. It is the line under the stage.
    - `rules`: the numbers of the rules this figure leans on most.
    - `range`: the one number the slider drives, at intensity 0, 0.5 and 1. The middle one is the default, and the three move one way. `mount`'s `value`, and the `value` that `set(value)` gets when the slider moves, is this number: the figure's own, read on `range`, not 0 to 1.
-5. Assemble it: `node build.mjs <name>.js` writes `hairline-<name>.html`, and so does each run of `look.mjs` in step 3. Without Node, copy `bench.html` and put the contents of `kernel.js` where `/*KERNEL*/` is and your figure where `/*FIGURE*/` is, by file operation, changing nothing else.
+5. Assemble it: `node ${CLAUDE_SKILL_DIR}/build.mjs <name>.js` writes `hairline-<name>.html`, and so does each run of `look.mjs` in step 3. Without Node, copy `bench.html` and put the contents of `kernel.js` where `/*KERNEL*/` is and your figure where `/*FIGURE*/` is, by file operation, changing nothing else.
 
 ## 3. Check
 
-1. `node look.mjs <name>.js --answer x,y,z --edge x,y,z`, the points being world points of your figure, as `look.md` says. It builds the page, validates it, takes the eight pictures on one sheet, `hairline-<name>-look.png`, and checks the frame, the read-out and the console. Fix every line it prints as failed, and run it again until it exits 0.
+1. `node ${CLAUDE_SKILL_DIR}/look.mjs <name>.js --answer x,y,z --edge x,y,z`, the points being world points of your figure, as `look.md` says. It builds the page, validates it, takes the eight pictures on one sheet, `hairline-<name>-look.png`, and checks the frame, the read-out and the console. Fix every line it prints as failed, and run it again until it exits 0.
 2. Read `look.md`, then the sheet, and answer its questions. Fix what fails, then go back to 1.
 
-`look.mjs` needs a browser and installs `playwright-core` once, outside this folder. Without one, check with `node validate.mjs hairline-<name>.html` after each build and do the look as `look.md` says under "Without a browser". Without Node, read the list of checks at the top of `validate.mjs` and answer each one from your code.
+`look.mjs` needs a browser and installs `playwright-core` once, outside this folder. Without one, check with `node ${CLAUDE_SKILL_DIR}/validate.mjs hairline-<name>.html` after each build and do the look as `look.md` says under "Without a browser". Without Node, read the list of checks at the top of `validate.mjs` and answer each one from your code.
 
 Do not hand over a page the validator rejects. Do not say the look is done if you did not look.
 
