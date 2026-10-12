@@ -1,6 +1,14 @@
 ---
 name: review-local
 description: Use when the user wants to review uncommitted or branch changes before opening a PR ("review my changes", "check before I push", "pre-PR review"). Spawns parallel domain-expert sub-agents across six dimensions. For an already-posted GitHub PR use the pr skill instead. For a task graph that agents build and review end to end, use gang instead. Read-only until asked to fix.
+argument-hint: "[--domain <expertise>] [--agents <N>] [--model <model>]"
+allowed-tools:
+  - Read
+  - Bash
+  - Glob
+  - Grep
+  - Agent
+  - AskUserQuestion
 ---
 
 ## Overview
@@ -34,6 +42,18 @@ Each finding is tagged with one of these review dimensions (plus the cross-file 
 - Nitpicking formatting when the project has a formatter (gofmt, prettier, black).
 - Flagging generated code (protobuf, mocks, vendored deps) unless the generation config is wrong.
 - Routing to the **pr** skill's job: this skill reviews local changes and never posts to GitHub.
+
+## Arguments
+
+Arguments: $ARGUMENTS
+
+Parse these flags from `$ARGUMENTS` and carry them into Step 2:
+
+- `--domain <expertise>`: the domain expertise for the sub-agents (for example, `--domain "distributed systems"`).
+- `--agents <N>`: the number of review agents to spawn (default: 3).
+- `--model <model>`: the sub-agent model, recorded as `agent_model`. Accepted values: `opus`, `sonnet`, `haiku`. Default: `opus`.
+
+If `$ARGUMENTS` is empty, Step 2 asks for the domain and the agent count. Run from the root of the repository that holds the local changes.
 
 ## Preconditions
 
@@ -225,7 +245,7 @@ After presenting the review, the user may ask to fix findings:
 - **"Fix all"**: work through findings by severity (blockers first, then suggestions). Skip nits unless the user asks.
 - **"Fix #3"** or **"Fix the test coverage issues"**: address specific findings or a specific dimension.
 - **"Re-review"**: after fixes, re-run Steps 4-7 to verify the fixes and catch any new issues.
-- **"Ship it"**: user is satisfied; suggest using `monet:ship` or `git-ship` to commit and create the PR.
+- **"Ship it"**: user is satisfied; suggest using `monet:ship` to commit and create the PR.
 
 When implementing fixes:
 - Follow the craftsmanship bar: existing patterns, clean abstractions, minimal diff.

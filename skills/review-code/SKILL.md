@@ -1,6 +1,13 @@
 ---
 name: review-code
 description: Use when the user asks to review a Go repository, including Kubernetes code, against official conventions (Effective Go, Go Code Review Comments, K8s best practices). Only applies inside a Go project (go.mod present). Writes findings to reviews.md; never modifies the reviewed code.
+argument-hint: "[path/to/repo]"
+allowed-tools:
+  - Read
+  - Bash
+  - Glob
+  - Grep
+  - Write
 ---
 
 ## Overview
@@ -27,6 +34,13 @@ Sample a bounded set of source files, run available Go tooling, and check the co
 | 6 | Check K8s conventions (k8s-controller only) | violations + good patterns |
 | 7 | Classify findings by severity + attach URLs | Critical / Suggestions / Nits |
 | 8 | Write the review | `reviews.md` at repo root |
+
+## Arguments
+
+Target repository: $ARGUMENTS
+
+- If `$ARGUMENTS` holds a path, check that the path exists and contains `go.mod`. If it does not exist or has no `go.mod`, report the issue and stop. Otherwise, use it as the working directory for the review, and run every step below from it.
+- If `$ARGUMENTS` is empty, review the current working directory.
 
 ## Preconditions
 
@@ -214,11 +228,11 @@ tools_run:
 
 **Parallelism:** Steps 4, 5, and 6 are independent convention checks against the same sampled code. Dispatch them as 3 parallel sub-agents -- one per convention set. Each agent receives the sampled code and its convention checklist, returns findings and good patterns. Merge all results in Step 7.
 
-Read `reference/effective-go.md` for the 22-category Effective Go checklist and apply each category to the sampled code, noting violations and good patterns.
+Read `${CLAUDE_SKILL_DIR}/reference/effective-go.md` for the 22-category Effective Go checklist and apply each category to the sampled code, noting violations and good patterns.
 
 ## Step 5: Apply Go Code Review Comments conventions
 
-Read `reference/code-review-comments.md` for the 31-rule Go Code Review Comments checklist and apply each rule to the sampled code (same approach as Step 4).
+Read `${CLAUDE_SKILL_DIR}/reference/code-review-comments.md` for the 31-rule Go Code Review Comments checklist and apply each rule to the sampled code (same approach as Step 4).
 
 ## Step 6: Apply K8s conventions (when applicable)
 
@@ -228,7 +242,7 @@ When `framework: k8s-aware`, do NOT apply the checklist. Instead, emit this note
 
 > "This project uses K8s libraries (k8s.io/api, k8s.io/apimachinery) but does not appear to be a controller. K8s controller-specific conventions are not applied. If this project is in fact a controller, check that `sigs.k8s.io/controller-runtime` is in go.mod or that a `PROJECT` file exists at the repo root."
 
-For `framework: k8s-controller`, read `reference/k8s-conventions.md` for the 15-item K8s checklist (with its "Why it matters" rationale) and apply each item to the sampled code (same approach as Steps 4 and 5).
+For `framework: k8s-controller`, read `${CLAUDE_SKILL_DIR}/reference/k8s-conventions.md` for the 15-item K8s checklist (with its "Why it matters" rationale) and apply each item to the sampled code (same approach as Steps 4 and 5).
 
 ## Step 7: Classify findings by severity
 
@@ -277,7 +291,7 @@ Take ALL findings from Steps 3 (tools), 4 (Effective Go), 5 (Code Review Comment
 
 ### Attach a guideline URL to every finding
 
-Read `reference/guideline-urls.md` for the four lookup tables (Effective Go, Go Code Review Comments, tool findings, K8s conventions). **Every finding MUST have a URL.** If no exact match exists, use the general URL for the tool or convention source.
+Read `${CLAUDE_SKILL_DIR}/reference/guideline-urls.md` for the four lookup tables (Effective Go, Go Code Review Comments, tool findings, K8s conventions). **Every finding MUST have a URL.** If no exact match exists, use the general URL for the tool or convention source.
 
 ## Step 8: Write reviews.md
 
