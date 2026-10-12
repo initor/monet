@@ -11,10 +11,11 @@ import sys
 import tempfile
 import unittest
 
-REPO = Path(__file__).resolve().parent.parent
-SCRIPT = REPO / '.claude/skills/voice/scripts/ste_check.py'
-CARD = REPO / '.claude/skills/voice/reference/ste-lite.md'
-STYLE = REPO / '.claude/output-styles/ste-lite.md'
+SKILL = Path(__file__).resolve().parent.parent
+REPO = SKILL.parent.parent
+SCRIPT = SKILL / 'scripts/ste_check.py'
+CARD = SKILL / 'reference/ste-lite.md'
+STYLE = REPO / 'output-styles/ste-lite.md'
 EM_DASH, RSQUO, LDQUO, RDQUO = chr(0x2014), chr(0x2019), chr(0x201C), chr(0x201D)
 SPEC = importlib.util.spec_from_file_location('ste_check', SCRIPT)
 STE = importlib.util.module_from_spec(SPEC)
@@ -648,8 +649,12 @@ class InterfaceTests(Case):
 
     def test_output_style_links_to_the_card(self):
         self.assertTrue(STYLE.is_symlink())
-        self.assertFalse(STYLE.readlink().is_absolute())
+        self.assertEqual(os.readlink(STYLE), '../skills/voice/reference/ste-lite.md')
         self.assertEqual(STYLE.resolve(), CARD.resolve())
+        env = {k: v for k, v in os.environ.items() if not k.startswith('GIT_')}
+        r = subprocess.run(['git', '-C', str(REPO), 'ls-files', '-s', 'output-styles/ste-lite.md'],
+                           capture_output=True, text=True, env=env, timeout=30)
+        self.assertTrue(r.stdout.startswith('120000 '), r.stdout)
 
 
 if __name__ == '__main__':
