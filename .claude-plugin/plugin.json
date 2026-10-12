@@ -1,0 +1,36 @@
+{
+  "name": "monet",
+  "version": "0.1.0",
+  "description": "Engineering workflow skills for Claude Code that draft commits and PRs, review code, shape prose, visualize findings, coach interview practice, and run a fleet of agents through a plan.",
+  "author": {
+    "name": "Wayne WEN"
+  },
+  "homepage": "https://github.com/initor/monet",
+  "repository": "https://github.com/initor/monet",
+  "license": "MIT",
+  "keywords": [
+    "skills",
+    "agent",
+    "workflow",
+    "git",
+    "code-review",
+    "writing",
+    "visualization",
+    "interview-prep",
+    "orchestration"
+  ],
+  "userConfig": {
+    "branch_prefix": {
+      "type": "string",
+      "title": "Branch prefix",
+      "description": "Text put in front of each branch name that monet creates, so a branch is <prefix><slug> (for example, the prefix me/ gives me/fix-login). Leave it empty for no prefix.",
+      "default": ""
+    },
+    "data_dir": {
+      "type": "string",
+      "title": "Data directory",
+      "description": "Directory where monet keeps your own data, such as voice personas and interview-prep sessions. monet never writes inside the plugin directory.",
+      "default": "~/.config/monet"
+    }
+  }
+}
