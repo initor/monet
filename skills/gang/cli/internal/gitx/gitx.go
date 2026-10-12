@@ -161,7 +161,7 @@ func UpdateRefCAS(dir, ref, newSHA, oldSHA string) error {
 }
 
 // taskLine is a whole message line that names a task. It need not be a git
-// trailer: potato puts it above a "Testing Done" paragraph.
+// trailer: demo puts it above a "Testing Done" paragraph.
 var taskLine = regexp.MustCompile(`^Task: ([A-Z]+[0-9]+)$`)
 
 // TaskIDs returns the sorted, unique ids from lines that are exactly

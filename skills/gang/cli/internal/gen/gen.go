@@ -237,7 +237,7 @@ func fill(tpl string, values map[string]string) (string, error) {
 	return strings.NewReplacer(pairs...).Replace(tpl), nil
 }
 
-// implementers is potato's formula: max(2, min(8, cap*2/3, RAM GB/4)).
+// implementers is demo's formula: max(2, min(8, cap*2/3, RAM GB/4)).
 func implementers(agentCap, ramGB int) int {
 	return max(2, min(8, agentCap*2/3, ramGB/4))
 }

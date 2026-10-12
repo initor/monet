@@ -251,7 +251,7 @@ func TestCommitTreeAndUpdateRefCAS(t *testing.T) {
 }
 
 // The rule comes from Contract 0 item 1: a whole line "Task: <id>", trailer
-// or not. potato writes it above a "Testing Done" paragraph, where git's
+// or not. demo writes it above a "Testing Done" paragraph, where git's
 // trailer parser does not see it. A1 appears only in that form.
 func TestTaskIDs(t *testing.T) {
 	repo := newRepo(t)
@@ -261,7 +261,7 @@ func TestTaskIDs(t *testing.T) {
 	commitFile(t, repo, "b.txt", "b2\n", "fix b\n\nTask: B2")
 	commitFile(t, repo, "c.txt", "c\n", "mentions Task: C3 in the body\n\n  Task: D4\nTask: e5\nTask: F6 and more")
 	if trailers := mustRun(t, repo, "log", "--format=%(trailers:key=Task,valueonly)", "-1", "HEAD~2"); trailers != "" {
-		t.Fatalf("git parsed the potato-style line as a trailer (%q), so this test no longer pins the difference", trailers)
+		t.Fatalf("git parsed the demo-style line as a trailer (%q), so this test no longer pins the difference", trailers)
 	}
 	got, err := TaskIDs(repo, "work")
 	if err != nil {

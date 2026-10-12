@@ -99,19 +99,19 @@ func TestSaveRoundTrip(t *testing.T) {
 }
 
 func TestWaveTitle(t *testing.T) {
-	p := &Plan{Slug: "potato-phase2"}
-	if got := WaveTitle(p, 3); got != "chore(gang): land wave 3 of potato-phase2" {
+	p := &Plan{Slug: "demo-phase2"}
+	if got := WaveTitle(p, 3); got != "chore(gang): land wave 3 of demo-phase2" {
 		t.Errorf("default title %q", got)
 	}
 	p.Repo.WaveTitle = "feat({slug}): wave {k}"
-	if got := WaveTitle(p, 12); got != "feat(potato-phase2): wave 12" {
+	if got := WaveTitle(p, 12); got != "feat(demo-phase2): wave 12" {
 		t.Errorf("custom title %q", got)
 	}
 }
 
 // The ref name comes from Contract 0 item 3.
 func TestRef(t *testing.T) {
-	if got := Ref("potato-phase2"); got != "refs/gang/potato-phase2/plan" {
+	if got := Ref("demo-phase2"); got != "refs/gang/demo-phase2/plan" {
 		t.Errorf("Ref = %s", got)
 	}
 }
