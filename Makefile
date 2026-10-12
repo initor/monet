@@ -83,3 +83,15 @@ unittest:
 	  echo "error: unittest suites failed:$$failed" >&2; \
 	  exit 1; \
 	fi
+
+# The gang Go tests and simulator, once skills/gang/cli exists (FND-8).
+.PHONY: gang
+gang:
+	@if [ -d skills/gang/cli ]; then \
+	  echo "==> gang: tools/test-gang.sh"; \
+	  tools/test-gang.sh; \
+	else \
+	  echo "skip gang: skills/gang/cli not present"; \
+	fi
+
+test: gang
