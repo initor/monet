@@ -1,6 +1,15 @@
 ---
 name: pr
 description: Use when a GitHub PR URL is shared and the user asks to review a pull request or do a code review on it before merge. Drafts copy-paste-ready comments with GitHub permalinks. Posts nothing until the user says "post all", then posts every comment as one COMMENT review. For your own un-pushed local changes, use review-local instead. For the CI and merge of a gang run's wave PRs, use gang instead.
+argument-hint: "<pr-url> [--domain <expertise>] [--agents <N>] [--model <model>]"
+allowed-tools:
+  - Read
+  - Bash
+  - Glob
+  - Grep
+  - Agent
+  - AskUserQuestion
+  - Skill
 ---
 
 ## Overview
@@ -9,13 +18,13 @@ Review a published PR by fanning out domain-expert sub-agents over its diff, the
 
 ## Voice
 
-Every `draft_comment` is prose that gets posted under Wayne's name, so it runs through `voice`. That file is read in full rather than merely referenced, because holding a rule is not the same as applying it.
+Every `draft_comment` is prose that gets posted under the user's name, so it runs through `voice`. The skill is loaded in full rather than merely referenced, because holding a rule is not the same as applying it.
 
 Apply it in **Step 6**, where comment prose is actually written. The Step 5 sub-agents return structured findings rather than finished prose, so they don't need it.
 
 Register for this surface: **PR review, someone else's code**. That is a fast surface, so contractions always and no semicolons. The Tone rules at the end of this file add the review-specific layer on top of those mechanics.
 
-Read `~/.claude/skills/voice/SKILL.md` before drafting. Expand `~` to the current home directory and read its referenced files explicitly.
+Before drafting in Step 6, load `monet:voice` with the Skill tool, with `--no-ste` in the Skill args, so review comments stay in plain voice rather than STE-lite.
 
 ## When to use
 
@@ -34,6 +43,17 @@ Read `~/.claude/skills/voice/SKILL.md` before drafting. Expand `~` to the curren
 - Recommending a change without a `​```suggestion` block when the fix is a concrete line edit (code or docs): give the author one-click text.
 - Anchoring a comment at a line that merely *mentions* the problem (a `t.Run` header, a doc comment) rather than the line the suggestion must replace.
 - Wrapping a repo permalink reference in `[text](url)` markdown: paste it bare so GitHub unfurls it as a code embed.
+
+## Arguments
+
+PR URL: $ARGUMENTS
+
+Parse `$ARGUMENTS` for:
+
+- A full GitHub PR URL: the positional argument, or the first URL-like argument. Step 1 validates it, and asks for one when `$ARGUMENTS` is empty or holds no valid URL.
+- `--domain <expertise>` (for example, `--domain "distributed systems"`): when given, Step 2 skips the domain prompt.
+- `--agents <N>` (for example, `--agents 5`): when given, Step 2 skips the agent count prompt.
+- `--model <model>`: recorded as `agent_model`. Accepted values: `opus`, `sonnet`, `haiku`. Default: `opus`.
 
 ## Preconditions
 
