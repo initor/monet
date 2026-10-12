@@ -1,22 +1,51 @@
 ---
 name: web-operator
 description: >-
-  Drive my authenticated Chrome to read or operate Slack, Google Docs, dashboards,
-  and other web UIs in dedicated tabs, through Claude-in-Chrome. Visible by
-  design: I can watch every action.
-  Require explicit approval for remote edits, sends, submissions, and deletions.
+  Use when the user wants their authenticated Chrome driven to read or operate
+  Slack, Google Docs, dashboards, and other web UIs in dedicated tabs, through
+  Claude-in-Chrome. Visible by design: the user can watch every action.
+  Requires explicit approval for remote edits, sends, submissions, and deletions.
   For visualizing findings as a page, use paint instead.
+argument-hint: "[target url or surface] [what to do]"
+allowed-tools:
+  - Read
+  - AskUserQuestion
+  - Skill
+  - mcp__claude-in-chrome__tabs_context_mcp
+  - mcp__claude-in-chrome__tabs_create_mcp
+  - mcp__claude-in-chrome__tabs_close_mcp
+  - mcp__claude-in-chrome__navigate
+  - mcp__claude-in-chrome__computer
+  - mcp__claude-in-chrome__find
+  - mcp__claude-in-chrome__get_page_text
+  - mcp__claude-in-chrome__read_page
+  - mcp__claude-in-chrome__javascript_tool
+  - mcp__claude-in-chrome__form_input
+  - mcp__claude-in-chrome__file_upload
+  - mcp__claude-in-chrome__upload_image
+  - mcp__claude-in-chrome__read_console_messages
+  - mcp__claude-in-chrome__read_network_requests
+  - mcp__claude-in-chrome__browser_batch
 ---
+
+## Parse the request
+
+Request: $ARGUMENTS
+
+- Treat a URL in the request (a Slack thread link, a Google Doc URL, a
+  dashboard) as the surface to `navigate` to, and the rest as the intent.
+- If the request is empty and the conversation does not already name a
+  surface and an intent, ask once what surface to operate and what to do,
+  then proceed.
 
 ## Check the browser backend first
 
-Resolve reference paths relative to this skill directory. Inspect the tools
-actually available in this session; never invent a tool or assume that reading
-this file installs an integration.
+Inspect the tools actually available in this session; never invent a tool or
+assume that reading this file installs an integration.
 
 - **Claude Code:** use the Claude-in-Chrome steps below and read
-  `reference/safety.md`. Follow the host's browser-selection confirmation before
-  using a browser.
+  `${CLAUDE_SKILL_DIR}/reference/safety.md`. Follow the host's
+  browser-selection confirmation before using a browser.
 - **No backend available:** report the missing integration and its setup
   instructions. Do not silently launch another profile or take over an open tab.
 
@@ -36,16 +65,16 @@ both problems: no separate profile means no separate login either, since the
 human is almost always already signed in to the surfaces that matter.
 
 Call the `mcp__claude-in-chrome__*` tools directly: there is no CLI harness
-to shell out to. All paths below are relative to this skill directory only for
-the reference docs; the tools themselves take no path arguments.
+to shell out to. The tools take no path arguments.
 
 ## When to use / not
 
-- Use when I say "drive a browser", "operate Slack/Docs/a dashboard for me",
-  "take over a Chrome window", or "log in and do X on the web".
-- Use when a task needs something only reachable through *my* authenticated
-  browser session (internal dashboards, a Slack thread, a Google Doc, GitHub).
-- **Not** for visualizing session findings as an HTML page: use `paint`.
+- Use when the user says "drive a browser", "operate Slack/Docs/a dashboard
+  for me", "take over a Chrome window", or "log in and do X on the web".
+- Use when a task needs something only reachable through *the user's*
+  authenticated browser session (internal dashboards, a Slack thread, a Google
+  Doc, GitHub).
+- **Not** for visualizing session findings as an HTML page: use `monet:paint`.
 - **Not** for pixel/computer-use control of the whole screen: this skill only
   ever drives tabs inside the dedicated MCP tab group, never the OS cursor or
   windows outside Chrome.
@@ -131,13 +160,16 @@ For mutations:
    the new message appears) to prove the mutation landed exactly once, no
    duplicate sends.
 
-See `reference/recipes/slack-reply.md` and `reference/recipes/read-surface.md`
-for worked end-to-end examples.
+See `${CLAUDE_SKILL_DIR}/reference/recipes/slack-reply.md` and
+`${CLAUDE_SKILL_DIR}/reference/recipes/read-surface.md` for worked end-to-end
+examples.
 
 ## Step 4: Hygiene & wrap-up
 
 - Close tabs you opened for the task with `tabs_close_mcp` once you no longer
   need them; close any that remain before finishing.
+- Report what was read or done, the post-write verification result for any
+  mutation, and which tabs are still open (or that they were closed).
 - No stop-sentinel file to check: this isn't a hidden background process;
   the human can interrupt directly at any time, or close a tab themselves.
 - The session's tool-call history is the audit trail: every

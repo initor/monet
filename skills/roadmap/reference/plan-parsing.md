@@ -7,8 +7,8 @@ How a stream's plan markdown becomes the items array that drives the SVG. Read t
 The plan must contain a markdown table with, at minimum, **a named ID column and a named status
 column**. Everything else is optional and stream-specific.
 
-Formats genuinely differ across streams (envtest carries
-`| ID | Item | Status | Ticket | Origin |`, PV/PVC does not use the same columns), so match on column
+Formats genuinely differ across streams (one carries
+`| ID | Item | Status | Ticket | Origin |`, another uses different columns), so match on column
 *names*, case-insensitively, rather than on position:
 
 | Role | Accepted header names |
@@ -39,11 +39,11 @@ One entity, built per plan row:
 
 | Field | Meaning |
 |---|---|
-| `id` | Stable identifier, never reused or renumbered (`EG-nn`, `PVC-nn`) |
+| `id` | Stable identifier, never reused or renumbered (`AB-nn`, `CD-nn`) |
 | `label` | Short text for the box |
 | `lane` | Which status lane the item sits in |
 | `state` | Drives the `.bx` class, muted text, and dot |
-| `caption` | Free-form string. Deliberately polymorphic: `#10034 merged`, `blocked on EG-12`, `5 items`, `review P1 #7` |
+| `caption` | Free-form string. Deliberately polymorphic: `#1234 merged`, `blocked on AB-12`, `5 items`, `review P1 #7` |
 | `groupedIds` | Optional. Collapses N items into one box. Set by the agent's judgment, not read from the plan |
 
 ## Relationships
@@ -54,7 +54,7 @@ function of lane and label.
 
 ## Grouping
 
-`groupedIds` collapses N items into one box. The envtest page renders 19 items as 14 boxes this way.
+`groupedIds` collapses N items into one box. A 19-item stream can render as 14 boxes this way.
 
 The agent decides the groups while building the items array: collapse items that share a lane and are
 plainly one piece of work (one PR, one ticket, sibling sub-tasks), and give the box a caption such as

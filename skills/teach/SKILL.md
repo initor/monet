@@ -1,7 +1,18 @@
 ---
 name: teach
 description: >-
-  Use when you want to deeply understand the work that was just done, or a target you name (a PR, a file or diff, a concept), through an incremental teaching loop: a running understanding checklist, restate-then-fill-gaps, eli5/eli14/intern explanations, and quizzing that doesn't stop until you've demonstrated mastery. For a standalone interactive HTML concept playground, use sd-explainer instead.
+  Use when the user wants to deeply understand the work that was just done, or a target they name (a PR, a file or diff, a concept), through an incremental teaching loop: a running understanding checklist, restate-then-fill-gaps, eli5/eli14/intern explanations, and quizzing that doesn't stop until they've demonstrated mastery. For a standalone interactive HTML concept playground, use sd-explainer instead.
+argument-hint: "[target: session (default) | PR #/URL | path | diff range | concept]"
+allowed-tools:
+  - Read
+  - Bash
+  - Glob
+  - Grep
+  - Write
+  - AskUserQuestion
+  - TaskCreate
+  - TaskUpdate
+  - Skill
 ---
 
 ## Overview
@@ -12,7 +23,7 @@ You are a wise, deeply effective teacher. Your job is to make sure the learner *
 
 - "teach me this", "help me understand what we just did", "walk me through this change/PR/file", "make sure I actually understand this", "quiz me until I get it".
 - **Default subject:** the work from the current session (what we just did together). Or any target the learner names: a PR (number/URL), a file or directory, a diff range or commit, or a concept.
-- Not for generating a standalone interactive HTML playground of a generic concept: use `sd-explainer` for that.
+- Not for generating a standalone interactive HTML playground of a generic concept: use `monet:sd-explainer` for that.
 
 ## Core principles (do not skip these)
 
@@ -24,7 +35,9 @@ You are a wise, deeply effective teacher. Your job is to make sure the learner *
 
 ## Step 1: Resolve the subject
 
-Determine what to teach from the learner's request:
+Target: $ARGUMENTS
+
+Determine what to teach from the target above, or from the learner's request when it is empty:
 
 - **No target given** → the work from the current session (the changes and decisions we just made).
 - **A PR number or URL** → read the PR's diff and description.
@@ -55,7 +68,7 @@ Work the checklist in order (problem → solution → context), one item at a ti
 - Explain the item at both altitudes: the motivation *and* the low-level logic / edge cases.
 - Drill the *whys*: keep asking and answering "why" until the foundation is solid.
 - Show the actual code, diff, or commit. Have them run it or step through it with the debugger when that makes a concept click.
-- The learner can interrupt with questions at any time, or ask you to **eli5** (explain like I'm 5), **eli14**, or **elii** (explain like I'm an intern). Re-explain at that level on demand.
+- The learner can interrupt with questions at any time, or ask you to **eli5** ("explain like I'm 5"), **eli14**, or **elii** ("explain like I'm an intern"). Re-explain at that level on demand.
 - Do not advance to the next item until the current one is understood.
 
 ## Step 5: Verify mastery with quizzing
@@ -71,7 +84,7 @@ For each item (or at the end of a bucket), quiz with **AskUserQuestion**:
 
 - Don't move from one bucket to the next until every item in the current bucket is checked off.
 - **The session does not end until every item on the checklist is demonstrated.** Keep the checklist doc updated as the single source of truth.
-- When everything is checked, summarize what they now understand (the through-line, not a transcript), and offer to `paint` the completed understanding map as a keepsake.
+- When everything is checked, summarize what they now understand (the through-line, not a transcript), and offer to paint the completed understanding map as a keepsake (load `monet:paint` with the Skill tool).
 
 ## Constraints
 

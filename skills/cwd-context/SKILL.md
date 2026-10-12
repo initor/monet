@@ -1,6 +1,6 @@
 ---
 name: cwd-context
-description: Classify the current working directory as a git codebase or a non-git workspace (defaults to operation). Emits a reusable session_context YAML block.
+description: Use when a session or skill needs to know whether the current working directory is a git codebase or a non-git workspace (defaults to operation). Classifies it and emits a reusable session_context YAML block.
 ---
 
 ## What to do
@@ -67,18 +67,18 @@ session_context:
   repo_owner: "work|personal"  # only present when kind: codebase
 ```
 
-Note: Branch, origin, and detailed git info are deferred to `git-changes` when needed.
+Note: Branch, origin, and detailed git info are deferred to `monet:git-changes` when needed.
 
 ## Step 4: Recommend next best tool posture
 
 After the YAML block, add 3–6 bullets:
 
-- If `codebase`: recommend `git-changes`, `git-draft-commit`, `git-draft-pr`; if the user also named a Google Doc, recommend the Google Docs tools for that doc too
+- If `codebase`: recommend `monet:git-changes`, `monet:git-draft-commit`, `monet:git-draft-pr`; if the user also named a Google Doc, recommend the Google Docs tools for that doc too
 - If `docs`: recommend the Google Docs tools this session has (a loaded rule may name one)
 - If `operation`: recommend evidence-first capture (bounded commands, save outputs into files)
 
 ## Constraints
 
 - Be fast: one git check (`git rev-parse --is-inside-work-tree`), plus `git remote get-url origin` only when `kind: codebase`.
-- Run no other git commands here: defer to `git-changes` for detailed info.
+- Run no other git commands here: defer to `monet:git-changes` for detailed info.
 - If unsure about docs vs operation and the user hasn't mentioned a Google Doc, keep default `operation` and set `confidence: medium`.

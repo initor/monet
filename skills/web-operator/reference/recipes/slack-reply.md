@@ -1,7 +1,7 @@
 # Recipe: post a gated reply to a Slack thread
 
-Goal: reply in a Slack thread you're authed to, with rich formatting (code,
-bold), **without** sending until you confirm. Clipboard HTML paste into Quill
+Goal: reply in a Slack thread the user is authed to, with rich formatting (code,
+bold), **without** sending until the user confirms. Clipboard HTML paste into Quill
 beats typed markdown and `execCommand`, but there's no dedicated paste tool
 in this backend, so it's a clipboard-write + `cmd+v` workaround.
 
@@ -79,7 +79,7 @@ get_page_text({ tabId })   // confirm the new reply is now in the thread
   fall back to `read_page` on the thread pane to inspect the live structure.
 - @-mentions and `:emoji:` shortcodes can mangle on paste; use bare usernames /
   plain text in the content, or let the human add mentions after.
-- Append your signature (e.g. ` (by :weezy: bot @<session-id>)`) to the
+- Append the user's signature (e.g. ` (by :robot_face: bot @<session-id>)`) to the
   staged content before pasting if that's house style: keep it in what the
   human sees before the gate, not added after.
 - The clipboard save and restore is best-effort (see `reference/safety.md` G6):
