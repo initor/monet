@@ -102,3 +102,10 @@ check: scan
 scan:
 	@echo "==> scan: python3 tools/scan.py"
 	@python3 tools/scan.py
+
+# The skill lint (FND-4).
+check: lint
+.PHONY: lint
+lint:
+	@echo "==> lint: python3 tools/check_skills.py"
+	python3 tools/check_skills.py
