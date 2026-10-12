@@ -156,7 +156,7 @@ When invoked:
 
 15) Fleet runs: a plan built and landed by a fleet of agents (codebase):
    - If the user asks to "orchestrate" a build / "run this plan with a fleet" / use a "fleet" or a "gang" of agents, don't run `monet:gang` yourself: tell the user to type `/monet:gang` in a session started at the target repo root. A run spans many turns and launches the Workflow tool, and a subagent returns one result.
-   - `plan <spec-dir>` turns specs into a linted, scheduled task graph and asks for one approval. `plan --adopt <file>` transcribes an existing plan. `run` pilots one task, then drives the graph to `main` through wave PRs. `status` prints at most five lines. Each verb takes `--slug <slug>`, which defaults to the repo root's base name in lowercase, with each run of characters outside `[a-z0-9]` turned into `-` (`.config` becomes `config`).
+   - `plan <spec-dir>` turns specs into a linted, scheduled task graph and asks for one approval. `plan --adopt <file>` transcribes an existing plan. `run` pilots one task, then drives the graph to `main` through wave PRs. `/monet:gang status` prints at most five lines. Each verb takes `--slug <slug>`, which defaults to the repo root's base name in lowercase, with each run of characters outside `[a-z0-9]` turned into `-` (`.config` becomes `config`).
    - After the plan approval, it pushes the integration branch and opens wave PRs without asking. That is a standing exception to the rule against PRs from an integration branch, for gang runs only. It merges a wave PR only with `--merge-on-green`, and it never force-pushes or pushes to `main`.
 
 16) Safety defaults:
