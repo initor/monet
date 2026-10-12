@@ -7,7 +7,7 @@ Point at a part of the figure, and its step lights up.
 
 The figure is a Hairline figure: an isometric line drawing that answers the pointer. The
 `hairline-create` skill draws it, on Hairline's engine and to Hairline's ten rules. Its folder is
-`../hairline-create`, beside this skill. This file adds what an explainer needs on top.
+`${CLAUDE_PLUGIN_ROOT}/skills/hairline-create`. This file adds what an explainer needs on top.
 
 Use an explainer only when the request asks for one: `--explainer`, "explain this to a newcomer", or
 "a picture explainer". For an expert who wants structure at a glance, a sheet fits better. For a
@@ -24,7 +24,7 @@ simulation the reader drives with inputs, use `sd-explainer`.
 | Legend | 1 or 2 sentences under the figure. They say what the object and its parts stand for. |
 | Steps | 3 to 5. Each has a title of 5 words at most and one detail sentence of 12 words at most. Step N is part N of the figure. |
 | In practice | Optional. One sentence and one code block of 10 lines at most, such as the file or the command that the steps describe. |
-| Words | The STE-lite card applies (`../voice/reference/ste-lite.md`), except its rule 4. The steps name the figure's parts in order, so they need not be actions. |
+| Words | The STE-lite card applies (`${CLAUDE_PLUGIN_ROOT}/skills/voice/reference/ste-lite.md`), except its rule 4. The steps name the figure's parts in order, so they need not be actions. |
 | Facts | Every number and fact comes from the session, such as a source read in it. Name each source in the footer. |
 | Theme | The HTML follows the reader's theme. The PNG uses the light theme. |
 | Motion | Only the figure moves, and only when pointed at. Set `<html data-anim="off">`. |
@@ -38,27 +38,29 @@ limits.
    name exists in the output directory, add `-2` or `-3`. Every file below takes the base name.
 2. **Words.** Write `<base>.md` first: a `#` title, the summary, the steps, the optional
    `## In practice`, and a `Sources:` line. Write each step as `1. **Title.** Detail.` Check the file
-   with the voice skill's checker, by absolute path: `python3 <voice skill>/scripts/ste_check.py
-   <file>`. Fix every line it reports. It checks only the card's caps, and the page check counts
-   the rest.
-3. **Figure concept.** Read `../hairline-create/concepts.md`. Offer two or three concepts in the
-   format of Step 1 of `../hairline-create/SKILL.md`, and wait for the pick. With nobody to ask,
-   take the one with the strongest rest pose and say which. Each concept names one part per step.
-   Then add the legend for the picked concept to the words file, after the summary, and check the
-   file again.
-4. **Figure.** Follow Steps 2 and 3 of `../hairline-create/SKILL.md` in the output directory. Write
-   `<name>.js`, then build, validate, and look at it. Keep the four additions under "The figure"
-   below. Skip its Step 4, except its last line: in the confirmation, say what you could not verify.
+   with the voice skill's checker, by absolute path:
+   `python3 ${CLAUDE_PLUGIN_ROOT}/skills/voice/scripts/ste_check.py <file>`. Fix every line it
+   reports. It checks only the card's caps, and the page check counts the rest.
+3. **Figure concept.** Load the hairline-create skill with the Skill tool as
+   `monet:hairline-create`, and take from it only what this file names. Read
+   `${CLAUDE_PLUGIN_ROOT}/skills/hairline-create/concepts.md`. Offer two or three concepts in the
+   format of Step 1 of hairline-create, and wait for the pick. With nobody to ask, take the one
+   with the strongest rest pose and say which. Each concept names one part per step. Then add the
+   legend for the picked concept to the words file, after the summary, and check the file again.
+4. **Figure.** Follow Steps 2 and 3 of hairline-create, which step 3 loaded with the Skill tool as
+   `monet:hairline-create`, in the output directory. Write `<name>.js`, then build, validate, and
+   look at it. Keep the four additions under "The figure" below. Skip its Step 4, except its last
+   line: in the confirmation, say what you could not verify.
 5. **Page.** Write `<base>.html` from the skeleton below, with the words from the words file. Drop
    the period after each step title. Then fill its three scripts:
-   `node <this skill>/scripts/explainer.mjs <page.html> <name>.js`. Run it again after any change
-   to the figure. Copy any change to the words back into the words file.
+   `node ${CLAUDE_PLUGIN_ROOT}/skills/paint/scripts/explainer.mjs <page.html> <name>.js`. Run it
+   again after any change to the figure. Copy any change to the words back into the words file.
 6. **Check and export,** as the last section says. Then open the HTML, as Step 5 of paint's
    `SKILL.md` says for a page.
 
 ## The figure
 
-The figure keeps all ten rules of `../hairline-create/rules.md`. An explainer adds four.
+The figure keeps all ten rules of `${CLAUDE_PLUGIN_ROOT}/skills/hairline-create/rules.md`. An explainer adds four.
 
 - **One part per step.** The pointer picks one part at a time: the "one of many" or the "scrub and
   pick" answer of `concepts.md`. Step N is part N, and the parts read in step order across the
@@ -72,7 +74,7 @@ The figure keeps all ten rules of `../hairline-create/rules.md`. An explainer ad
 - **The legend decodes it.** Rule 10 keeps words out of the figure. The legend says what the
   object stands for and what the parts are, so the figure is never a riddle.
 
-`explainer-layers.js`, beside this file, keeps all four: a stack of image layers whose plates the
+`${CLAUDE_PLUGIN_ROOT}/skills/paint/reference/explainer-layers.js` keeps all four: a stack of image layers whose plates the
 pointer picks by height. Read it with the examples of `hairline-create` before drawing. The page
 mounts the figure at the middle of its `range`, and it shows no slider.
 
