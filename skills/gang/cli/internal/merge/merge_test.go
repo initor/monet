@@ -234,7 +234,7 @@ func TestMergeRefusalsInContractOrder(t *testing.T) {
 	}
 }
 
-// Contract 0 rule 1: potato writes the Task line above a "Testing Done"
+// Contract 0 rule 1: demo writes the Task line above a "Testing Done"
 // paragraph, where it is not a git trailer.
 func TestMergeAcceptsTaskLineThatIsNotATrailer(t *testing.T) {
 	f := newFixture(t)

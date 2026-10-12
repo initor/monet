@@ -168,7 +168,7 @@ func TestSlugShape(t *testing.T) {
 			t.Errorf("slug %q: %v, want one rule 1 slug problem", slug, ps)
 		}
 	}
-	for _, slug := range []string{"config", "potato-phase2", "a", "0x9"} {
+	for _, slug := range []string{"config", "demo-phase2", "a", "0x9"} {
 		p := validPlan()
 		p.Slug = slug
 		if ps := Lint(p, Options{}); len(ps) != 0 {
@@ -295,7 +295,7 @@ func TestAdoptSource(t *testing.T) {
 		wantMsg []string
 	}{
 		{"snake case keys", `{"tasks":[{"id":"A1","depends_on":[]},{"id":"B1","depends_on":["A1"],"merge_after":[]}]}`, nil},
-		{"potato keys", `{"source":"x","tasks":[{"id":"A1","deps":[],"mergeAfter":[]},{"id":"B1","deps":["A1"],"size":300}]}`, nil},
+		{"demo keys", `{"source":"x","tasks":[{"id":"A1","deps":[],"mergeAfter":[]},{"id":"B1","deps":["A1"],"size":300}]}`, nil},
 		{"camel case keys", `{"tasks":[{"id":"A1"},{"id":"B1","dependsOn":["A1"]}]}`, nil},
 		{"extra source task", `{"tasks":[{"id":"A1"},{"id":"B1","deps":["A1"]},{"id":"C1","deps":["B1"]}]}`, []string{
 			"rule 8: - : task count 2 differs from the source's 3",
