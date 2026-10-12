@@ -1,0 +1,27 @@
+# Runs `make test` (which runs `make check` first) on every pull request and
+# on each push to main (FND-9). The claude CLI is pinned to an exact version,
+# so a CLI release can't change what `claude plugin validate` accepts.
+# Validation needs no login, so the job reads no secret or API key.
+name: check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.x"
+      - run: npm install -g @anthropic-ai/claude-code@2.1.296
+      - run: claude --version
+      - run: make test
