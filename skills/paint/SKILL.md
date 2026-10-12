@@ -1,29 +1,43 @@
 ---
 name: paint
 description: Use when the user asks to visualize, "paint", or turn session research/analysis/data into a shareable self-contained HTML page, or wants a visual summary of findings. With --sheet, it makes one dense image instead, as HTML plus a PNG. With --explainer, it teaches one concept to a newcomer, with one Hairline figure and plain words. For a visual the owner picks by eye in rounds, use visual-design.
+argument-hint: "[topic or focus] [--flavor showcase|minimal|technical] [--sheet | --explainer]"
+allowed-tools:
+  - Read
+  - Bash
+  - Write
+  - AskUserQuestion
+  - Skill
 ---
 
 ## Overview
 
 Turn the session's findings into **one self-contained, honest, theme-aware HTML page**. The structure and components are fixed; the visual *voice* is a **flavor** chosen to fit the content: engineering write-ups shouldn't look like product launches. Every number on the page comes from the session. Never invent data.
 
+Paths: CLAUDE_SKILL_DIR, this skill's dir, is `${CLAUDE_SKILL_DIR}`, and CLAUDE_PLUGIN_ROOT, the plugin root, is `${CLAUDE_PLUGIN_ROOT}`, so a reference file below that writes either name as a `${...}` token means that path.
+
+## Arguments
+
+Arguments: $ARGUMENTS
+
+Parse them for three optional parts:
+
+- A topic or focus guides which session content to prioritize and how to title the page. If it is empty, infer the dominant content.
+- `--flavor showcase|minimal|technical` forces a flavor. Otherwise Step 2 picks one from the content and intent.
+- `--sheet` switches to the sheet layout, and `--explainer` to the explainer layout, as Step 2 says.
+
 ## Prose voice
 
 Distinct from the **flavor voice** in Step 2, which is visual. This one is about the words.
 
-A painted page gets shared, so its text goes out under Wayne's name and runs through `voice`. Read that file in full, as the instruction below says, rather than taking it as a mere reference, because holding a rule is not the same as applying it. It covers section headings, narrative copy, callouts, metric labels, and chart captions.
+A painted page gets shared, so its text goes out under the user's name and runs through the voice skill. Before writing prose, load it with the Skill tool as `monet:voice`, with `--no-ste` in its args, rather than relying on memory, because holding a rule is not the same as applying it. It covers section headings, narrative copy, callouts, metric labels, and chart captions.
 
-Register for this surface: **paint page copy**. An explainer's words follow the STE-lite card instead, as `reference/explainer.md` says. Proper capitalization, fully formed sentences in narrative sections. Not chat. Fragments are fine in labels and metric captions, where they are the convention rather than a shortcut.
+Register for this surface: **paint page copy**. An explainer's words follow the STE-lite card instead, as `${CLAUDE_SKILL_DIR}/reference/explainer.md` says. Proper capitalization, fully formed sentences in narrative sections. Not chat. Fragments are fine in labels and metric captions, where they are the convention rather than a shortcut.
 
 Two invariants carry most of the weight here:
 
 - **Ground every claim.** The Constraints below already forbid fabricating numbers. The same rule applies to prose assertions, which slip in more easily because nothing about them looks numeric.
 - **No cute generated phrasing.** A visual page is exactly where a model reaches for punchy headline copy. A section heading states what the section shows. It is not a tagline.
-
-Read `../voice/SKILL.md` relative to this skill directory before writing prose.
-Resolve all `reference/` paths against this skill directory, not the task's
-working directory. If the client does not expand `@` includes, read referenced
-files explicitly using its available file-reading tool.
 
 ## When to use / not
 
@@ -37,7 +51,7 @@ Scan the conversation and pull out: key insights (3–5), quantifiable data poin
 
 ## Step 2: Choose the flavor (automatic)
 
-**Layout.** The default is a **page** of scrolling sections. Switch to a **sheet** only when the request asks for one: `--sheet`, "one sheet", "sheet this", or "one image I can paste". A sheet is one fixed canvas of lettered panels with a PNG export, and `reference/sheet.md` holds its rules. Switch to an **explainer** only when the request asks for one: `--explainer`, "explain this to a newcomer", or "a picture explainer". An explainer is one Hairline figure with plain words and numbered steps, and `reference/explainer.md` holds its rules. The flavor below still sets the tokens for every layout.
+**Layout.** The default is a **page** of scrolling sections. Switch to a **sheet** only when the request asks for one: `--sheet`, "one sheet", "sheet this", or "one image I can paste". A sheet is one fixed canvas of lettered panels with a PNG export, and `${CLAUDE_SKILL_DIR}/reference/sheet.md` holds its rules. Switch to an **explainer** only when the request asks for one: `--explainer`, "explain this to a newcomer", or "a picture explainer". An explainer is one Hairline figure with plain words and numbered steps, and `${CLAUDE_SKILL_DIR}/reference/explainer.md` holds its rules. The flavor below still sets the tokens for every layout.
 
 Pick the flavor that fits the content and intent. Don't ask. Honor an explicit `--flavor <name>` or a natural-language cue ("keep it minimal", "make it pop" → showcase) when present.
 
@@ -47,11 +61,11 @@ Pick the flavor that fits the content and intent. Don't ask. Honor an explicit `
 | Exec summary, results/benchmarks to present, comparison or recommendation you're "selling", launch recap, "make it impressive" | **showcase** |
 | Plain notes, single-topic summary/reference, "keep it simple/clean", **or anything ambiguous** | **minimal** (default) |
 
-Read `reference/flavors/<flavor>.md` for that flavor's tokens, rules, and *visual* voice.
+Read `${CLAUDE_SKILL_DIR}/reference/flavors/<flavor>.md` for that flavor's tokens, rules, and *visual* voice.
 
 ## Step 3: Design the page
 
-For a sheet, choose 4 to 6 panels instead, per `reference/sheet.md`. For an explainer, follow the order of work in `reference/explainer.md`: the words, then the figure, then the page. For a page, choose 4–8 sections, one idea each, building a story (overview → detail → conclusion). Alternate data-heavy and narrative sections. Pick the visualization per section from the palette below, and honor the chosen flavor's *visual* voice (e.g. technical favors tables/code/flow diagrams over decorative charts). For the words in those sections, see Prose voice above.
+For a sheet, choose 4 to 6 panels instead, per `${CLAUDE_SKILL_DIR}/reference/sheet.md`. For an explainer, follow the order of work in `${CLAUDE_SKILL_DIR}/reference/explainer.md`: the words, then the figure, then the page. For a page, choose 4–8 sections, one idea each, building a story (overview → detail → conclusion). Alternate data-heavy and narrative sections. Pick the visualization per section from the palette below, and honor the chosen flavor's *visual* voice (e.g. technical favors tables/code/flow diagrams over decorative charts). For the words in those sections, see Prose voice above.
 
 | Pattern | Use for |
 |---|---|
@@ -69,7 +83,7 @@ For a sheet, choose 4 to 6 panels instead, per `reference/sheet.md`. For an expl
 
 ## Step 4: Assemble the HTML
 
-Read `reference/base.md` for the skeleton, component CSS, and theme/reveal JS. Build a single self-contained file: inline the base CSS, then the chosen flavor's token block **after** it (so flavor wins), then the content. Set `<html data-anim>` to the flavor's default. No external dependencies: it must work offline. For a sheet, build from the skeleton in `reference/sheet.md` instead of sections, with `data-anim="off"`. For an explainer, build from the skeleton in `reference/explainer.md`, with `data-anim="off"`, then fill its scripts with `scripts/explainer.mjs`.
+Read `${CLAUDE_SKILL_DIR}/reference/base.md` for the skeleton, component CSS, and theme/reveal JS. Build a single self-contained file: inline the base CSS, then the chosen flavor's token block **after** it (so flavor wins), then the content. Set `<html data-anim>` to the flavor's default. No external dependencies: it must work offline. For a sheet, build from the skeleton in `${CLAUDE_SKILL_DIR}/reference/sheet.md` instead of sections, with `data-anim="off"`. For an explainer, build from the skeleton in `${CLAUDE_SKILL_DIR}/reference/explainer.md`, with `data-anim="off"`, then fill its scripts with `${CLAUDE_SKILL_DIR}/scripts/explainer.mjs`.
 
 ## Step 5: Write and open
 
@@ -84,21 +98,10 @@ Read `reference/base.md` for the skeleton, component CSS, and theme/reveal JS. B
    Follow the host's delivery and publication requirements using tools actually
    available there; generating HTML does not require an Artifact tool or remote
    hosting.
-4. For a sheet, do not open the HTML. Export and check the PNG as `reference/sheet.md`
+4. For a sheet, do not open the HTML. Export and check the PNG as `${CLAUDE_SKILL_DIR}/reference/sheet.md`
    describes. Then open the PNG once, with the same exceptions as a page.
-   For an explainer, run the check and export in `reference/explainer.md`, then open the HTML.
-5. Confirm tersely. A sheet uses the second form, and an explainer the third. An explainer adds a
-   line for anything it could not verify, such as a figure not looked at in a browser:
-   ```
-   Painted: {filename}  ·  flavor: {flavor}
-   {N} sections, {M} visualizations · light + dark theme
-
-   Painted: {name}.html + {name}.png  ·  flavor: {flavor}
-   {N} panels · PNG 3200 by 1800, light theme
-
-   Painted: {name}.html + {name}.png  ·  flavor: {flavor}
-   one figure, {N} steps · PNG 2400 wide, light theme
-   ```
+   For an explainer, run the check and export in `${CLAUDE_SKILL_DIR}/reference/explainer.md`, then open the HTML.
+5. Report as the last section, Report, says.
 
 ## Constraints
 
@@ -116,3 +119,21 @@ Read `reference/base.md` for the skeleton, component CSS, and theme/reveal JS. B
 - ASCII/box-art diagrams, or a chart built from fewer than 3 data points.
 - A 70vh marketing hero on technical content (technical/minimal use a compact title block).
 - Prettifying a copy panel's payload: rendering its markdown, styling `​```suggestion` fences into diff boxes, or linkifying bare URLs. The payload is verbatim text; what the user sees is exactly what the copy button puts on the clipboard.
+
+## Report
+
+Report the filename (and the PNG for a sheet or an explainer), the section, panel, or step count,
+and the flavor that was used. Keep it terse. A page uses the first form, a sheet the second, and an
+explainer the third. An explainer adds a line for anything it could not verify, such as a figure
+not looked at in a browser:
+
+```
+Painted: {filename}  ·  flavor: {flavor}
+{N} sections, {M} visualizations · light + dark theme
+
+Painted: {name}.html + {name}.png  ·  flavor: {flavor}
+{N} panels · PNG 3200 by 1800, light theme
+
+Painted: {name}.html + {name}.png  ·  flavor: {flavor}
+one figure, {N} steps · PNG 2400 wide, light theme
+```

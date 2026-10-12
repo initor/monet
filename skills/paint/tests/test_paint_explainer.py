@@ -9,9 +9,8 @@ import subprocess
 import tempfile
 import unittest
 
-REPO = Path(__file__).resolve().parent.parent
-PAINT = REPO / '.claude/skills/paint'
-HAIRLINE = REPO / '.claude/skills/hairline-create'
+PAINT = Path(__file__).resolve().parents[1]
+HAIRLINE = PAINT.parent / 'hairline-create'
 DOC = PAINT / 'reference/explainer.md'
 FILL = PAINT / 'scripts/explainer.mjs'
 HOST = PAINT / 'scripts/explainer-host.js'
