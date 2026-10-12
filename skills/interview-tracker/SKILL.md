@@ -1,7 +1,11 @@
 ---
 name: interview-tracker
-description: Record, read, and manage interview preparation practice sessions -- persists session data with rubric scores, takeaways, and timing metadata to ~/.config/interview-prep/.
+description: Use when asked to record, read, and manage interview preparation practice sessions, or when a mock skill records its results. Persists session data with rubric scores, takeaways, and timing metadata to the interview-prep folder of the user's monet data dir.
 ---
+
+## Data dir
+
+The data dir is `${user_config.data_dir}`. If the data dir above is empty or starts with `${user_config`, it isn't configured, so use `~/.config/monet`. Below, `<data dir>` stands for that path, and sessions live in `<data dir>/interview-prep/`. In Bash, write `<data dir>` unquoted, so a leading `~` expands. For the Write tool, expand a leading `~` to the home directory.
 
 ## Preconditions
 
@@ -12,7 +16,7 @@ None. This skill creates the storage directory if it does not exist.
 Run the following to guarantee the storage directory exists:
 
 ```bash
-mkdir -p ~/.config/interview-prep/
+mkdir -p <data dir>/interview-prep/
 ```
 
 This is idempotent and safe to call every time.
@@ -129,7 +133,7 @@ When called with session data to record:
 
    To determine `NNN`:
    ```bash
-   ls -1 ~/.config/interview-prep/{date}_{domain}_{mode}_*.json 2>/dev/null
+   ls -1 <data dir>/interview-prep/{date}_{domain}_{mode}_*.json 2>/dev/null
    ```
    Parse the highest existing sequence number and increment by 1. If no matching files exist, start at `001`.
 
@@ -152,7 +156,7 @@ When called with session data to record:
 
 4. **Set the `id` field.** Set it to the filename without the `.json` extension (e.g., `2026-02-22_sd_mock_001`).
 
-5. **Write the file.** Use the Write tool to write the JSON to `~/.config/interview-prep/{filename}` with 2-space indented formatting.
+5. **Write the file.** Use the Write tool to write the JSON to `<data dir>/interview-prep/{filename}` with 2-space indented formatting.
 
 6. **Confirm.** Print a confirmation line:
    ```
@@ -165,7 +169,7 @@ When called to list or read sessions:
 
 1. **List session files.**
    ```bash
-   ls -1 ~/.config/interview-prep/*.json 2>/dev/null
+   ls -1 <data dir>/interview-prep/*.json 2>/dev/null
    ```
 
 2. **Read and parse each file.** For each JSON file, extract the key fields.
