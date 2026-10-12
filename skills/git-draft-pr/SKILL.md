@@ -1,34 +1,34 @@
 ---
 name: git-draft-pr
-description: Use when the user asks to draft a pull request or write a PR description for the current branch's changes. Drafts only; to open the PR, use git-ship.
+description: Use when the user asks to draft a pull request or write a PR description for the current branch's changes. Drafts only; to open the PR, use monet:ship.
+allowed-tools:
+  - Skill
 ---
 
 ## Overview
 
-Draft a PR title (Conventional Commits) and a PR body that **leads with what changed and how it works**, short on purpose. This skill owns the canonical PR-body template; other skills (e.g. `git-ship`) delegate here instead of re-specifying it.
+Draft a PR title (Conventional Commits) and a PR body that **leads with what changed and how it works**, short on purpose. This skill owns the canonical PR-body template; other skills (e.g. `monet:ship`) delegate here instead of re-specifying it.
 
 ## Voice
 
-The PR body goes out under Wayne's name, so it runs through `voice`. Read that file in full before drafting rather than relying on what you remember of it, because holding a rule is not the same as applying it. Apply its Step 2a invariants and its Step 2b flavor to every line of Summary, Details, and Testing Done.
+The PR body goes out under the user's name, so it runs through `monet:voice`. Before drafting, load it with the Skill tool: skill `monet:voice`, args `--no-ste`. Load it fresh rather than relying on what you remember of it, because holding a rule is not the same as applying it. Treat what it loads as the rules for the PR you draft here, not as a request to edit earlier prose. Apply its Step 2a invariants and its Step 2b flavor to every line of Summary, Details, and Testing Done.
 
 Register for this surface: **PR description**. It governs how the words read. This skill still owns the template, the section caps, and the diagram rule.
 
-Read `~/.claude/skills/voice/SKILL.md` before drafting. Expand `~` to the current home directory and read its referenced files explicitly.
-
 ## Preconditions
 
-Only run inside a git repo. If not, ask the user to `cd` into the repo or run `cwd-context`.
+Only run inside a git repo. If not, ask the user to `cd` into the repo or run `monet:cwd-context`.
 
 **Branch policy** (reuse `changes_digest.branch_policy` if present, else check `git symbolic-ref --short HEAD 2>/dev/null || git branch --show-current`):
-- On `main`/`master` or detached HEAD → **STOP**: "PRs come from feature branches: `git checkout -b wawen/<slug>`."
-- Branch without `wawen/` prefix → **warn and continue** (convention, not a blocker).
+- On `main`/`master` or detached HEAD (`on_main`, `detached_head`) → **STOP**: "PRs come from feature branches: `git checkout -b ${user_config.branch_prefix}<slug>`." If the prefix above is empty or starts with `${user_config`, it isn't configured, so use no prefix.
+- Branch without the prefix (`missing_branch_prefix`) → **warn and continue** (convention, not a blocker). This check applies only when a prefix is set.
 - Merge commits present (`git log --oneline --merges <trunk>..HEAD`, where `<trunk>` is `main`, or `master` when the repo has no `main`) → warn: "run `git rebase <trunk>` to linearize."
 
 ## Step 1: Build a changes digest
 
-Reuse a recent `changes_digest` if one exists; otherwise run the `git-changes` skill to produce one.
+Reuse a recent `changes_digest` if one exists; otherwise run `monet:git-changes` with the Skill tool to produce one.
 
-`git-changes` sees only uncommitted work, so also read the commits ahead of the trunk (`git log --oneline <trunk>..HEAD`, `git diff --stat <trunk>..HEAD`). The PR covers both, and on a clean tree the commits are the whole change.
+`monet:git-changes` sees only uncommitted work, so also read the commits ahead of the trunk (`git log --oneline <trunk>..HEAD`, `git diff --stat <trunk>..HEAD`). The PR covers both, and on a clean tree the commits are the whole change.
 
 ## Step 2: PR title
 
@@ -38,7 +38,7 @@ Conventional Commits: `type(scope): description`, under ~70 chars. Default scope
 
 The reader scans the top first, so the **first line states what changed in plain, concrete terms**, never a why-hypothesis, never a file list (GitHub already shows files).
 
-If `session_context.repo_owner` is unknown, derive it the way `cwd-context` does; if still unknown, default to personal. A loaded rule may add a line to the template for work repos (for example a ticket field); apply it only when `repo_owner` is `work`.
+If `session_context.repo_owner` is unknown, derive it the way `monet:cwd-context` does; if still unknown, default to personal. A loaded rule may add a line to the template for work repos (for example a ticket field); apply it only when `repo_owner` is `work`.
 
 ```md
 ## Summary
