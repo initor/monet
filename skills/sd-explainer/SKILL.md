@@ -3,10 +3,14 @@ name: sd-explainer
 description: Use when the user asks to explain a concept, learn about a distributed systems topic, or wants a concept playground. Generates interactive playgrounds for distributed systems concepts, self-contained HTML simulations where users manipulate inputs and see results. For a quiz-gated lesson in chat, use teach instead. For a newcomer explainer with one Hairline figure, use paint --explainer instead.
 ---
 
+## Data dir
+
+The data dir is `${user_config.data_dir}`. If the data dir above is empty or starts with `${user_config`, it isn't configured, so use `~/.config/monet`. Below, `<data dir>` stands for that path. In shell commands, leave a leading `~/` outside quotes so it expands, and quote the rest of the path when it holds spaces.
+
 ## Preconditions
 
 - User must specify which concept to explain, or ask for a recommendation.
-- If the user asks for a recommendation, suggest based on their weak areas from interview-progress data (check session tags for recurring weaknesses) or from gaps identified in recent mock sessions.
+- If the user asks for a recommendation, suggest based on their weak areas: read the session records in `<data dir>/interview-prep/*.json` (the data that `monet:interview-progress` charts) and check session tags for recurring weaknesses, or use gaps identified in recent mock sessions.
 - This skill is on-demand only -- it does NOT auto-trigger during mocks or drills.
 - If the concept is ambiguous (e.g., "hashing"), clarify which variant ("consistent hashing? hash rings? cryptographic hashing?") before proceeding.
 
@@ -269,18 +273,18 @@ Apply consistent CSS across all explainers:
 
 1. **Create directory if needed:**
    ```bash
-   mkdir -p ~/.config/interview-prep/playgrounds/
+   mkdir -p <data dir>/interview-prep/playgrounds/
    ```
 
 2. **Write the HTML file:**
-   - Path: `~/.config/interview-prep/playgrounds/sd-concept-{concept-slug}-{date}.html`
+   - Path: `<data dir>/interview-prep/playgrounds/sd-concept-{concept-slug}-{date}.html`
    - `concept-slug`: concept name lowercased, spaces replaced with hyphens (e.g., "consistent-hashing", "circuit-breakers", "rate-limiting")
    - `date`: current date in YYYY-MM-DD format
    - Use the Write tool to create the file
 
 3. **Open in browser:**
    ```bash
-   open ~/.config/interview-prep/playgrounds/sd-concept-{concept-slug}-{date}.html
+   open <data dir>/interview-prep/playgrounds/sd-concept-{concept-slug}-{date}.html
    ```
 
 4. **Print confirmation:**

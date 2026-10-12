@@ -3,12 +3,16 @@ name: sd-playground
 description: Use when the user asks for an architecture diagram, system design diagram, or design playground. Generates an interactive architecture diagram playground from a system design, as a self-contained HTML file with draggable components, connections, and annotations in a whiteboard aesthetic. For a designed overview page or visual the owner picks by eye, use visual-design instead.
 ---
 
+## Data dir
+
+The data dir is `${user_config.data_dir}`. If the data dir above is empty or starts with `${user_config`, it isn't configured, so use `~/.config/monet`. Below, `<data dir>` stands for that path. In shell commands, leave a leading `~/` outside quotes so it expands, and quote the rest of the path when it holds spaces.
+
 ## Preconditions
 
 - This skill needs a system design to visualize. It can work from:
-  1. A just-completed sd-mock session (preferred -- components are already in conversation context)
+  1. A just-completed `monet:sd-mock` session (preferred -- components are already in conversation context)
   2. A user-described system design (user explains their architecture)
-- If no design context is available, ask the user to describe their system or run an sd-mock first.
+- If no design context is available, ask the user to describe their system or run `monet:sd-mock` first.
 
 ## Step 1: Extract architecture components
 
@@ -314,7 +318,7 @@ Store initial positions in `state.initialPositions` for the "Reset Layout" featu
 
 1. **Create the output directory** (if it doesn't exist):
    ```bash
-   mkdir -p ~/.config/interview-prep/playgrounds/
+   mkdir -p <data dir>/interview-prep/playgrounds/
    ```
 
 2. **Generate the filename:**
@@ -324,12 +328,12 @@ Store initial positions in `state.initialPositions` for the "Reset Layout" featu
 
 3. **Write the HTML file** using the Write tool to:
    ```
-   ~/.config/interview-prep/playgrounds/sd-diagram-{topic-slug}-{date}.html
+   <data dir>/interview-prep/playgrounds/sd-diagram-{topic-slug}-{date}.html
    ```
 
 4. **Open in default browser:**
    ```bash
-   open ~/.config/interview-prep/playgrounds/sd-diagram-{topic-slug}-{date}.html
+   open <data dir>/interview-prep/playgrounds/sd-diagram-{topic-slug}-{date}.html
    ```
 
 5. **Print confirmation:**
@@ -350,7 +354,7 @@ Store initial positions in `state.initialPositions` for the "Reset Layout" featu
 - Keep the generated HTML under approximately 2000 lines. Focus on usability over visual polish (functional whiteboard aesthetic).
 - Component layout algorithm must produce a readable layout on first render -- no overlapping components. Use the zone-based positioning from Step 1 with vertical spacing.
 - Do not include any server-side logic -- this is a static HTML file opened locally.
-- Do not auto-invoke this skill after a mock -- it is on-demand only. The sd-mock skill offers it as a next step (Step 6, option 3).
+- Do not auto-invoke this skill after a mock -- it is on-demand only. The `monet:sd-mock` skill offers it as a next step (Step 6, option 3).
 - Use inline SVG or Unicode text for component type icons. No external icon libraries.
 - Use CSS `font-family: 'Segoe Print', 'Comic Sans MS', cursive` for the handwritten/sketch feel (Excalidraw-style approximation).
 - Export PNG is best-effort. For complex diagrams, suggest the user take a screenshot as fallback.
