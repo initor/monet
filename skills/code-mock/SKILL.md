@@ -1,6 +1,6 @@
 ---
 name: code-mock
-description: Run Java-focused coding mock interviews or drill specific aspects (clarification, optimization, edge cases) with a realistic Staff+ interviewer. Evaluates against coding rubric, generates golden solutions, and auto-records sessions. Use when the user asks to practice coding, run a coding mock, or drill coding problems.
+description: Use when the user asks to practice coding, run a coding mock, or drill coding problems. Runs Java-focused coding mock interviews or drills specific aspects (clarification, optimization, edge cases) with a realistic Staff+ interviewer, evaluates against a coding rubric, generates golden solutions, and auto-records sessions.
 ---
 
 ## Preconditions
@@ -411,14 +411,14 @@ For drill mode focused on **clarification**:
 
 ### Playground generation
 
-Generate the coding playground automatically by applying the `code-playground` skill with the following context:
+Generate the coding playground automatically: invoke `monet:code-playground` with the Skill tool, and pass it this problem context as its arguments:
 
 - **Title:** [problem title]
 - **Description:** [problem description]
 - **Method signature:** [signature or "User-defined interface"]
 - **Test cases:** [list the test cases]
 
-Read `~/.claude/skills/code-playground/SKILL.md` (absolute path, never cwd-relative) and execute it to produce the playground HTML. The playground is the PRIMARY coding surface. The user writes their solution there, not in chat.
+Follow the loaded `monet:code-playground` instructions to produce the playground HTML. The Skill tool expands its data dir, so never read its skill file by path. The playground is the PRIMARY coding surface. The user writes their solution there, not in chat.
 
 ### During coding
 
@@ -527,7 +527,7 @@ After all sub-agents complete, merge their outputs and assemble the complete eva
 
 ### 5a. Rubric scores
 
-Score against the 5 coding dimensions from the interview-tracker schema. For each dimension, provide a numeric score (1-5 integer), the label, and brief notes referencing specific moments from the session.
+Score against the 5 coding dimensions from the `monet:interview-tracker` schema. For each dimension, provide a numeric score (1-5 integer), the label, and brief notes referencing specific moments from the session.
 
 | Dimension Key | What It Measures |
 |---------------|------------------|
@@ -692,13 +692,13 @@ Be honest and specific: "Your approach to the problem was sound with a clean has
 
 Auto-record the session with zero friction. Do NOT ask the user for confirmation.
 
-**Background execution:** Session recording (interview-tracker write) can run as a background sub-agent AFTER presenting the evaluation to the user. Do not make the user wait for file I/O before seeing their results.
+**Background execution:** Session recording (the `monet:interview-tracker` write mode) can run as a background sub-agent AFTER presenting the evaluation to the user. Do not make the user wait for file I/O before seeing their results.
 
-Follow the interview-tracker skill's write mode protocol:
+Load `monet:interview-tracker` with the Skill tool and follow its write mode protocol. A background sub-agent loads it with the Skill tool too. Never read the tracker's skill file by path.
 
 1. **Compute `timing_breakdown`** from phase timestamps. Approximate from conversation flow -- estimate seconds spent on each phase based on message length and exchange count.
 
-2. **Build the session JSON** with all required fields per the interview-tracker schema:
+2. **Build the session JSON** with all required fields per the `monet:interview-tracker` schema:
 
    ```json
    {
@@ -738,7 +738,7 @@ Follow the interview-tracker skill's write mode protocol:
 
 5. **Generate `takeaways.tags`** as machine-readable tags derived from weak areas. Examples: `edge-cases`, `time-complexity`, `space-complexity`, `clean-code`, `clarification`, `variable-naming`, `null-handling`, `off-by-one`, `optimization`, `data-structure-choice`, `problem-decomposition`, `duplicate-handling`, `boundary-conditions`.
 
-6. Call the interview-tracker write mode to persist the session.
+6. Run the `monet:interview-tracker` write mode, loaded with the Skill tool, to persist the session.
 
 7. Print confirmation:
 
@@ -754,7 +754,7 @@ After evaluation and recording, offer the user these options:
 What's next?
 - "Run another coding mock" -- Fresh problem from a different category
 - "Drill a weak area" -- Focused practice on [weakest dimension from evaluation]
-- "Generate a playground for further practice" -- Invoke the code-playground skill with a new problem
+- "Generate a playground for further practice" -- Invoke `monet:code-playground` with the Skill tool and a new problem
 - "View progress dashboard" -- See your trends across coding sessions
 ```
 
