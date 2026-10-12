@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="auto">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{TITLE}}</title>
+<style>
+/* ---------- base ---------- */
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg-primary);color:var(--text-primary);font-family:var(--font-text);
+  font-size:var(--body-size);line-height:1.5;-webkit-font-smoothing:antialiased;
+  transition:background-color .3s ease,color .3s ease}
+main{max-width:var(--max-width);margin:0 auto;padding:0 24px 72px}
+h1,h2{font-family:var(--font-display);line-height:1.12;margin:0 0 .4em}
+.hero{padding:56px 0 20px}
+.hero h1{font-size:var(--hero-title-size);letter-spacing:-.01em}
+.hero .subtitle{color:var(--text-secondary);max-width:74ch}
+.section{padding:var(--section-pad-y) 0 0}
+.section p{color:var(--text-secondary);max-width:80ch}
+.card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:18px;margin-top:20px}
+.card{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--card-radius);padding:var(--card-pad)}
+.card h3{font-family:var(--font-mono);font-size:.82rem;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--text-tertiary);margin:0 0 10px}
+.card p{margin:0;font-size:.9rem;color:var(--text-secondary);max-width:none}
+#theme-toggle{position:fixed;top:18px;right:18px;z-index:1000;width:38px;height:38px;border-radius:50%;
+  border:1px solid var(--border);background:var(--card-bg);color:var(--text-primary);cursor:pointer;
+  display:grid;place-items:center}
+@media (max-width:740px){:root{--hero-title-size:30px;--section-pad-y:40px}main{padding:0 18px 56px}}
+
+/* ---------- flavor: technical ---------- */
+:root{
+  --font-display:ui-sans-serif,system-ui,"Inter","Segoe UI",Roboto,sans-serif;
+  --font-text:ui-sans-serif,system-ui,"Inter","Segoe UI",Roboto,sans-serif;
+  --font-mono:ui-monospace,"JetBrains Mono",SFMono-Regular,Menlo,Consolas,monospace;
+  --bg-primary:#fff; --bg-secondary:#f5f5f7; --bg-tertiary:#e8e8ed;
+  --text-primary:#1d1d1f; --text-secondary:#6e6e73; --text-tertiary:#86868b;
+  --accent:#0a84d6; --accent-subtle:rgba(10,132,214,.08);
+  --success:#34a853; --warning:#e8910a; --danger:#e0392f;
+  --success-subtle:rgba(52,168,83,.10);
+  --border:rgba(0,0,0,.08); --card-bg:#fff; --code-bg:#f5f5f7;
+  --max-width:960px; --section-pad-y:40px;
+  --hero-title-size:30px; --section-title-size:19px; --body-size:16px;
+  --card-radius:8px; --card-pad:16px;
+}
+[data-theme="dark"]{
+  --bg-primary:#000; --bg-secondary:#1c1c1e; --bg-tertiary:#2c2c2e;
+  --text-primary:#f5f5f7; --text-secondary:#a1a1a6; --text-tertiary:#86868b;
+  --accent:#2997ff; --accent-subtle:rgba(41,151,255,.14);
+  --success:#30d158; --warning:#ffd60a; --danger:#ff453a;
+  --success-subtle:rgba(48,209,88,.16);
+  --border:rgba(255,255,255,.10); --card-bg:#1c1c1e; --code-bg:#1c1c1e;
+}
+.hero h1{font-family:var(--font-mono);font-weight:600}
+code{font-family:var(--font-mono);font-size:.86em;background:var(--code-bg);padding:1px 5px;border-radius:4px}
+
+/* ---------- diagram ---------- */
+.dgwrap{overflow-x:auto;padding:6px 0 10px}
+.dg{display:block;width:100%;height:auto;min-width:840px}
+.dg .bx      {fill:var(--card-bg);       stroke:var(--border);  stroke-width:1.5}
+.dg .bx.now  {fill:var(--accent-subtle); stroke:var(--accent);  stroke-width:2.4}
+.dg .bx.later{fill:var(--bg-secondary);  stroke:var(--border);  stroke-width:1.5;stroke-dasharray:5 3}
+.dg .bx.done {fill:var(--success-subtle);stroke:var(--success); stroke-width:1.6}
+{{EXTRA_STATE_RULES}}
+.dg .type    {font-family:var(--font-mono);font-size:8px;font-weight:700;letter-spacing:.1em;fill:var(--text-tertiary)}
+.dg .type.fix{fill:var(--danger)}
+.dg .type.ref{fill:var(--warning)}
+.dg .lnk     {fill:var(--accent);text-decoration:underline;text-underline-offset:2px}
+.dg a        {cursor:pointer}
+.dg a:hover .lnk{fill:var(--text-primary)}
+.dg .id      {font-family:var(--font-mono);font-size:13px;font-weight:600;fill:var(--text-primary)}
+.dg .id.mut  {fill:var(--text-tertiary)}
+.dg .sub     {font-family:var(--font-text);font-size:10px;fill:var(--text-secondary)}
+.dg .sub.mut {fill:var(--text-tertiary)}
+.dg .pr      {font-family:var(--font-mono);font-size:9.5px;fill:var(--text-tertiary)}
+.dg .pr.open {fill:var(--accent);font-weight:600}

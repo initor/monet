@@ -1,0 +1,71 @@
+package gh
+
+import (
+	"reflect"
+	"strings"
+	"testing"
+
+	"gang/internal/testkit"
+)
+
+func TestPRStateMapsCheckRunsAndStatusContexts(t *testing.T) {
+	state, _ := testkit.FakeGH(t)
+	testkit.Answer(t, state, "pr-view.json", `{"state":"OPEN","mergeable":"MERGEABLE","headRefOid":"abc123",
+"statusCheckRollup":[
+ {"__typename":"CheckRun","name":"build","status":"COMPLETED","conclusion":"SUCCESS"},
+ {"__typename":"CheckRun","name":"e2e","status":"IN_PROGRESS","conclusion":""},
+ {"__typename":"StatusContext","context":"ci/lint","state":"FAILURE"},
+ {"__typename":"StatusContext","context":"ci/docs","state":"PENDING"}]}`)
+	got, err := PRState("github.com/acme/widget", 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := State{State: "OPEN", Mergeable: "MERGEABLE", HeadSHA: "abc123", Checks: []Check{
+		{"build", "COMPLETED", "SUCCESS"},
+		{"e2e", "IN_PROGRESS", ""},
+		{"ci/lint", "COMPLETED", "FAILURE"},
+		{"ci/docs", "PENDING", "PENDING"},
+	}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %+v\nwant %+v", got, want)
+	}
+	calls := testkit.Calls(t, state)
+	if len(calls) != 1 || calls[0] != "pr view 7 --repo github.com/acme/widget --json state,mergeable,headRefOid,statusCheckRollup" {
+		t.Fatalf("calls = %q", calls)
+	}
+}
+
+func TestPRStateReportsGHErrors(t *testing.T) {
+	testkit.FakeGH(t) // no pr-view.json answer: the fake exits 1
+	if _, err := PRState("github.com/acme/widget", 7); err == nil || !strings.Contains(err.Error(), "gh pr view 7") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestClassify(t *testing.T) {
+	ok := Check{"build", "COMPLETED", "SUCCESS"}
+	cases := []struct {
+		name       string
+		s          State
+		green, red bool
+		failed     []string
+	}{
+		{"zero checks is never green", State{Mergeable: "MERGEABLE"}, false, false, nil},
+		{"all passing and mergeable", State{Mergeable: "MERGEABLE", Checks: []Check{ok, {"lint", "COMPLETED", "NEUTRAL"}, {"docs", "COMPLETED", "SKIPPED"}}}, true, false, nil},
+		{"passing but conflicting", State{Mergeable: "CONFLICTING", Checks: []Check{ok}}, false, false, nil},
+		{"passing but mergeable unknown", State{Mergeable: "UNKNOWN", Checks: []Check{ok}}, false, false, nil},
+		{"pending blocks green", State{Mergeable: "MERGEABLE", Checks: []Check{ok, {"e2e", "IN_PROGRESS", ""}}}, false, false, nil},
+		{"pending status context", State{Mergeable: "MERGEABLE", Checks: []Check{ok, {"ci", "PENDING", "PENDING"}}}, false, false, nil},
+		{"failure is red even with pending", State{Mergeable: "MERGEABLE", Checks: []Check{{"e2e", "IN_PROGRESS", ""}, {"unit", "COMPLETED", "FAILURE"}}}, false, true, []string{"unit"}},
+		{"every failing conclusion, sorted and unique", State{Checks: []Check{
+			{"z", "COMPLETED", "TIMED_OUT"}, {"a", "COMPLETED", "ERROR"}, {"m", "COMPLETED", "CANCELLED"},
+			{"b", "COMPLETED", "ACTION_REQUIRED"}, {"a", "COMPLETED", "FAILURE"}, {"s", "COMPLETED", "STARTUP_FAILURE"}, ok,
+		}}, false, true, []string{"a", "b", "m", "s", "z"}},
+	}
+	for _, c := range cases {
+		green, red, failed := Classify(c.s)
+		if green != c.green || red != c.red || !reflect.DeepEqual(failed, c.failed) {
+			t.Errorf("%s: got (%v, %v, %v), want (%v, %v, %v)", c.name, green, red, failed, c.green, c.red, c.failed)
+		}
+	}
+}

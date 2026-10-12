@@ -1,0 +1,13 @@
+{
+  "implement": { "model": "opus", "effort": "high" },
+  "implement_hard": { "model": "opus", "effort": "xhigh" },
+  "review": { "model": "opus", "effort": "xhigh" },
+  "review_adversarial": { "model": "opus", "effort": "xhigh" },
+  "fix": { "model": "opus", "effort": "high" },
+  "sync": { "model": "opus", "effort": "high" },
+  "merge": { "model": "opus", "effort": "low" },
+  "health": { "model": "opus", "effort": "medium" },
+  "repair": { "model": "opus", "effort": "xhigh" },
+  "plan_draft": { "model": "opus", "effort": "high" },
+  "plan_review": { "model": "opus", "effort": "high" }
+}
