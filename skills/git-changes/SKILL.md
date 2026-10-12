@@ -9,7 +9,7 @@ This skill only applies inside a git repo.
 
 If `git rev-parse --is-inside-work-tree` is false:
 - Say you're not in a git repo.
-- Recommend running `cwd-context` or `cd` into the repo.
+- Recommend running `monet:cwd-context` or `cd` into the repo.
 - Stop.
 
 ## Collect change facts (bounded)
@@ -37,15 +37,19 @@ Untracked files count toward themes, risks, commit type, and scope, but stay in 
 
 ## Check branch policy
 
+The branch prefix is `${user_config.branch_prefix}`. If the prefix above is empty or starts with `${user_config`, it isn't configured, so use no prefix.
+
 After collecting the branch name:
 - If branch is `DETACHED`: keep `violation: "detached_head"` (set above).
 - Else if branch is `main` or `master`: set `branch_policy.violation: "on_main"`.
-- Else if branch does NOT start with `wawen/`: set `violation: "missing_wawen_prefix"`.
+- Else if a prefix is set and the branch does NOT start with it: set `violation: "missing_branch_prefix"`. This check applies only when a prefix is set.
 - Otherwise: set `violation: "none"`.
+
+Set `has_branch_prefix` to true when the branch starts with the prefix, or when no prefix is set.
 
 Include this in the digest. Do NOT block the digest -- this skill is observational.
 If there is a violation, append to the "Suggested next step" bullets:
-- "**Branch policy violation**: you're on `<branch>`. Create a feature branch first: `git checkout -b wawen/<slug>`"
+- "**Branch policy violation**: you're on `<branch>`. Create a feature branch first: `git checkout -b ${user_config.branch_prefix}<slug>`" If the prefix above is empty or starts with `${user_config`, it isn't configured, so use no prefix.
 
 ## Produce a Changes Digest (YAML + short bullets)
 
@@ -71,8 +75,8 @@ changes_digest:
     - "<candidate scope 3>"
   branch_policy:
     on_main: true|false
-    has_wawen_prefix: true|false
-    violation: "none|on_main|missing_wawen_prefix|detached_head"
+    has_branch_prefix: true|false
+    violation: "none|on_main|missing_branch_prefix|detached_head"
 ```
 
 2) Then a short bullet list:
@@ -90,9 +94,9 @@ changes_digest:
 - New endpoints/features/flags → `feat`
 - Otherwise: `refactor` or `chore` depending on nature
 
-### Scope candidates (since your scope preference varies)
+### Scope candidates (the scope depends on the change)
 
-You don't have a single fixed scope rule; you want it to depend on the change.
+There is no single fixed scope rule: the scope depends on the change.
 
 Generate up to 3 candidates:
 
