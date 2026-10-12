@@ -1,14 +1,18 @@
 ---
 name: code-playground
-description: Generate an interactive coding playground for Java interview practice. Creates a self-contained HTML file with syntax-highlighted code editor, test case visualization, collapsible problem statement, and elapsed timer. Use when the user asks for a coding playground, wants to practice a coding problem interactively, or when running a coding mock.
+description: Use when the user asks for a coding playground, wants to practice a coding problem interactively, or when running a coding mock. Generates an interactive coding playground for Java interview practice, as a self-contained HTML file with a syntax-highlighted code editor, test case visualization, collapsible problem statement, and elapsed timer.
 ---
+
+## Data dir
+
+The data dir is `${user_config.data_dir}`. If the data dir above is empty or starts with `${user_config`, it isn't configured, so use `~/.config/monet`. Below, `<data dir>` stands for that path, and playgrounds live in `<data dir>/interview-prep/playgrounds/`. In Bash, write `<data dir>` unquoted, so a leading `~` expands. For the Write tool, expand a leading `~` to the home directory.
 
 ## Preconditions
 
 - This skill needs a coding problem to visualize. It can work from:
   1. A code-mock session in progress (preferred -- problem details are already in conversation context)
   2. A user-described problem (user provides title, description, method signature, test cases)
-- If no problem context is available, ask the user to describe their problem or start a code-mock first.
+- If no problem context is available, ask the user to describe their problem or start `monet:code-mock` first.
 
 ## Step 1: Extract problem data
 
@@ -699,7 +703,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 1. **Ensure directory exists:**
    ```bash
-   mkdir -p ~/.config/interview-prep/playgrounds
+   mkdir -p <data dir>/interview-prep/playgrounds/
    ```
 
 2. **Generate the filename:**
@@ -711,12 +715,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
 3. **Write the HTML file** using the Write tool to:
    ```
-   ~/.config/interview-prep/playgrounds/code-playground-{problem-slug}-{date}.html
+   <data dir>/interview-prep/playgrounds/code-playground-{problem-slug}-{date}.html
    ```
 
 4. **Open in default browser:**
    ```bash
-   open ~/.config/interview-prep/playgrounds/code-playground-{problem-slug}-{date}.html
+   open <data dir>/interview-prep/playgrounds/code-playground-{problem-slug}-{date}.html
    ```
 
 5. **Print confirmation:**
@@ -741,7 +745,7 @@ document.addEventListener('DOMContentLoaded', () => {
 - Timer starts on page load, no hard cutoff. Timer color changes at 30min (amber) and 45min (red) for awareness.
 - Problem statement is collapsible but expanded on first load. User clicks header to toggle.
 - Code editor must be pre-populated with method signature or class structure. Never generate an empty editor.
-- File goes to `~/.config/interview-prep/playgrounds/` directory (same as other playgrounds).
+- File goes to `<data dir>/interview-prep/playgrounds/` directory (same as other playgrounds).
 - Filename follows pattern: `code-playground-{problem-slug}-{date}.html`.
 
 ## Tone rules

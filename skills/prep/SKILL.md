@@ -1,6 +1,15 @@
 ---
 name: prep
 description: Use when the user wants to practice interviews -- system design, behavioral, or coding mocks -- or view their prep progress dashboard. Routes by domain + mode arguments to the matching mock skill (sd-mock, bq-mock, code-mock) or interview-progress; falls back to interactive selection when arguments are missing or invalid.
+argument-hint: "[sd|bq|code|progress] [mode] [topic]"
+allowed-tools:
+  - Read
+  - Bash
+  - Glob
+  - Grep
+  - Write
+  - AskUserQuestion
+  - Skill
 ---
 
 ## Overview
@@ -11,19 +20,29 @@ A thin router: resolve `<domain> [mode] [topic]` to a downstream interview skill
 
 - The user asks to practice or run a mock and hasn't named a specific domain skill, or wants a single entry point.
 - The user asks to check interview prep progress / view their dashboard.
-- Not for running the actual interview -- that is owned by `sd-mock`, `bq-mock`, `code-mock`, and `interview-progress`. This skill only picks one and delegates.
+- Not for running the actual interview -- that is owned by `monet:sd-mock`, `monet:bq-mock`, `monet:code-mock`, and `monet:interview-progress`. This skill only picks one and delegates.
+
+## Arguments
+
+Arguments: $ARGUMENTS
+
+Read `$ARGUMENTS` as positional inputs, `<domain> [mode] [topic]`. There are no flags. Pass them through unchanged. Empty arguments are valid: this skill then selects interactively (Step 1).
+
+- First argument: domain (`sd`, `bq`, `code`, `progress`, or an alias)
+- Second argument (optional): mode (`mock`, `drill`, `story-bank`, or an alias)
+- Third argument (optional): topic, passed through verbatim to the downstream skill
 
 ## Quick reference
 
 | Domain arg (aliases) | Mode arg (aliases) | Downstream skill | Context passed |
 |----------------------|--------------------|------------------|----------------|
-| `sd` / `system-design` / `system` / `design` | `mock` / `practice` / `interview` | `sd-mock` | "Run a system design mock" + topic if provided |
-| `sd` … | `drill` | `sd-mock` | "Drill {topic or 'a specific phase'}" |
-| `bq` / `behavioral` / `behavior` | `mock` / `practice` / `interview` | `bq-mock` | "Run a behavioral mock" + topic if provided |
-| `bq` … | `story-bank` / `stories` / `bank` / `build` | `bq-mock` | "Build a story for the bank" + topic if provided |
-| `code` / `coding` | `mock` / `practice` / `interview` | `code-mock` | "Run a coding mock" + topic if provided |
-| `code` … | `drill` | `code-mock` | "Drill {topic or 'a specific aspect'}" |
-| `progress` / `dashboard` / `stats` | (none) | `interview-progress` | (none) |
+| `sd` / `system-design` / `system` / `design` | `mock` / `practice` / `interview` | `monet:sd-mock` | "Run a system design mock" + topic if provided |
+| `sd` … | `drill` | `monet:sd-mock` | "Drill {topic or 'a specific phase'}" |
+| `bq` / `behavioral` / `behavior` | `mock` / `practice` / `interview` | `monet:bq-mock` | "Run a behavioral mock" + topic if provided |
+| `bq` … | `story-bank` / `stories` / `bank` / `build` | `monet:bq-mock` | "Build a story for the bank" + topic if provided |
+| `code` / `coding` | `mock` / `practice` / `interview` | `monet:code-mock` | "Run a coding mock" + topic if provided |
+| `code` … | `drill` | `monet:code-mock` | "Drill {topic or 'a specific aspect'}" |
+| `progress` / `dashboard` / `stats` | (none) | `monet:interview-progress` | (none) |
 
 Aliases are case-insensitive.
 
@@ -61,10 +80,10 @@ Use AskUserQuestion with a domain-specific prompt. Map the choice to a mode valu
 
 ## Step 3: Delegate to downstream skill
 
-Look up the downstream skill and context string in the Quick reference table. Invoke that skill **by its registered name** via the Skill mechanism (`sd-mock`, `bq-mock`, `code-mock`, or `interview-progress`), passing the context string as its arguments. The Skill mechanism resolves the skill from any working directory; do not construct a cwd-relative filesystem path. If invoking via Skill is unavailable, read the SKILL.md at the absolute path `~/.claude/skills/{skill-name}/SKILL.md` instead. The downstream skill handles all further interaction.
+Look up the downstream skill and context string in the Quick reference table. Invoke that skill with the Skill tool, by its plugin name (`monet:sd-mock`, `monet:bq-mock`, `monet:code-mock`, or `monet:interview-progress`), passing the context string as its arguments. The Skill tool resolves the skill from any working directory; do not construct a filesystem path. The downstream skill handles all further interaction. Do not add steps after delegation.
 
 ## Constraints
 
-- Never run a downstream mock inline -- always delegate to the named skill.
+- Never run a downstream mock inline -- always delegate to the named skill with the Skill tool.
 - Invalid input never dead-ends; every error falls back to interactive selection.
 - Do not remember domain/mode choices across sessions.

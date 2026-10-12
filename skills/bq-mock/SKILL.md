@@ -1,6 +1,6 @@
 ---
 name: bq-mock
-description: Build STAR+ stories collaboratively or run live behavioral mocks with Staff+ evaluation. Use when the user asks to practice behavioral questions, build stories, run a behavioral mock, or add stories to their story bank.
+description: Use when the user asks to practice behavioral questions, build stories, run a behavioral mock, or add stories to their story bank. Builds STAR+ stories collaboratively or runs live behavioral mocks with Staff+ evaluation.
 ---
 
 ## Preconditions
@@ -10,6 +10,10 @@ description: Build STAR+ stories collaboratively or run live behavioral mocks wi
   - "run a behavioral mock" / "practice behavioral" / "bq mock" -> **mock mode** (Step 2)
   - If ambiguous, ask the user to clarify: "Do you want to build stories for your bank, or run a live behavioral mock?"
 - Record `started_at` timestamp (ISO 8601) at session start. This is used for session recording in Step 4.
+
+## Data dir
+
+The data dir is `${user_config.data_dir}`. If the data dir above is empty or starts with `${user_config`, it isn't configured, so use `~/.config/monet`. Below, `<data dir>` stands for that path, and sessions live in `<data dir>/interview-prep/`. In Bash, write `<data dir>` unquoted, so a leading `~` expands. For the Write tool, expand a leading `~` to the home directory.
 
 ## Step 1: Story-bank mode -- collaborative STAR+ extraction
 
@@ -219,7 +223,7 @@ After all sub-agents complete, merge their outputs and assemble the complete eva
 
 ### 3a. Rubric scores
 
-Score against the 5 BQ dimensions from the interview-tracker schema. For each dimension, provide a numeric score (1-5 integer), the label, and brief notes referencing specific moments from the session.
+Score against the 5 BQ dimensions from the `monet:interview-tracker` schema. For each dimension, provide a numeric score (1-5 integer), the label, and brief notes referencing specific moments from the session.
 
 | Dimension Key | What It Measures |
 |---------------|------------------|
@@ -373,9 +377,9 @@ Be honest and specific. "Your storytelling structure is strong with clear STAR c
 
 ## Step 4: Record session
 
-After evaluation (Step 3) completes, automatically record the session using the interview-tracker write protocol. Do NOT ask the user for confirmation -- just record it. If Step 3 did not run (story-bank feedback declined), skip this step: there are no scores, and nothing is recorded.
+After evaluation (Step 3) completes, automatically record the session using the `monet:interview-tracker` write protocol, run inline as the steps below give it. Do NOT ask the user for confirmation -- just record it. If Step 3 did not run (story-bank feedback declined), skip this step: there are no scores, and nothing is recorded.
 
-**Background execution:** Session recording (interview-tracker write) can run as a background sub-agent AFTER presenting the evaluation to the user. Do not make the user wait for file I/O before seeing their results.
+**Background execution:** Session recording (the inline `monet:interview-tracker` write) can run as a background sub-agent AFTER presenting the evaluation to the user. Do not make the user wait for file I/O before seeing their results. Give the sub-agent the data dir resolved above.
 
 ### Recording protocol
 
@@ -383,7 +387,7 @@ After evaluation (Step 3) completes, automatically record the session using the 
 
 2. **Compute `duration_seconds`** from `started_at` and `ended_at`.
 
-3. **Build session JSON** following the interview-tracker canonical schema:
+3. **Build session JSON** following the `monet:interview-tracker` canonical schema:
 
    ```json
    {
@@ -421,11 +425,11 @@ After evaluation (Step 3) completes, automatically record the session using the 
 
 6. **Generate `takeaways.tags`** as machine-readable tags derived from weak areas. Examples: `star-format`, `impact-quantification`, `leadership-framing`, `mentoring-examples`, `conflict-resolution`, `decision-rationale`, `story-selection`, `communication-structure`, `cross-team-influence`, `failure-ownership`.
 
-7. **Follow the interview-tracker write protocol** to persist the session:
-   - Ensure storage directory: `mkdir -p ~/.config/interview-prep/`
+7. **Follow the `monet:interview-tracker` write protocol** to persist the session under the data dir resolved above:
+   - Ensure storage directory: `mkdir -p <data dir>/interview-prep/`
    - Generate filename: `{YYYY-MM-DD}_bq_{mode}_{NNN}.json`
    - Validate all required fields
-   - Write the file with 2-space indented formatting
+   - Write the file to `<data dir>/interview-prep/{filename}` with 2-space indented formatting
 
 8. **Print confirmation:**
 
@@ -460,7 +464,7 @@ What's next?
 - Never reveal the question list before asking. Each question in mock mode must feel like a cold open.
 - In story-bank mode, probe for all STAR+ components AND all 3 Staff+ signals (influence, alignment, mentoring) at least once. If a signal doesn't apply after re-probing, accept it but note the gap in the summary.
 - Do not provide golden answer rewrites during the mock itself -- only in evaluation (Step 3).
-- Always record evaluated sessions to interview-tracker (Step 4). Never skip recording. Never ask "should I record this?" The one exception: a story-bank session whose optional feedback the user declined has no scores, so nothing is recorded.
+- Always record evaluated sessions to `<data dir>/interview-prep/` (Step 4). Never skip recording. Never ask "should I record this?" The one exception: a story-bank session whose optional feedback the user declined has no scores, so nothing is recorded.
 - When scoring, do not inflate scores to be nice. A vague answer with no metrics is a 2, not a 3.
 - Story-bank mode does NOT have time pressure. The user should feel coached, not rushed. Mock mode should feel like a real interview with natural pacing.
 - Keep mock sessions to 3-4 questions. Do not extend to 5+ even if the user asks -- suggest starting a new session instead: "Let's keep this session tight at 3-4 questions. Want to start a fresh mock with new questions?"

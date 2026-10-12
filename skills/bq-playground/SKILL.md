@@ -1,14 +1,18 @@
 ---
 name: bq-playground
-description: Generate an interactive concept map playground visualizing your behavioral story bank. Shows stories as nodes connected by competency themes and question types with dual views. Requires 2+ stories from bq-mock sessions. Use when the user asks to visualize stories, see their story bank, generate a concept map, or view story coverage.
+description: Use when the user asks to visualize stories, see their story bank, generate a concept map, or view story coverage. Generates an interactive concept map playground visualizing your behavioral story bank, with stories as nodes connected by competency themes and question types in dual views. Requires 2+ stories from bq-mock sessions.
 ---
+
+## Data dir
+
+The data dir is `${user_config.data_dir}`. If the data dir above is empty or starts with `${user_config`, it isn't configured, so use `~/.config/monet`. Below, `<data dir>` stands for that path, and playgrounds live in `<data dir>/interview-prep/playgrounds/`. In Bash, write `<data dir>` unquoted, so a leading `~` expands. For the Write tool, expand a leading `~` to the home directory.
 
 ## Preconditions
 
 - The user must have at least 2 stories available. Stories can come from:
   1. A just-completed bq-mock story-bank session (preferred -- stories are already in conversation context)
   2. User-provided structured story data (must include STAR+ components and competency themes)
-- If fewer than 2 stories exist, inform the user: "You need at least 2 stories to generate a meaningful concept map. Use the bq-mock skill in story-bank mode to build stories first."
+- If fewer than 2 stories exist, inform the user: "You need at least 2 stories to generate a meaningful concept map. Use `monet:bq-mock` in story-bank mode to build stories first."
 - If more than 20 stories are available, warn: "Your story bank has {N} stories. The layout works best with 3-15 stories. Beyond 20, the visualization may become crowded. Proceeding with all stories."
 - Record the story count for the coverage gap summary bar.
 
@@ -529,7 +533,7 @@ Store initial positions in `state.initialPositions` for the "Reset Layout" featu
 
 1. **Create the output directory** (if it does not exist):
    ```bash
-   mkdir -p ~/.config/interview-prep/playgrounds/
+   mkdir -p <data dir>/interview-prep/playgrounds/
    ```
 
 2. **Generate the filename:**
@@ -539,12 +543,12 @@ Store initial positions in `state.initialPositions` for the "Reset Layout" featu
 
 3. **Write the HTML file** using the Write tool to:
    ```
-   ~/.config/interview-prep/playgrounds/bq-storymap-{YYYY-MM-DD}.html
+   <data dir>/interview-prep/playgrounds/bq-storymap-{YYYY-MM-DD}.html
    ```
 
 4. **Open in default browser:**
    ```bash
-   open ~/.config/interview-prep/playgrounds/bq-storymap-{YYYY-MM-DD}.html
+   open <data dir>/interview-prep/playgrounds/bq-storymap-{YYYY-MM-DD}.html
    ```
 
 5. **Print confirmation:**

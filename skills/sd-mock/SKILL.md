@@ -1,6 +1,6 @@
 ---
 name: sd-mock
-description: Run full system design mock interviews or drill specific phases with a realistic Staff+ interviewer. Evaluates against Staff+ rubric, generates golden answer outlines, and auto-records sessions. Use when the user asks to practice system design, run a system design mock, or drill a system design topic.
+description: Use when the user asks to practice system design, run a system design mock, or drill a system design topic. Runs full system design mock interviews or drills specific phases with a realistic Staff+ interviewer, evaluates against a Staff+ rubric, generates golden answer outlines, and auto-records sessions.
 ---
 
 ## Preconditions
@@ -159,7 +159,7 @@ After all sub-agents complete, merge their outputs and assemble the complete eva
 
 ### 4a. Rubric scores
 
-Score each of the interview-tracker's SD rubric dimensions on a 1-5 integer scale:
+Score each of the SD rubric dimensions from `monet:interview-tracker` on a 1-5 integer scale:
 
 | Dimension | What It Measures |
 |-----------|------------------|
@@ -294,13 +294,13 @@ Identify the weakest 1-2 rubric dimensions from the scores. Recommend specific d
 
 Auto-record the session with zero friction. Do NOT ask the user for confirmation.
 
-**Background execution:** Session recording (interview-tracker write) can run as a background sub-agent AFTER presenting the evaluation to the user. Do not make the user wait for file I/O before seeing their results.
+**Background execution:** Session recording (the `monet:interview-tracker` write mode) can run as a background sub-agent AFTER presenting the evaluation to the user. Do not make the user wait for file I/O before seeing their results.
 
-Follow the interview-tracker skill's write mode protocol:
+Load `monet:interview-tracker` with the Skill tool and follow its write mode protocol. A background sub-agent loads it with the Skill tool too. Never read the tracker's skill file by path.
 
 1. **Compute `timing_breakdown`** from phase timestamps. Approximate from conversation flow -- estimate seconds spent on each phase based on message length and exchange count.
 
-2. **Build the session JSON** with all required fields per the interview-tracker schema:
+2. **Build the session JSON** with all required fields per the `monet:interview-tracker` schema:
 
    ```json
    {
@@ -339,7 +339,7 @@ Follow the interview-tracker skill's write mode protocol:
 
 5. **Generate `takeaways.tags`** as machine-readable tags derived from weak areas. Examples: `capacity-planning`, `cache-invalidation`, `fault-tolerance`, `api-versioning`, `data-partitioning`, `observability-slos`, `security-auth`, `bottleneck-analysis`.
 
-6. Call the interview-tracker write mode to persist the session.
+6. Run the `monet:interview-tracker` write mode, loaded with the Skill tool, to persist the session.
 
 7. Print confirmation:
 
@@ -353,8 +353,8 @@ After evaluation and recording, offer the user these options:
 
 1. **"Run another mock with a different topic"** -- Start over at Step 1 with mock mode.
 2. **"Drill a specific weak area"** -- Suggest the drills from Step 4e. Start over at Step 1 with drill mode targeting the recommended phase and a different topic.
-3. **"Generate an architecture diagram playground for this design"** -- Invoke the sd-playground skill to create an interactive canvas pre-populated from the user's design (available for full mock only).
-4. **"View progress dashboard"** -- Invoke the interview-progress skill to see trends across sessions.
+3. **"Generate an architecture diagram playground for this design"** -- Invoke `monet:sd-playground` with the Skill tool to create an interactive canvas pre-populated from the user's design (available for full mock only).
+4. **"View progress dashboard"** -- Invoke `monet:interview-progress` with the Skill tool to see trends across sessions.
 
 ## Constraints
 
