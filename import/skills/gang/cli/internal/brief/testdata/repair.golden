@@ -1,0 +1,49 @@
+TASK F01: Repair the integration branch
+branch: gang/F01
+wave: 0
+
+GOAL
+make every health command pass on the integration branch
+
+SCOPE
+write:
+- **
+shared: none
+peers: none
+
+CONTEXT
+depends_on: none
+merge_after: none
+requirements: none
+consumes: none
+produces: none
+
+ACCEPTANCE
+- Every command in plan.commands.health passes on the integration branch.
+
+VERIFY
+tests_first: none
+commands: none
+gate:
+- make check
+- make e2e
+
+TIMEBOX
+lines: 1200
+minutes: 60
+
+FORBIDDEN
+- git stash
+- force-push
+
+REPORT
+Return the JSON object your prompt names. Write your report with gang report.
+
+STANDING
+none
+
+OWNER RULINGS
+none
+
+PRIOR REPORT
+none

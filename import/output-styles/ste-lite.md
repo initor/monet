@@ -1,0 +1,1 @@
+../skills/voice/reference/ste-lite.md

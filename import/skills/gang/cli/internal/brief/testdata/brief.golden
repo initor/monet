@@ -1,0 +1,60 @@
+TASK B2: Parse the config file
+branch: gang/B2
+wave: 2
+
+GOAL
+Load config.yaml into a typed Config and reject unknown keys.
+
+SCOPE
+write:
+- internal/config/**
+shared:
+- Makefile
+peers:
+- C3
+
+CONTEXT
+depends_on:
+- A1
+merge_after: none
+requirements:
+- ENG-25 (spec/10-engineering.md:670)
+- ENG-27 (source not in plan)
+consumes:
+- file:config.yaml
+produces:
+- py:config.load
+
+ACCEPTANCE
+- Unknown keys fail with exit 1.
+- Defaults fill missing keys.
+
+VERIFY
+tests_first:
+- TestLoadRejectsUnknownKeys
+commands:
+- go test ./internal/config/...
+gate:
+- make check
+
+TIMEBOX
+lines: 300
+minutes: 45
+
+FORBIDDEN
+- git stash
+- force-push
+- edit go.mod
+
+REPORT
+Return the JSON object your prompt names. Write your report with gang report.
+
+STANDING
+1. Run make check before every commit.
+2. No new dependencies.
+
+OWNER RULINGS
+Ruling: keys are case sensitive.
+
+PRIOR REPORT
+<DIR>/run/tasks/B2/report.md
