@@ -29,6 +29,6 @@ A card holds facts only. Panel scores live in the round notes, never on the page
 ## Building the page
 
 - Generate the page with a script in `tools/` from one data file, for example `rounds.json`: rounds, options, values, reasons, and harness results. Every round then renders the same way.
-- Build it on `paint`'s base and its `minimal` flavor (`reference/base.md`, `reference/flavors/minimal.md`): self-contained, with light and dark themes.
+- Build it on `paint`'s base and its `minimal` flavor (`${CLAUDE_PLUGIN_ROOT}/skills/paint/reference/base.md`, `${CLAUDE_PLUGIN_ROOT}/skills/paint/reference/flavors/minimal.md`): self-contained, with light and dark themes.
 - Card previews are the harness's real renders, never hand-drawn stand-ins. Scale each render to the size it shows at. A page of several MB is fine, since it stays local.
 - Keep each build of the page in `history/`.

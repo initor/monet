@@ -22,6 +22,6 @@ Build it before the first option is judged. Designers may start while it is buil
 
 ## Ship
 
-- Copy that ships goes through `voice`.
+- Copy that ships goes through `monet:voice`: load it with the Skill tool as `monet:voice` before writing.
 - Ship only on the owner's explicit go, through `/monet:ship`. Nothing in the work folder is published before that.
-- After shipping, update `learnings.md`. Across sessions, `handoff` and memory carry the state.
+- After shipping, update `learnings.md`. Across sessions, `monet:handoff` and memory carry the state.
