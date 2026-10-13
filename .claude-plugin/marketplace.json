@@ -1,0 +1,14 @@
+{
+  "name": "monet",
+  "owner": {
+    "name": "initor"
+  },
+  "description": "The monet skill set for Claude Code.",
+  "plugins": [
+    {
+      "name": "monet",
+      "source": ".",
+      "description": "Engineering workflow skills for Claude Code that draft commits and PRs, review code, shape prose, visualize findings, coach interview practice, and run a fleet of agents through a plan."
+    }
+  ]
+}
