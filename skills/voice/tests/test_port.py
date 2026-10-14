@@ -129,5 +129,25 @@ class VoicePort(unittest.TestCase):
         self.assertNotRegex(self.skill.body, r'(?i)\bvariables?\b')
 
 
+    def test_every_caller_stays_on_plain_voice(self):
+        # A paragraph in another skill that loads monet:voice through the Skill tool must pass
+        # --no-ste, and this skill must name that caller where it says how callers load it.
+        section = self.skill.body.split('## How other skills load this one\n', 1)[1].split('\n## ', 1)[0]
+        section = ' '.join(section.split())
+        callers = set()
+        for path in sorted((REPO / 'skills').glob('*/**/*.md')):
+            name = path.relative_to(REPO / 'skills').parts[0]
+            if name == 'voice':
+                continue
+            for para in path.read_text(encoding='utf-8').split('\n\n'):
+                if 'Skill tool' in para and '`monet:voice`' in para:
+                    callers.add(name)
+                    with self.subTest(file=str(path.relative_to(REPO))):
+                        self.assertIn('--no-ste', para)
+        self.assertTrue(callers, 'no skill loads monet:voice')
+        for name in sorted(callers):
+            with self.subTest(caller=name):
+                self.assertIn(f'`{name}`', section)
+
 if __name__ == '__main__':
     unittest.main()

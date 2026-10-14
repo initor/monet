@@ -60,7 +60,7 @@ A folder that already holds `goal.md` is a design in progress. Read the Decision
 4. **Put the round on the page** (`${CLAUDE_SKILL_DIR}/reference/options-page.md`). Each option gets an ID and a card that shows it in every real context, with its idea, its values and their reasons, and the harness's flags.
 5. **Stop for the pick.** Open the page for the owner (`open <path>`), or give its path, and ask one question: "Round N is on `iterate.html`: <IDs>. Which one, or which parts of which?" Record the answer in Decisions, in the owner's words.
 6. **Refine** (`${CLAUDE_SKILL_DIR}/reference/rounds.md`, "Converge"). Rebuild the pick as parameters, sweep one knob at a time, and give every number a reason. Each refinement is a new ID on the same page. Repeat steps 4 to 6 until the owner calls it final.
-7. **Build, verify, ship** (`${CLAUDE_SKILL_DIR}/reference/verify-and-ship.md`). Build the final from its generator, keep every build in `history/`, and check it in a real browser. Write the copy through `monet:voice`: load it with the Skill tool as `monet:voice` before writing. Ship only on the owner's go, through `/monet:ship`. Then add what the work taught to `learnings.md`. Across sessions, `monet:handoff` carries the state.
+7. **Build, verify, ship** (`${CLAUDE_SKILL_DIR}/reference/verify-and-ship.md`). Build the final from its generator, keep every build in `history/`, and check it in a real browser. Write the copy through `monet:voice`: load it with the Skill tool as `monet:voice`, with `--no-ste` in its args, before writing. Ship only on the owner's go, through `/monet:ship`. Then add what the work taught to `learnings.md`. Across sessions, `monet:handoff` carries the state.
 
 ## Common mistakes
 
