@@ -37,9 +37,10 @@ voice and calling it the user's.
 
 Another skill that writes prose loads this one with the Skill tool as `monet:voice`. It never
 reads this file by path. Such a caller passes `--no-ste` in the Skill args to stay on plain voice,
-unless it asks for STE-lite. The prose producers `git-draft-pr`, `pr`, and `paint` work this way.
-Holding a rule in context is not the same as applying it, so a producer loads this skill rather
-than relying on the agent to remember it.
+unless it asks for STE-lite. Every caller in this plugin works this way: `git-draft-commit`,
+`git-draft-pr`, `pr`, `paint`, `ship`, and `visual-design`. Holding a rule in context is not the
+same as applying it, so a producer loads this skill rather than relying on the agent to remember
+it.
 
 ## When to use / not
 
