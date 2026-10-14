@@ -105,7 +105,6 @@ Uninstall keeps your data dir. Your personas and interview-prep sessions stay th
 - [Development](docs/development.md): the dev loop, `make check`, CI, and a release.
 - [Authoring a skill](docs/authoring.md): add or change a skill in the plugin layout.
 - [Architecture](docs/architecture.md): how the skills, the agent, the output style, and the data dir fit together.
-- [Migration](docs/migration.md): move from a dotfiles install to the plugin.
 - [Gang design](docs/design/gang.md): how the gang skill runs a plan with a fleet of agents.
 - [Roadmap and handoff design](docs/design/roadmap-handoff.md): the roadmap and handoff skills.
 - [Contributing](CONTRIBUTING.md): the rules for a pull request.

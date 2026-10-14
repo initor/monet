@@ -94,14 +94,13 @@ class PortabilityScan(ScanCase):
 
     def test_allowlisted_file_passes(self):
         # Not listed: a sibling, a longer name, another dir, and a listed path under another dir.
-        near = ["docs/other.md", "old/specs/design.md", "specs/goal.md.bak", "tools/x.py", "x/docs/migration.md"]
-        for rel in ["docs/migration.md", "specs/goal.md", "specs/design.md"] + near:
+        near = ["docs/other.md", "old/specs/design.md", "specs/goal.md.bak", "tools/x.py", "x/specs/goal.md"]
+        for rel in ["specs/goal.md", "specs/design.md"] + near:
             write(self.repo / rel, "intro\n" + DOTFILES[0] + "\n")
-        # scripts/migrate-from-dotfiles.sh is listed but absent, which is not an error.
         self.assertHits("portability", [f"{rel}:2: {dotfiles_hit(0)}" for rel in near])
         # A listed path in another case is not listed (a rename, so a case-insensitive disk works too).
-        (self.repo / "docs" / "migration.md").rename(self.repo / "docs" / "MIGRATION.md")
-        self.assertHits("portability", [f"{rel}:2: {dotfiles_hit(0)}" for rel in ["docs/MIGRATION.md"] + near])
+        (self.repo / "specs" / "goal.md").rename(self.repo / "specs" / "GOAL.md")
+        self.assertHits("portability", [f"{rel}:2: {dotfiles_hit(0)}" for rel in sorted(["specs/GOAL.md"] + near)])
 
     def test_skips_import_and_checks_untracked(self):
         write(self.repo / ".gitignore", "*.log\n")
@@ -117,10 +116,10 @@ class PortabilityScan(ScanCase):
         os.symlink("/nonexistent/target", self.repo / "dangling")
         os.symlink("../outside.md", self.repo / "rel.md")
         # The allowlist exempts text, not an absolute symlink.
-        (self.repo / "docs").mkdir()
-        os.symlink(str(outside), self.repo / "docs" / "migration.md")
+        (self.repo / "specs").mkdir()
+        os.symlink(str(outside), self.repo / "specs" / "goal.md")
         self.assertHits("portability", [f"{rel}:1: symlink to an absolute path"
-                                        for rel in ("abs.md", "dangling", "docs/migration.md")])
+                                        for rel in ("abs.md", "dangling", "specs/goal.md")])
         # No scan reads a symlink's content.
         self.assertHits("privacy", [])
         self.assertHits("prose", [])
@@ -266,9 +265,8 @@ class Cli(ScanCase):
 
 
 class Sources(unittest.TestCase):
-    def test_allowlist_holds_the_four_entries(self):
-        self.assertEqual(scan.allowlist(ROOT), {"docs/migration.md", "scripts/migrate-from-dotfiles.sh",
-                                                "specs/goal.md", "specs/design.md"})
+    def test_allowlist_holds_the_two_specs(self):
+        self.assertEqual(scan.allowlist(ROOT), {"specs/goal.md", "specs/design.md"})
         lines = (ROOT / ALLOW).read_text(encoding="utf-8").splitlines()
         for i, line in enumerate(lines):
             if line.strip() and not line.startswith("#"):
