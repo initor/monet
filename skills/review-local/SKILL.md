@@ -9,6 +9,7 @@ allowed-tools:
   - Grep
   - Agent
   - AskUserQuestion
+  - Skill
 ---
 
 ## Overview
