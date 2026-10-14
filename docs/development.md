@@ -52,9 +52,10 @@ The claude CLI version is pinned in the workflow, so a CLI release cannot change
 ## A release
 
 1. Bump `version` in `.claude-plugin/plugin.json`. Do not add a version anywhere else.
-2. Add a `CHANGELOG.md` entry for the new version.
+2. Add a `CHANGELOG.md` entry for the new version. Move what `## [Unreleased]` holds into it, and date it the day you tag.
 3. Commit both changes and merge them to `main`.
 4. From a clean checkout of `main`, run `claude plugin tag --dry-run`. It checks that `plugin.json` and the marketplace entry agree, and prints the tag.
 5. Run `claude plugin tag --push`. It makes the tag `monet--v<version>` and pushes it to `origin`.
+6. Publish the GitHub release from that tag, with the new `CHANGELOG.md` entry as its notes: `gh release create monet--v<version> --verify-tag --title "monet <version>" --notes-file <notes.md>`.
 
 Users see the update only after the bump. A change that keeps the old version does not reach an installed copy.
