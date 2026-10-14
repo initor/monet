@@ -4,6 +4,10 @@ This file lists the notable changes to monet in each release. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-14
+
+This release breaks one thing: the interview-prep commands, such as `/monet:prep`, are gone.
+
 ### Changed
 
 - The README's How it works diagram is now an animated isometric figure, in a light and a dark version. `tools/how-it-works.mjs` builds it from `docs/assets/how-it-works.json`. It goes still for readers who turn on reduced motion.
@@ -11,6 +15,11 @@ This file lists the notable changes to monet in each release. The format follows
 ### Removed
 
 - The interview-prep skills: `prep`, `sd-mock`, `bq-mock`, `code-mock`, `sd-explainer`, `sd-playground`, `bq-playground`, `code-playground`, `interview-tracker`, and `interview-progress`. They were personal tools, not engineering workflow. The monet agent no longer routes interview requests. Session records that they wrote stay in `<data dir>/interview-prep/` until you remove them.
+
+### Fixed
+
+- `review-local` lists the Skill tool in `allowed-tools`, so the call that draws its report through `paint` no longer depends on the session's permission rules.
+- `visual-design` loads `voice` in plain mode, like every other caller. Its page copy no longer gets the STE-lite rules by default.
 
 ## [0.1.0] - 2026-10-13
 
