@@ -13,6 +13,8 @@ CONTRIBUTING = ROOT / "CONTRIBUTING.md"
 MANIFEST = ROOT / ".claude-plugin" / "plugin.json"
 STE_CHECK = ROOT / "skills" / "voice" / "scripts" / "ste_check.py"
 RELEASE = re.compile(r"^## \[(\d+\.\d+\.\d+)\] - \d{4}-\d{2}-\d{2}$", re.M)
+# The first release by name, so the check still finds it after later releases sit on top.
+FIRST_RELEASE = re.compile(r"^## \[0\.1\.0\] - \d{4}-\d{2}-\d{2}$", re.M)
 
 
 def read(path):
@@ -40,7 +42,9 @@ class Changelog(unittest.TestCase):
 
     def test_first_release_lists_what_it_adds(self):
         text = read(CHANGELOG)
-        entry = re.split(r"(?m)^## ", text[RELEASE.search(text).start():])[1]
+        first = FIRST_RELEASE.search(text)
+        self.assertIsNotNone(first, "no `## [0.1.0] - YYYY-MM-DD` heading")
+        entry = re.split(r"(?m)^## ", text[first.start():])[1]
         self.assertRegex(entry, r"(?m)^### Added$")
         for needle in ("marketplace", "`/monet:<name>`", "commands folded into skills",
                        "`git-ship`", "`ship`", "`branch_prefix`", "`data_dir`",
