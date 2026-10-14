@@ -4,7 +4,7 @@ This file lists the notable changes to monet in each release. The format follows
 
 ## [Unreleased]
 
-## [0.1.0] - 2026-10-12
+## [0.1.0] - 2026-10-13
 
 The first release of monet as a Claude Code plugin.
 

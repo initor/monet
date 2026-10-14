@@ -179,11 +179,13 @@ class DevelopmentDoc(unittest.TestCase):
         body = flat(raw)
         for needle in ("`version`", "`.claude-plugin/plugin.json`", "`CHANGELOG.md`",
                        "claude plugin tag --dry-run", "claude plugin tag --push",
-                       "`monet--v<version>`", "only after",
+                       "gh release create monet--v<version> --verify-tag",
+                       "`monet--v<version>`", "only after", "date it the day you tag",
                        "Do not add a version anywhere else"):
             with self.subTest(needle=needle):
                 self.assertIn(needle, body)
         self.assertLess(body.find("--dry-run"), body.find("--push"))
+        self.assertLess(body.find("--push"), body.find("gh release create"))
         # The version bump names plugin.json and no other manifest.
         bump = [line for line in raw.split("\n") if "Bump `version`" in line]
         self.assertEqual(len(bump), 1, bump)
