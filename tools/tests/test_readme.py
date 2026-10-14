@@ -102,7 +102,7 @@ class Readme(unittest.TestCase):
                    if not re.match(r"[a-z]+:", t) and not t.startswith("#")]
         docs = section("Docs")
         for doc in ("docs/development.md", "docs/authoring.md", "docs/architecture.md",
-                    "docs/migration.md", "docs/design/gang.md", "docs/design/roadmap-handoff.md",
+                    "docs/design/gang.md", "docs/design/roadmap-handoff.md",
                     "CONTRIBUTING.md", "CHANGELOG.md"):
             with self.subTest(doc=doc):
                 self.assertIn(f"]({doc})", docs)

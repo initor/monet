@@ -45,7 +45,7 @@ class Changelog(unittest.TestCase):
         for needle in ("marketplace", "`/monet:<name>`", "commands folded into skills",
                        "`git-ship`", "`ship`", "`branch_prefix`", "`data_dir`",
                        "Personas and interview-prep", "sample persona",
-                       "Rewritten `distill-voice`", "`scripts/migrate-from-dotfiles.sh`",
+                       "Rewritten `distill-voice`",
                        "`make check`", "`make test`", "CI", "`docs/"):
             with self.subTest(needle=needle):
                 self.assertIn(needle, entry)

@@ -17,7 +17,6 @@ The first release of monet as a Claude Code plugin.
 - Personas and interview-prep data in the data dir, which defaults to `~/.config/monet`. Nothing writes inside the plugin dir.
 - A synthetic sample persona for `voice`, which `--persona sample` applies.
 - Rewritten `distill-voice` scripts, with unit tests. They write personas to the data dir.
-- The docs: the README, `docs/development.md`, `docs/authoring.md`, `docs/architecture.md`, `docs/migration.md`, and the gang and roadmap-handoff design specs in `docs/design/`.
-- The migration script `scripts/migrate-from-dotfiles.sh`. It is a dry run by default, and it never deletes a file.
+- The docs: the README, `docs/development.md`, `docs/authoring.md`, `docs/architecture.md`, and the gang and roadmap-handoff design specs in `docs/design/`.
 - The `make check` gate (manifests, catalog, unit tests, scans, and the skill lint) and `make test`, which adds the gang tests.
 - CI that runs `make test` on each pull request and each push to `main`, with a pinned claude CLI.

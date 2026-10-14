@@ -5,10 +5,6 @@
 # One repo path per line, with a `#` comment line above it giving its reason.
 # A listed path that does not exist yet is not an error.
 
-# The migration guide takes a user from the dotfiles install to the plugin.
-docs/migration.md
-# The migration script finds the old dotfiles copies and moves them aside.
-scripts/migrate-from-dotfiles.sh
 # The goal spec names the dotfiles source that monet moves out of.
 specs/goal.md
 # The design spec names the snapshot paths and the paths this scan rejects.
