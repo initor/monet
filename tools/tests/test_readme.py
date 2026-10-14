@@ -15,7 +15,7 @@ import skillkit  # noqa: E402
 README = ROOT / "README.md"
 MANIFEST = ROOT / ".claude-plugin" / "plugin.json"
 STE_CHECK = ROOT / "skills" / "voice" / "scripts" / "ste_check.py"
-SECTIONS = ["Install", "First run", "Skills", "Configuration", "Update and uninstall", "Docs", "Credits"]
+SECTIONS = ["How it works", "Install", "First run", "Skills", "Configuration", "Update and uninstall", "Docs", "Credits"]
 
 
 def read():
@@ -31,14 +31,37 @@ def fences(text):
     return re.findall(r"(?ms)^```[^\n]*\n(.*?)^```", text)
 
 
+# One line of a node label that names a skill: `/monet:<name>`, or a bare `<name>` for a helper.
+SKILL_LINE = re.compile(r"(/monet:)?([a-z0-9]+(?:-[a-z0-9]+)*)")
+
+
 class Readme(unittest.TestCase):
     def test_at_most_150_lines(self):
         self.assertLessEqual(len(read().splitlines()), 150)
 
     def test_sections_in_order(self):
         text = read()
-        self.assertRegex(text, r"\A# monet\n\n[^#\n][^\n]+\n\n## Install\n")
+        self.assertRegex(text, r"\A# monet\n\n[^#\n][^\n]+\n\n## How it works\n")
         self.assertEqual(re.findall(r"(?m)^## (.+)$", text), SECTIONS)
+
+    def test_how_it_works_names_real_skills(self):
+        body = section("How it works")
+        diagrams = re.findall(r"(?ms)^```mermaid\n(.*?)^```", body)
+        self.assertEqual(len(diagrams), 1, "one Mermaid diagram")
+        lines = [line.strip() for label in re.findall(r'"([^"]*)"', diagrams[0])
+                 for line in label.split("<br/>")]
+        typed, helpers = [], []
+        for line in lines:
+            m = SKILL_LINE.fullmatch(line)
+            if m:
+                (typed if m.group(1) else helpers).append(m.group(2))
+        self.assertTrue(typed, "the diagram names a command the user types")
+        self.assertTrue(helpers, "the diagram names a skill that monet runs")
+        for name in typed + helpers:
+            with self.subTest(skill=name):
+                self.assertTrue((ROOT / "skills" / name / "SKILL.md").is_file())
+        self.assertIn("Solid boxes are commands you type.", body)
+        self.assertIn("Dashed boxes are skills that monet runs for you.", body)
 
     def test_install_commands(self):
         body = section("Install")
@@ -54,7 +77,9 @@ class Readme(unittest.TestCase):
         examples = re.findall(r"(?m)^- `([^`]+)`: \S.*$", body)
         self.assertEqual(len(examples), 3)
         self.assertIn("/monet:help", examples)
-        for example in examples:
+        doors = re.findall(r"(?m)^\| [^|`]+ \| `([^`]+)` \|$", body)
+        self.assertTrue(doors, "a table of commands beyond the loop")
+        for example in examples + doors:
             with self.subTest(example=example):
                 if example == "claude --agent monet:monet":
                     continue

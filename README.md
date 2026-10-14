@@ -2,6 +2,26 @@
 
 monet is a Claude Code plugin with engineering workflow skills. It drafts commits and pull requests, reviews code, and shapes prose so it reads like you. It also turns findings into shareable pages, coaches interview practice, and runs a fleet of agents through a plan. Each skill is a slash command such as `/monet:ship`, and the `monet` agent routes a plain request to the right skill.
 
+## How it works
+
+Claude writes the change. monet takes it from there: it reviews the change, ships it as a commit and a PR that read like you wrote them, and helps you understand what landed.
+
+```mermaid
+flowchart TB
+  you(["You and Claude build a change"])
+  you --> review["/monet:review-local<br/>review it before you push"]
+  review -- "fix the findings" --> you
+  review --> ship["/monet:ship<br/>commit and open the PR"]
+  ship --> teach["/monet:teach<br/>understand what landed"]
+  review -.-> paint["paint<br/>draws the review"]
+  ship -.-> drafts["git-draft-commit<br/>git-draft-pr"]
+  drafts -.-> voice["voice<br/>reads like you"]
+  classDef helper stroke-dasharray: 5 4
+  class paint,drafts,voice helper
+```
+
+Solid boxes are commands you type. Dashed boxes are skills that monet runs for you.
+
 ## Install
 
 Run these two commands in Claude Code:
@@ -15,11 +35,21 @@ You need a Claude Code version with plugin support. Some skills need extra tools
 
 ## First run
 
-Start a new session after the install, then try one of these:
+Start a new session in a repo after the install. Build a change with Claude, then walk the loop in the diagram:
 
-- `/monet:help`: lists every monet command and the skills that the plugin holds.
-- `claude --agent monet:monet`: starts a session with the monet agent, which routes each request to a skill.
-- `/monet:review-local`: reviews your uncommitted or branch changes before you open a pull request.
+- `/monet:review-local`: reviews your uncommitted or branch changes, and draws the findings as a page.
+- `/monet:ship`: drafts the commit and the PR, asks you once, and then commits, pushes, and opens the PR.
+- `/monet:help`: lists every monet command. To ask in plain words instead, start a session with `claude --agent monet:monet`, and it picks the skill.
+
+Beyond the loop:
+
+| You want to | Type |
+| --- | --- |
+| Review a teammate's pull request | `/monet:pr <url>` |
+| Turn findings into a page you can share | `/monet:paint` |
+| Make a draft sound like you | `/monet:voice` |
+| Land a whole plan with a fleet of agents | `/monet:gang plan <spec-dir>` |
+| Pick the work up in a fresh session | `/monet:handoff` |
 
 ## Skills
 
