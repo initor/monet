@@ -7,6 +7,10 @@ monet is a Claude Code plugin with engineering workflow skills. It drafts commit
 Claude writes the change. monet takes it from there: it reviews the change, ships it as a commit and a PR that read like you wrote them, and helps you understand what landed.
 
 ```mermaid
+---
+config: {flowchart: {wrappingWidth: 240}}
+---
+%% GitHub wraps flowchart labels at 120px by default, which splits /monet:review-local at its hyphen.
 flowchart TB
   you(["You and Claude build a change"])
   you --> review["/monet:review-local<br/>review it before you push"]
