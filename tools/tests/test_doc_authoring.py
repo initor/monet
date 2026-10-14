@@ -79,7 +79,7 @@ class AuthoringDoc(unittest.TestCase):
     def test_naming_step(self):
         body = flat(section(doc_text(), "Name the skill", 3))
         for needle in ("The dir name, the frontmatter `name`, and the text after `/monet:` are the same string",
-                       "`git-*`", "`sd-*`", "joins a family only when it belongs there"):
+                       "`git-*`", "`review-*`", "joins a family only when it belongs there"):
             with self.subTest(needle=needle):
                 self.assertIn(needle, body)
 

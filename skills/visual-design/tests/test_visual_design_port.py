@@ -19,7 +19,7 @@ DESCRIPTION = (
     'Use when designing something visual that the owner picks by eye, such as a logo or mark, a '
     'figure, the look of a page, or an HTML overview like a system architecture page, worked out '
     'over rounds of options. For a one-pass page from session findings, use paint. For one Hairline '
-    'figure, use hairline-create. For an interactive system design whiteboard, use sd-playground.')
+    'figure, use hairline-create.')
 TOOLS = ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'Agent', 'Skill', 'AskUserQuestion']
 # The acceptance grep, with each literal split by a char class so this file does not match it.
 PRIVATE = re.compile(r'W[a]yne|w[a]wen|~/[.]claude|~/[.]config|git-s[h]ip')

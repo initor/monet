@@ -52,7 +52,7 @@ These files are inventory metadata here. Don't read past the frontmatter, and do
 
 List each skill with its name (typed as `/monet:<name>`), the first sentence of its description, and its path relative to the plugin dir (`skills/<name>/SKILL.md`).
 
-For the `all` scope there can be many skills, so keep it scannable: group them by family (for example git, review, interview prep, writing, visualization, orchestration), one line each, and trim each description to a short clause.
+For the `all` scope there can be many skills, so keep it scannable: group them by family (for example git, review, writing, visualization, orchestration), one line each, and trim each description to a short clause.
 
 ### Scope `agent` or `all`
 

@@ -8,7 +8,7 @@
     {
       "name": "monet",
       "source": ".",
-      "description": "Engineering workflow skills for Claude Code that draft commits and PRs, review code, shape prose, visualize findings, coach interview practice, and run a fleet of agents through a plan."
+      "description": "Engineering workflow skills for Claude Code that draft commits and PRs, review code, shape prose, visualize findings, and run a fleet of agents through a plan."
     }
   ]
 }

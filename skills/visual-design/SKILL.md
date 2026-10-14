@@ -1,6 +1,6 @@
 ---
 name: visual-design
-description: Use when designing something visual that the owner picks by eye, such as a logo or mark, a figure, the look of a page, or an HTML overview like a system architecture page, worked out over rounds of options. For a one-pass page from session findings, use paint. For one Hairline figure, use hairline-create. For an interactive system design whiteboard, use sd-playground.
+description: Use when designing something visual that the owner picks by eye, such as a logo or mark, a figure, the look of a page, or an HTML overview like a system architecture page, worked out over rounds of options. For a one-pass page from session findings, use paint. For one Hairline figure, use hairline-create.
 argument-hint: "[what to design, for whom] [work folder to resume]"
 allowed-tools:
   - Read
@@ -34,7 +34,7 @@ Parse them for what to design, and for a work folder to resume:
 ## When to use
 
 - A logo, mark, emoji, or wordmark. A figure or an animation. The look of a page. An HTML overview, such as a system's architecture, a roadmap, or an intro page, that the owner will judge by eye.
-- Not for a one-pass page from session findings: use `paint`. One Hairline figure: `hairline-create`. A system design whiteboard: `sd-playground`.
+- Not for a one-pass page from session findings: use `paint`. One Hairline figure: `hairline-create`.
 
 ## The work folder
 

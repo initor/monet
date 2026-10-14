@@ -12,7 +12,7 @@ flowchart LR
     style["output-styles/ste-lite.md, monet:ste-lite"]
     card["skills/voice/reference/ste-lite.md"]
   end
-  data[("data dir: personas/, interview-prep/")]
+  data[("data dir: personas/")]
   planning[("target repo: .planning/")]
   user -->|"/monet:name"| skills
   user -->|"claude --agent monet:monet"| agent
@@ -69,16 +69,13 @@ The data dir holds only the user's own data:
 ```
 <data dir>/
   personas/          voice personas and the surface map personas.md
-  interview-prep/    interview session records (*.json) and dashboard.html
-    playgrounds/     generated practice pages
   handoffs/          handoff notes, only when the current dir is not writable
 ```
 
-- `personas/`: `distill-voice` writes a persona and its row in the surface map. `voice` reads them first, and it falls back to the copies that it bundles.
-- `interview-prep/`: `interview-tracker` writes the session records, and `bq-mock`, `sd-mock`, and `code-mock` record their sessions through it. `interview-progress` reads the records and writes the dashboard. `sd-explainer` reads the records to find weak areas. `sd-explainer`, `sd-playground`, `bq-playground`, and `code-playground` write their pages to `playgrounds/`.
+- `personas/`: `distill-voice` writes a persona and its row in the roster of `personas.md`. It never writes the surface map, which the user edits by hand. `voice` reads them first, and it falls back to the copies that it bundles.
 - `handoffs/`: `handoff` writes here only as a fallback.
 
-User data is not in the plugin dir, because Claude Code replaces the plugin cache on each update. It is not in `${CLAUDE_PLUGIN_DATA}` either, because Claude Code deletes that dir when the user uninstalls the plugin. A dir that the user owns keeps personas and interview history through an update, an uninstall, and a reinstall.
+User data is not in the plugin dir, because Claude Code replaces the plugin cache on each update. It is not in `${CLAUDE_PLUGIN_DATA}` either, because Claude Code deletes that dir when the user uninstalls the plugin. A dir that the user owns keeps personas through an update, an uninstall, and a reinstall.
 
 ## Run scratch
 

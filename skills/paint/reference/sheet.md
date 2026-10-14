@@ -5,8 +5,8 @@ fixed canvas, a zone grid on the edges, lettered panels, and a title block. A re
 a glance. The PNG pastes into Slack, a doc, or a pull request.
 
 Use a sheet only when the request asks for one: `--sheet`, "one sheet", "sheet this", or "one image
-I can paste". Typical sheets are a PR at a glance, an RCA at a glance, a design on one page, and a
-concept for interview prep. For many parts, data, or a what-if, the page layout fits better.
+I can paste". Typical sheets are a PR at a glance, an RCA at a glance, and a design on one
+page. For many parts, data, or a what-if, the page layout fits better.
 
 ## Rules
 

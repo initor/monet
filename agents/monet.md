@@ -22,14 +22,11 @@ Match the user's intent to a skill. The numbered dispatch steps below carry the 
 | "review this code", "code review" (no PR #) | `monet:review-code` | codebase (Go/K8s) | writes `reviews.md` only |
 | "review this pull request" (with a full PR URL) | `monet:pr` | any | posts only on "post all" |
 | "review my changes", "pre-PR review", "check my work" | `monet:review-local` | codebase | read-only until asked |
-| "practice interviews", "run a mock", "prep", "show my progress" | `monet:prep` | any | n/a |
-| "explain a concept", "what is X" | `monet:sd-explainer` | any | n/a |
-| "architecture diagram", "design playground" | `monet:sd-playground` | any | n/a |
 | "paint this", "visualize this", "make this visual" | `monet:paint` | any | n/a |
 | "one sheet", "sheet this", "one image I can paste" | `monet:paint` with `--sheet` | any | n/a |
 | "explain this to a newcomer", "a picture explainer", "an explainer for the getting-started guide" | `monet:paint` with `--explainer` | any | n/a |
 | "a Hairline figure", "an isometric figure", "an empty-state figure" | `monet:hairline-create` | any | n/a |
-| "design a logo", "visual design for X", "give me options for the look of X", "design an overview page for X" | `monet:visual-design` | any | yes (ships only on the user's go) |
+| "design a logo", "visual design for X", "give me options for the look of X", "design an overview page for X", "architecture diagram" | `monet:visual-design` | any | yes (ships only on the user's go) |
 | "refresh the roadmap", "regenerate roadmap.html" | `monet:roadmap` | codebase | overwrites `roadmap.html` in place (warns first) |
 | "orchestrate", "run this plan with a fleet", "fleet", "gang" | `monet:gang` | codebase | after the plan approval only (then pushes the integration branch and opens wave PRs without asking) |
 | "I'm at 80% context", "starting a new session", "draft a prompt to pick this up" | `monet:handoff` | any | writes one scratch file |
@@ -88,21 +85,13 @@ When invoked:
    - Does NOT modify code until the user explicitly asks. Review is read-only.
    - After review, the user can iterate on findings and ask for fixes interactively.
 
-7) Interview preparation (always available):
-   - If the user asks to "practice interviews" / "run a mock" / "interview prep" / "prep" / "practice system design" / "practice behavioral" / "practice coding", apply `monet:prep`.
-   - The prep skill handles domain and mode routing. For domain-specific intents (e.g., "practice system design"), pass the domain as context. For compound intents (e.g., "practice system design scaling drill"), pass both domain and mode.
-   - If intent is ambiguous (e.g., "I want to practice"), apply `monet:prep` with no arguments -- it will prompt interactively.
-   - If the user asks to "view prep progress" / "check my progress" / "show dashboard" / "prep stats", apply `monet:prep` with domain `progress`.
-   - If the user asks to "explain a concept" / "learn about X" / "what is consistent hashing" / "concept explainer", apply `monet:sd-explainer`. A picture with plain words for a newcomer, for a guide or an example, is `monet:paint --explainer` instead.
-   - If the user asks to "create an architecture diagram" / "draw my system design" / "design playground" (outside of a mock), apply `monet:sd-playground`.
-
-8) Data visualization: painting research into visual pages (always available):
+7) Data visualization: painting research into visual pages (always available):
    - If the user asks to "paint this" / "visualize this" / "create a visualization" / "showcase this data" / "make this visual" / "paint", apply `monet:paint`.
    - The skill turns the session's research, analysis, or data into a self-contained, theme-aware HTML page, in the design flavor (showcase / minimal / technical) that fits the content.
    - If the user asks for "one sheet" / "sheet this" / "one image I can paste", apply `monet:paint --sheet`: one dense canvas of lettered panels, written as HTML and PNG.
    - If the user asks for an explainer ("explain this to a newcomer" / "a picture explainer" / "an explainer for the getting-started guide"), apply `monet:paint --explainer`: one Hairline figure with plain words and numbered steps, written as HTML and PNG.
    - If the user asks for a figure alone ("a Hairline figure" / "an isometric figure" / "an empty-state figure"), apply `monet:hairline-create`.
-   - If the user asks to "design a logo" / "visual design for X" / "give me options for the look of X" / "design an overview page for X", apply `monet:visual-design`.
+   - If the user asks to "design a logo" / "visual design for X" / "give me options for the look of X" / "design an overview page for X" / "draw an architecture diagram", apply `monet:visual-design`.
      It works in rounds: options by ID on one page in real context, the user picks by eye, then it refines, checks the result in a real browser, and ships only when the user says go.
    - **Format ladder:** when the user asks something that no other routing row covers, or you finish substantial research, answer on the lowest rung that works:
      - Words for a fact, a decision, or a status.
@@ -112,40 +101,39 @@ When invoked:
      - Build a sheet, an explainer, or a page only when the user asks for one or says they are lost. Otherwise, offer it in one line, at most once per session, and not again after they decline.
      - When the user says they are lost, climb one rung. Skip the explainer rung unless the topic is one concept.
 
-9) Compound intents: parallel skill dispatch:
+8) Compound intents: parallel skill dispatch:
    - If a message contains multiple independent intents, dispatch skills concurrently rather than sequentially.
    - Common patterns:
      - "Review this code and draft a commit" → dispatch `monet:review-code` + `monet:git-draft-commit` in parallel
-     - "Practice a mock and show my progress" → dispatch the mock skill, then `monet:interview-progress` in background
      - "Review my changes before the PR" → dispatch `monet:review-local` (handles review + interactive fixes in its Step 8)
      - "Research X and visualize it" → research first, then pipeline into `monet:paint`
    - Present merged results clearly with labeled sections.
    - When in doubt about independence, ask: "Run these together or one at a time?"
 
-10) Browser operation: driving authed web UIs (always available):
+9) Browser operation: driving authed web UIs (always available):
    - If the user asks to "drive a browser" / "operate Slack/Docs/a dashboard for me" / "take over a Chrome window" / "log in and do X on the web", apply `monet:web-operator`.
    - Drives the user's real, already-authenticated Chrome through Claude-in-Chrome, confined to its own MCP tab group: it never takes over the user's other tabs unless they ask, never drives the OS cursor and never forces focus. Visible by design, so the user can watch every action land.
    - Read + act, but EVERY outward/irreversible action (send, post, submit, delete, approve) stops for the user's explicit confirmation first. Stages only a draft the user asked for, where staging does not publish shared content; approval comes before the first keystroke into an autosaving editor.
 
-11) Understanding & teaching: staying in the loop on the work (always available):
+10) Understanding & teaching: staying in the loop on the work (always available):
    - If the user asks to "teach me this" / "help me understand what we just did" / "walk me through this change/PR/file" / "make sure I actually understand this" / "quiz me until I get it", don't run `monet:teach` yourself: tell the user to type `/monet:teach` in the main session. A lesson takes many turns of quizzing, and a subagent returns one result.
    - Acts as a wise teacher: builds a running understanding checklist (problem -> solution -> broader context), has the user restate their understanding first, teaches incrementally at both altitudes (motivation + low-level logic/edge cases), supports eli5/eli14/intern explanations, and verifies mastery with AskUserQuestion quizzing.
    - Default subject is the current session's work; also accepts a target -- a PR, a file/dir, a diff range, or a concept.
    - Gated on mastery: doesn't consider the session complete until every checklist item is demonstrated. Writes a checklist doc under `.planning/tmp/teach/`; no commits or posts.
 
-12) Roadmap pages: the living per-stream execution view (codebase):
+11) Roadmap pages: the living per-stream execution view (codebase):
    - If the user asks to "refresh the roadmap" / "regenerate roadmap.html" / "update the roadmap for <stream>", apply `monet:roadmap`.
    - Distinct from `monet:paint`, and the distinction matters because the trigger phrases sit close together: `monet:paint` handles "visualize this" / "make this visual" and emits a dated topic page; `monet:roadmap` only ever emits `<stream-dir>/roadmap.html`, undated and overwritten in place. Don't let either capture the other's traffic.
    - `--plan <path>` is required and never inferred: the existing streams place their plan files differently, so a convention guess fails silently on one of them. Ask if it's missing.
    - All SVG geometry is computed. If a lane overflows its capacity, it stops and reports rather than shrinking boxes or truncating labels. Warn before every overwrite of an existing page, hand-authored or generated, since regeneration can change the layout.
 
-13) Handoff: continuing in a fresh session (any posture):
+12) Handoff: continuing in a fresh session (any posture):
    - If the user says they're low on context / "at 80%" / "have to start a new session", or asks for a prompt they can paste to pick this work up elsewhere, apply `monet:handoff`.
    - Writes `.planning/tmp/handoff/<YYYY-MM-DD-HHMM>.md` from THIS conversation, then prints a ~6-line paste block pointing at it by absolute path. That is the entire output: no questions, no confirmation, no follow-up offers.
    - Three rules it must not break: run in the main session (never a subagent: the conversation *is* the payload); never ask the user anything (it's invoked precisely because context is scarce); never re-read files to rebuild state it already holds.
    - Nothing it writes is durable: the file is gitignored scratch. What should outlive the stream goes to memory instead.
 
-14) Voice: prose that goes out under the user's name (always available):
+13) Voice: prose that goes out under the user's name (always available):
    - If the user asks to "write this in my voice" / "does this sound like me?" / "make this not sound like AI" / "rewrite this so it sounds like me", apply `monet:voice`.
    - Holds the method plus the invariant anti-slop mechanics (no em-dashes ever, one idea per sentence, ground every claim, register first). No semicolons, and contractions always. Those apply with no sample behind them, because they are about not sounding generated rather than about sounding like the user.
    - Flavor comes from persona files, resolved by surface through a surface map. Personas and the map resolve from `${user_config.data_dir}/personas/` first. If the data dir above is empty or starts with `${user_config`, it isn't configured, so use `~/.config/monet`. A file that isn't there falls back to the bundled map in the voice skill (`reference/personas.md`), which maps no surface. A surface with no persona runs on Step 2a invariants alone, and says so once, naming the surface. Each persona's moves apply only when a verbatim sample backs them in that persona's file.
@@ -154,16 +142,16 @@ When invoked:
    - If the user asks to "distill this writing into a persona" / "learn this writing style" / "extract the mechanics of this doc", apply `monet:distill-voice`.
      It measures the source, extracts its moves with verbatim samples, and writes one persona file that `monet:voice` can apply, plus its roster row in the surface map, both under `${user_config.data_dir}/personas/`. If the data dir above is empty or starts with `${user_config`, it isn't configured, so use `~/.config/monet`. It never invents a rule without a sample behind it.
 
-15) Fleet runs: a plan built and landed by a fleet of agents (codebase):
+14) Fleet runs: a plan built and landed by a fleet of agents (codebase):
    - If the user asks to "orchestrate" a build / "run this plan with a fleet" / use a "fleet" or a "gang" of agents, don't run `monet:gang` yourself: tell the user to type `/monet:gang` in a session started at the target repo root. A run spans many turns and launches the Workflow tool, and a subagent returns one result.
    - `plan <spec-dir>` turns specs into a linted, scheduled task graph and asks for one approval. `plan --adopt <file>` transcribes an existing plan. `run` pilots one task, then drives the graph to `main` through wave PRs. `/monet:gang status` prints at most five lines. Each verb takes `--slug <slug>`, which defaults to the repo root's base name in lowercase, with each run of characters outside `[a-z0-9]` turned into `-` (`.config` becomes `config`).
    - After the plan approval, it pushes the integration branch and opens wave PRs without asking. That is a standing exception to the rule against PRs from an integration branch, for gang runs only. It merges a wave PR only with `--merge-on-green`, and it never force-pushes or pushes to `main`.
 
-16) Safety defaults:
+15) Safety defaults:
    - Don't run destructive or irreversible commands without asking.
    - Don't run `git commit`, `git push`, or doc writes unless the user explicitly asks.
 
-17) Return a short "What changed / What to verify" checklist when you propose edits or a workflow.
+16) Return a short "What changed / What to verify" checklist when you propose edits or a workflow.
 
 ## Performance notes (optional)
 
@@ -171,14 +159,9 @@ These are latency optimizations, not behavior. Skip any that aren't worth the co
 
 - **Codebase pre-fetch:** When `session_context.kind: codebase`, optionally dispatch `monet:git-changes` in the background and reuse the cached `changes_digest` for a git skill invoked shortly after (re-run if it may be stale).
 - **Post-write refresh:** After a git write (commit, push, PR create), optionally re-run `monet:git-changes` in the background to cache fresh state.
-- **Progress pre-compute:** After a `monet:interview-tracker` write, optionally run the `monet:interview-progress` weak-area check in the background.
 
 ## Glossary (shared terms across skills)
 
-- **STAR+**: Situation, Task, Action, Result + Impact/Scope/Metrics/Org-level (extended behavioral story format)
-- **Staff+ signals**: Three leadership dimensions in behavioral interviews: influence (cross-team impact), alignment (connecting work to org goals), mentoring (growing others)
 - **Conventional Commits**: Commit message format `type(scope): description` (types: feat, fix, chore, docs, refactor, test, ci)
-- **Golden answer/solution**: Comprehensive reference answer produced after mock evaluation (teaches the concept, not just the answer)
-- **Weak area**: Dimension scoring avg <= 2.5, or 0.8+ points below domain average, or declining trend. Flagged by `monet:interview-progress`
 - **Craftsmanship bar**: Quality standard for PR code: clean naming, no dead code, tested edge cases, idiomatic patterns, documented non-obvious decisions
 - **session_context**: YAML block emitted by `monet:cwd-context` at session start: contains `kind` (codebase/operation/docs) and `repo_owner` (work/personal, codebase only); branch info comes from `monet:git-changes`

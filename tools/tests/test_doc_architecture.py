@@ -153,13 +153,13 @@ class ArchitectureDoc(unittest.TestCase):
     def test_data_dir_section(self):
         body = section(doc_text(), "data dir")
         layout = FENCE.search(body).group(1)
-        for dir_name in ("personas/", "interview-prep/"):
+        for dir_name in ("personas/", "handoffs/"):
             with self.subTest(layout=dir_name):
                 self.assertRegex(layout, r"(?m)^\s+" + re.escape(dir_name))
+        self.assertNotIn("interview", body)
         items = dict(re.findall(r"^- `([a-z-]+/)`: (.*)$", body, re.M))
         for dir_name, writes, reads in (
-                ("personas/", "distill-voice", "voice"),
-                ("interview-prep/", "interview-tracker", "interview-progress")):
+                ("personas/", "distill-voice", "voice"),):
             with self.subTest(item=dir_name):
                 self.assertIn(dir_name, items)
                 self.assertIn(f"`{writes}` writes", items[dir_name])
