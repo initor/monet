@@ -6,25 +6,10 @@ monet is a Claude Code plugin with engineering workflow skills. It drafts commit
 
 Claude writes the change. monet takes it from there: it reviews the change, ships it as a commit and a PR that read like you wrote them, and helps you understand what landed.
 
-```mermaid
----
-config: {flowchart: {wrappingWidth: 240}}
----
-%% GitHub wraps flowchart labels at 120px by default, which splits /monet:review-local at its hyphen.
-flowchart TB
-  you(["You and Claude build a change"])
-  you --> review["/monet:review-local<br/>review it before you push"]
-  review -- "fix the findings" --> you
-  review --> ship["/monet:ship<br/>commit and open the PR"]
-  ship --> teach["/monet:teach<br/>understand what landed"]
-  review -.-> paint["paint<br/>draws the review"]
-  ship -.-> drafts["git-draft-commit<br/>git-draft-pr"]
-  drafts -.-> voice["voice<br/>reads like you"]
-  classDef helper stroke-dasharray: 5 4
-  class paint,drafts,voice helper
-```
-
-Solid boxes are commands you type. Dashed boxes are skills that monet runs for you.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/how-it-works-dark.svg">
+  <img alt="How monet works. You and Claude build a change. Type /monet:review-local to review it before you push. It runs paint, which draws the review, and you fix the findings and review again. Type /monet:ship to commit and open the PR. It runs git-draft-commit and git-draft-pr, which use voice so the text reads like you. Type /monet:teach to understand what landed. Solid boxes are commands you type. Dashed boxes are skills that monet runs for you." src="docs/assets/how-it-works-light.svg" width="566">
+</picture>
 
 ## Install
 

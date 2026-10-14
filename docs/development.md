@@ -26,6 +26,8 @@ claude plugin install monet@monet
 
 To switch back, run the same three commands with `initor/monet` in place of the path. Then start a new session. Run `claude plugin marketplace list` to see which source `monet` points at now.
 
+The README's How it works figure is built, not drawn. `docs/assets/how-it-works.json` lists its steps and skills, and `node tools/how-it-works.mjs` writes `docs/assets/how-it-works-light.svg` and `docs/assets/how-it-works-dark.svg` from it. To rename, add, or hide a skill in the figure, edit the JSON and run the script again. Never edit the SVGs by hand: the README test runs the script with `--check` and fails when they're stale.
+
 ## The gate: `make check` and `make test`
 
 `make check` is the gate. It runs its steps one at a time, in this order, and it stops at the first step that fails:

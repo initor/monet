@@ -4,6 +4,10 @@ This file lists the notable changes to monet in each release. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The README's How it works diagram is now an animated isometric figure, in a light and a dark version. `tools/how-it-works.mjs` builds it from `docs/assets/how-it-works.json`. It goes still for readers who turn on reduced motion.
+
 ### Removed
 
 - The interview-prep skills: `prep`, `sd-mock`, `bq-mock`, `code-mock`, `sd-explainer`, `sd-playground`, `bq-playground`, `code-playground`, `interview-tracker`, and `interview-progress`. They were personal tools, not engineering workflow. The monet agent no longer routes interview requests. Session records that they wrote stay in `<data dir>/interview-prep/` until you remove them.
