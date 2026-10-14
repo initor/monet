@@ -1,6 +1,6 @@
 # monet
 
-monet is a Claude Code plugin with engineering workflow skills. It drafts commits and pull requests, reviews code, and shapes prose so it reads like you. It also turns findings into shareable pages, coaches interview practice, and runs a fleet of agents through a plan. Each skill is a slash command such as `/monet:ship`, and the `monet` agent routes a plain request to the right skill.
+monet is a Claude Code plugin with engineering workflow skills. It drafts commits and pull requests, reviews code, and shapes prose so it reads like you. It also turns findings into shareable pages and runs a fleet of agents through a plan. Each skill is a slash command such as `/monet:ship`, and the `monet` agent routes a plain request to the right skill.
 
 ## Install
 
@@ -29,10 +29,6 @@ Type a skill as `/monet:<name>`, or ask in plain words and let Claude pick it. A
 
 | Skill | What it does |
 | --- | --- |
-| `/monet:bq-mock` | Use when the user asks to practice behavioral questions, build stories, run a behavioral mock, or add stories to their story bank. |
-| `/monet:bq-playground` | Use when the user asks to visualize stories, see their story bank, generate a concept map, or view story coverage. |
-| `/monet:code-mock` | Use when the user asks to practice coding, run a coding mock, or drill coding problems. |
-| `/monet:code-playground` | Use when the user asks for a coding playground, wants to practice a coding problem interactively, or when running a coding mock. |
 | `/monet:cwd-context` | Use when a session or skill needs to know whether the current working directory is a git codebase or a non-git workspace (defaults to operation). |
 | `/monet:distill-voice` | Use when the user hands you a piece of writing, or names a corpus of their own, and wants its mechanics extracted into a named persona that the voice skill can apply. |
 | `/monet:gang` | Use when the user asks to "orchestrate" a build, says "run this plan with a fleet", or wants a "fleet" or "gang" of agents to turn specs into a task graph and land every task on main through wave PRs. |
@@ -42,18 +38,12 @@ Type a skill as `/monet:<name>`, or ask in plain words and let Claude pick it. A
 | `/monet:hairline-create` | Use when someone asks for a new Hairline figure, or runs /monet:hairline-create with an idea. |
 | `/monet:handoff` | Use when the user is running out of context and needs to continue in a fresh session ("I'm at 80% context", "I have to start a new session", "draft me a prompt to pick up this work", "hand this off"). |
 | `/monet:help` | Use when the user asks what monet can do, which /monet commands exist, or how to invoke a monet skill ("monet help", "list monet commands"). |
-| `/monet:interview-progress` | Use when the user asks to view progress, check stats, see their dashboard, or track interview prep improvement over time. |
-| `/monet:interview-tracker` | Use when asked to record, read, and manage interview preparation practice sessions, or when a mock skill records its results. |
 | `/monet:new-skill` | Use when the user asks to create, scaffold, or add a new monet skill ("new monet skill", "scaffold a skill for X"). |
 | `/monet:paint` | Use when the user asks to visualize, "paint", or turn session research/analysis/data into a shareable self-contained HTML page, or wants a visual summary of findings. |
 | `/monet:pr` | Use when a GitHub PR URL is shared and the user asks to review a pull request or do a code review on it before merge. |
-| `/monet:prep` | Use when the user wants to practice interviews -- system design, behavioral, or coding mocks -- or view their prep progress dashboard. |
 | `/monet:review-code` | Use when the user asks to review a Go repository, including Kubernetes code, against official conventions (Effective Go, Go Code Review Comments, K8s best practices). |
 | `/monet:review-local` | Use when the user wants to review uncommitted or branch changes before opening a PR ("review my changes", "check before I push", "pre-PR review"). |
 | `/monet:roadmap` | Use when the user asks to refresh, regenerate, or update a work stream's roadmap page, says "refresh the roadmap", or asks for a roadmap.html for a stream. |
-| `/monet:sd-explainer` | Use when the user asks to explain a concept, learn about a distributed systems topic, or wants a concept playground. |
-| `/monet:sd-mock` | Use when the user asks to practice system design, run a system design mock, or drill a system design topic. |
-| `/monet:sd-playground` | Use when the user asks for an architecture diagram, system design diagram, or design playground. |
 | `/monet:ship` | Use when the user wants to commit and open a PR in one step (asks to "ship", "land", "open a PR", or push-and-PR the current branch's uncommitted changes or commits ahead of main), or asks to "make a commit", which takes the commit-only path. |
 | `/monet:status` | Use when the user wants to inspect what monet can do or how it is wired ("monet status", "which skills does monet have", "show the monet agent config"). |
 | `/monet:teach` | Use when the user wants to deeply understand the work that was just done, or a target they name (a PR, a file or diff, a concept), through an incremental teaching loop: a running understanding checklist, restate-then-fill-gaps, eli5/eli14/intern explanations, and quizzing that doesn't stop until they've demonstrated mastery. |
@@ -70,7 +60,7 @@ monet has two settings in `.claude-plugin/plugin.json`:
 | Key | Default | What it sets |
 | --- | --- | --- |
 | `branch_prefix` | empty, so no prefix | The text in front of each branch name that monet makes, so a branch is `<prefix><slug>`. |
-| `data_dir` | `~/.config/monet` | The dir that holds your own data, such as voice personas and interview-prep sessions. |
+| `data_dir` | `~/.config/monet` | The dir that holds your own data, such as voice personas. |
 
 Set them in one of these ways:
 
@@ -98,7 +88,7 @@ To uninstall, run this command:
 claude plugin uninstall monet@monet
 ```
 
-Uninstall keeps your data dir. Your personas and interview-prep sessions stay there until you remove them.
+Uninstall keeps your data dir. Your personas stay there until you remove them.
 
 ## Docs
 

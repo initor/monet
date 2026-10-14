@@ -28,16 +28,13 @@ TABLE = (
     ('"review this code", "code review" (no PR #)', "`monet:review-code`"),
     ('"review this pull request" (with a full PR URL)', "`monet:pr`"),
     ('"review my changes", "pre-PR review", "check my work"', "`monet:review-local`"),
-    ('"practice interviews", "run a mock", "prep", "show my progress"', "`monet:prep`"),
-    ('"explain a concept", "what is X"', "`monet:sd-explainer`"),
-    ('"architecture diagram", "design playground"', "`monet:sd-playground`"),
     ('"paint this", "visualize this", "make this visual"', "`monet:paint`"),
     ('"one sheet", "sheet this", "one image I can paste"', "`monet:paint` with `--sheet`"),
     ('"explain this to a newcomer", "a picture explainer", "an explainer for the getting-started guide"',
      "`monet:paint` with `--explainer`"),
     ('"a Hairline figure", "an isometric figure", "an empty-state figure"', "`monet:hairline-create`"),
     ('"design a logo", "visual design for X", "give me options for the look of X", '
-     '"design an overview page for X"', "`monet:visual-design`"),
+     '"design an overview page for X", "architecture diagram"', "`monet:visual-design`"),
     ('"refresh the roadmap", "regenerate roadmap.html"', "`monet:roadmap`"),
     ('"orchestrate", "run this plan with a fleet", "fleet", "gang"', "`monet:gang`"),
     ('"I\'m at 80% context", "starting a new session", "draft a prompt to pick this up"', "`monet:handoff`"),
@@ -47,18 +44,14 @@ TABLE = (
 )
 
 ROUTED = {"git-changes", "git-draft-commit", "git-draft-pr", "ship", "voice", "distill-voice",
-          "review-code", "pr", "review-local", "prep", "sd-explainer", "sd-playground", "paint",
-          "hairline-create", "visual-design", "roadmap", "gang", "handoff", "teach", "web-operator"}
+          "review-code", "pr", "review-local", "paint", "hairline-create", "visual-design", "roadmap",
+          "gang", "handoff", "teach", "web-operator"}
 
 # Quoted phrases in the dispatch steps that hold I, me, or my, verbatim from the snapshot.
 STEP_PHRASES = (
     '"review my changes" / "review local" / "review before PR" / "check my work" / "pre-PR review" / '
     '"review what I\'ve done" / "review my local changes"',
-    '"view prep progress" / "check my progress" / "show dashboard" / "prep stats"',
-    '"I want to practice"',
-    '"create an architecture diagram" / "draw my system design" / "design playground"',
     '"one sheet" / "sheet this" / "one image I can paste"',
-    '"Practice a mock and show my progress"',
     '"Review my changes before the PR"',
     '"drive a browser" / "operate Slack/Docs/a dashboard for me" / "take over a Chrome window"',
     '"teach me this" / "help me understand what we just did" / "walk me through this change/PR/file" / '
@@ -122,10 +115,8 @@ class AgentPort(unittest.TestCase):
         bare = [(line_of(self.body, m.start()), m.group()) for m in BARE.finditer(self.body)]
         self.assertEqual(bare, [])
         self.assertIn("`monet:cwd-context`", step(self.body, 0))
-        self.assertIn("`monet:interview-progress`", step(self.body, 9))
-        self.assertIn("`monet:interview-tracker`", self.body)
-        self.assertIn("type `/monet:teach` in the main session", step(self.body, 11))
-        self.assertIn("type `/monet:gang` in a session", step(self.body, 15))
+        self.assertIn("type `/monet:teach` in the main session", step(self.body, 10))
+        self.assertIn("type `/monet:gang` in a session", step(self.body, 14))
 
     def test_moved_out_of_import(self):
         self.assertEqual(tracked("import/agents"), set())
@@ -133,7 +124,7 @@ class AgentPort(unittest.TestCase):
 
     def test_every_route_has_a_skill(self):
         names = {m.group(1) for m in ROUTE.finditer(self.text)}
-        self.assertTrue(ROUTED | {"cwd-context", "interview-progress", "interview-tracker"} <= names)
+        self.assertTrue(ROUTED | {"cwd-context"} <= names)
         wanted = {f"skills/{n}/SKILL.md" for n in names}
         self.assertEqual(sorted(wanted - tracked(*wanted)), [])
 
@@ -167,7 +158,7 @@ class AgentPort(unittest.TestCase):
             self.assertIn(phrases, self.body)
 
     def test_personas_from_data_dir(self):
-        voice = step(self.body, 14)
+        voice = step(self.body, 13)
         first = voice.find(f"`{DATA_DIR}/personas/` first")
         bundled = voice.find("the bundled map in the voice skill")
         self.assertGreaterEqual(first, 0)

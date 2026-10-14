@@ -20,7 +20,7 @@ Do these steps in this order when you write a skill by hand. To change a skill, 
 
 Use kebab-case: lowercase letters, digits, and hyphens. Name the skill for what it produces. The dir name, the frontmatter `name`, and the text after `/monet:` are the same string. For example, `skills/git-changes/` holds `name: git-changes`, and users type `/monet:git-changes`.
 
-Some skills form a prefix family, such as `git-*` for the git skills and `sd-*` for the system design skills. A new skill joins a family only when it belongs there. Do not add a prefix to group a skill by topic alone.
+Some skills form a prefix family, such as `git-*` for the git skills and `review-*` for the review skills. A new skill joins a family only when it belongs there. Do not add a prefix to group a skill by topic alone.
 
 ### 2. Write `skills/<name>/SKILL.md`
 

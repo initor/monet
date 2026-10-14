@@ -1,7 +1,7 @@
 {
   "name": "monet",
   "version": "0.1.0",
-  "description": "Engineering workflow skills for Claude Code that draft commits and PRs, review code, shape prose, visualize findings, coach interview practice, and run a fleet of agents through a plan.",
+  "description": "Engineering workflow skills for Claude Code that draft commits and PRs, review code, shape prose, visualize findings, and run a fleet of agents through a plan.",
   "author": {
     "name": "Wayne WEN"
   },
@@ -16,7 +16,6 @@
     "code-review",
     "writing",
     "visualization",
-    "interview-prep",
     "orchestration"
   ],
   "userConfig": {
@@ -29,7 +28,7 @@
     "data_dir": {
       "type": "string",
       "title": "Data directory",
-      "description": "Directory where monet keeps your own data, such as voice personas and interview-prep sessions. monet never writes inside the plugin directory.",
+      "description": "Directory where monet keeps your own data, such as voice personas. monet never writes inside the plugin directory.",
       "default": "~/.config/monet"
     }
   }

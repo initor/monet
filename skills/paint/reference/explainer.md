@@ -11,7 +11,7 @@ The figure is a Hairline figure: an isometric line drawing that answers the poin
 
 Use an explainer only when the request asks for one: `--explainer`, "explain this to a newcomer", or
 "a picture explainer". For an expert who wants structure at a glance, a sheet fits better. For a
-simulation the reader drives with inputs, use `sd-explainer`.
+what-if the reader drives with inputs, the page layout fits better.
 
 ## Rules
 

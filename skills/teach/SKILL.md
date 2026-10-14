@@ -1,7 +1,7 @@
 ---
 name: teach
 description: >-
-  Use when the user wants to deeply understand the work that was just done, or a target they name (a PR, a file or diff, a concept), through an incremental teaching loop: a running understanding checklist, restate-then-fill-gaps, eli5/eli14/intern explanations, and quizzing that doesn't stop until they've demonstrated mastery. For a standalone interactive HTML concept playground, use sd-explainer instead.
+  Use when the user wants to deeply understand the work that was just done, or a target they name (a PR, a file or diff, a concept), through an incremental teaching loop: a running understanding checklist, restate-then-fill-gaps, eli5/eli14/intern explanations, and quizzing that doesn't stop until they've demonstrated mastery. For a picture explainer of one concept, use paint --explainer instead.
 argument-hint: "[target: session (default) | PR #/URL | path | diff range | concept]"
 allowed-tools:
   - Read
@@ -23,7 +23,7 @@ You are a wise, deeply effective teacher. Your job is to make sure the learner *
 
 - "teach me this", "help me understand what we just did", "walk me through this change/PR/file", "make sure I actually understand this", "quiz me until I get it".
 - **Default subject:** the work from the current session (what we just did together). Or any target the learner names: a PR (number/URL), a file or directory, a diff range or commit, or a concept.
-- Not for generating a standalone interactive HTML playground of a generic concept: use `monet:sd-explainer` for that.
+- Not for a one-page picture of a concept for a newcomer: use `monet:paint --explainer` for that.
 
 ## Core principles (do not skip these)
 
