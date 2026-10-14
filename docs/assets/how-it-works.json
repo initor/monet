@@ -1,0 +1,19 @@
+{
+  "start": { "id": "you", "label": "You and Claude build a change" },
+  "typed": [
+    { "id": "review", "cmd": "/monet:review-local", "note": "review it before you push" },
+    { "id": "ship", "cmd": "/monet:ship", "note": "commit and open the PR" },
+    { "id": "teach", "cmd": "/monet:teach", "note": "understand what landed" }
+  ],
+  "helpers": [
+    { "id": "paint", "names": ["paint"], "note": "draws the review", "calledBy": "review" },
+    { "id": "drafts", "names": ["git-draft-commit", "git-draft-pr"], "note": "draft the commit and the PR", "calledBy": "ship" },
+    { "id": "voice", "names": ["voice"], "note": "reads like you", "calledBy": "drafts" }
+  ],
+  "path": ["you", "review", "ship", "teach"],
+  "loop": { "from": "review", "to": "you", "label": "fix the findings" },
+  "key": {
+    "typed": "Solid boxes are commands you type.",
+    "helper": "Dashed boxes are skills that monet runs for you."
+  }
+}

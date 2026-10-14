@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import unittest
@@ -31,8 +32,18 @@ def fences(text):
     return re.findall(r"(?ms)^```[^\n]*\n(.*?)^```", text)
 
 
-# One line of a node label that names a skill: `/monet:<name>`, or a bare `<name>` for a helper.
-SKILL_LINE = re.compile(r"(/monet:)?([a-z0-9]+(?:-[a-z0-9]+)*)")
+# The How it works figure: its data, its generator, and the two SVGs it builds.
+FIGURE_DATA = "docs/assets/how-it-works.json"
+FIGURE_SCRIPT = "tools/how-it-works.mjs"
+FIGURE_LIGHT = "docs/assets/how-it-works-light.svg"
+FIGURE_DARK = "docs/assets/how-it-works-dark.svg"
+
+
+def tracked_files():
+    return set(subprocess.run(["git", "-C", str(ROOT), "ls-files", "-z", "--cached"],
+                              capture_output=True, text=True, check=True, timeout=60,
+                              env={k: v for k, v in os.environ.items()
+                                   if not k.startswith("GIT_")}).stdout.split("\0"))
 
 
 class Readme(unittest.TestCase):
@@ -44,24 +55,40 @@ class Readme(unittest.TestCase):
         self.assertRegex(text, r"\A# monet\n\n[^#\n][^\n]+\n\n## How it works\n")
         self.assertEqual(re.findall(r"(?m)^## (.+)$", text), SECTIONS)
 
-    def test_how_it_works_names_real_skills(self):
+    def test_how_it_works_figure(self):
         body = section("How it works")
-        diagrams = re.findall(r"(?ms)^```mermaid\n(.*?)^```", body)
-        self.assertEqual(len(diagrams), 1, "one Mermaid diagram")
-        lines = [line.strip() for label in re.findall(r'"([^"]*)"', diagrams[0])
-                 for line in label.split("<br/>")]
-        typed, helpers = [], []
-        for line in lines:
-            m = SKILL_LINE.fullmatch(line)
-            if m:
-                (typed if m.group(1) else helpers).append(m.group(2))
-        self.assertTrue(typed, "the diagram names a command the user types")
-        self.assertTrue(helpers, "the diagram names a skill that monet runs")
-        for name in typed + helpers:
+        self.assertNotIn("```mermaid", body)
+        dark = re.findall(r'<source media="\(prefers-color-scheme: dark\)" srcset="([^"]+)">', body)
+        light = re.findall(r'<img alt="([^"]+)" src="([^"]+)"', body)
+        self.assertEqual(dark, [FIGURE_DARK])
+        self.assertEqual([src for _, src in light], [FIGURE_LIGHT])
+        tracked = tracked_files()
+        for path in (FIGURE_DATA, FIGURE_SCRIPT, FIGURE_LIGHT, FIGURE_DARK):
+            with self.subTest(path=path):
+                self.assertIn(path, tracked)
+        data = json.loads((ROOT / FIGURE_DATA).read_text(encoding="utf-8"))
+        commands = [step["cmd"] for step in data["typed"]]
+        helpers = [name for helper in data["helpers"] for name in helper["names"]]
+        self.assertTrue(commands, "the figure names a command the user types")
+        self.assertTrue(helpers, "the figure names a skill that monet runs")
+        for command in commands:
+            with self.subTest(command=command):
+                self.assertRegex(command, r"\A/monet:[a-z0-9-]+\Z")
+                self.assertIn(command, light[0][0], "the alt text names every command")
+        for name in [c.removeprefix("/monet:") for c in commands] + helpers:
             with self.subTest(skill=name):
                 self.assertTrue((ROOT / "skills" / name / "SKILL.md").is_file())
-        self.assertIn("Solid boxes are commands you type.", body)
-        self.assertIn("Dashed boxes are skills that monet runs for you.", body)
+        for path in (FIGURE_LIGHT, FIGURE_DARK):
+            svg = (ROOT / path).read_text(encoding="utf-8")
+            for text in commands + helpers + list(data["key"].values()):
+                with self.subTest(path=path, text=text):
+                    self.assertIn(text, svg)
+
+    @unittest.skipUnless(shutil.which("node"), "node is not on PATH")
+    def test_how_it_works_figure_is_current(self):
+        result = subprocess.run(["node", str(ROOT / FIGURE_SCRIPT), "--check"],
+                                capture_output=True, text=True, check=False, timeout=60)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_install_commands(self):
         body = section("Install")
@@ -131,10 +158,7 @@ class Readme(unittest.TestCase):
                     "CONTRIBUTING.md", "CHANGELOG.md"):
             with self.subTest(doc=doc):
                 self.assertIn(f"]({doc})", docs)
-        tracked = set(subprocess.run(["git", "-C", str(ROOT), "ls-files", "-z", "--cached"],
-                                     capture_output=True, text=True, check=True, timeout=60,
-                                     env={k: v for k, v in os.environ.items()
-                                          if not k.startswith("GIT_")}).stdout.split("\0"))
+        tracked = tracked_files()
         for target in targets:
             with self.subTest(target=target):
                 self.assertFalse(target.startswith("/"), "use a relative link")
