@@ -34,7 +34,7 @@ class ReviewLocalPort(unittest.TestCase):
         meta = self.skill.frontmatter
         self.assertEqual(meta['name'], 'review-local')
         self.assertEqual(meta['argument-hint'], '[--domain <expertise>] [--agents <N>] [--model <model>]')
-        self.assertEqual(meta['allowed-tools'], ['Read', 'Bash', 'Glob', 'Grep', 'Agent', 'AskUserQuestion'])
+        self.assertEqual(meta['allowed-tools'], ['Read', 'Bash', 'Glob', 'Grep', 'Agent', 'AskUserQuestion', 'Skill'])
         args = section(self.skill.body, 'Arguments')
         for needle in ('$ARGUMENTS', '`--domain <expertise>`', '`--agents <N>`', '`--model <model>`',
                        'Default: `opus`.', '`agent_model`', '(default: 3)'):
