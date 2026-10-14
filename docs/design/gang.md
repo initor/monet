@@ -16,7 +16,7 @@ The user builds a new orchestrator by hand for each large task. Each one relearn
 
 Two working systems exist today:
 
-- **The brief method**, from another coding agent's tooling, is proven: briefs as the product, a ledger keyed by SHA, fresh agents, and independent verification.
+- **[pstack](https://github.com/cursor/plugins/tree/main/pstack)**, in Cursor's plugins repo, is the method gang is built on, and it's proven: briefs as the product, a ledger keyed by SHA, fresh agents, and independent verification.
 - **The earlier engine**, hand-built on Claude Code for an earlier project, is proven: a compiled Workflow, resume from git, compare-and-swap merges, and a simulator.
 
 `/monet:gang` makes the two into one reusable skill. It turns specs into a task graph, then runs the graph with a fleet of agents until every task reaches `main` through wave PRs.
@@ -92,7 +92,7 @@ git is the source of truth for "done". A task is done when a commit whose messag
 
 ## 5. Plan schema (`plan.json`)
 
-A task in the plan is its brief. Each of the brief method's 9 brief fields is a required field, so lint catches a missing field before any spawn.
+A task in the plan is its brief. Each of pstack's 9 brief fields is a required field, so lint catches a missing field before any spawn.
 
 ### 5.1 Run-wide fields
 
@@ -248,7 +248,7 @@ The coordinator runs the Monitor tool on `gang watch`, which prints one event pe
 | `ENGINE_STOPPED <reason>` | Handle the checkpoint (8.3). |
 | `STALL` | No trunk move and no file activity for 2 times the median task time. Probe read-only. Never resume an agent to check on it. |
 
-`gang watch` ports the `watch-pr` policy of the brief method. Blocker order is conflicts, then review threads, then CI, then gates. An empty check list is never green. A query error retries with backoff, then reports.
+`gang watch` ports pstack's `watch-pr` policy. Blocker order is conflicts, then review threads, then CI, then gates. An empty check list is never green. A query error retries with backoff, then reports.
 
 ### 8.2 Files as the channel to a running engine
 

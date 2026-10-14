@@ -15,7 +15,7 @@ import skillkit  # noqa: E402
 README = ROOT / "README.md"
 MANIFEST = ROOT / ".claude-plugin" / "plugin.json"
 STE_CHECK = ROOT / "skills" / "voice" / "scripts" / "ste_check.py"
-SECTIONS = ["Install", "First run", "Skills", "Configuration", "Update and uninstall", "Docs"]
+SECTIONS = ["Install", "First run", "Skills", "Configuration", "Update and uninstall", "Docs", "Credits"]
 
 
 def read():

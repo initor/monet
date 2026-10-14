@@ -110,3 +110,8 @@ Uninstall keeps your data dir. Your personas and interview-prep sessions stay th
 - [Roadmap and handoff design](docs/design/roadmap-handoff.md): the roadmap and handoff skills.
 - [Contributing](CONTRIBUTING.md): the rules for a pull request.
 - [Changelog](CHANGELOG.md): what each release changed.
+
+## Credits
+
+- `/monet:gang` is inspired by [pstack](https://github.com/cursor/plugins/tree/main/pstack), from Cursor's plugins repo. Gang takes its core method from pstack: the brief is the product, a ledger is keyed by commit SHA, each round gets a fresh agent, and an independent reviewer checks every result.
+- `/monet:hairline-create` is a copy of the skill from [Hairline](https://github.com/lucasmarkes/hairline), under its MIT license. Its `UPSTREAM.md` lists the local changes.
