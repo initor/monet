@@ -61,7 +61,8 @@ class PluginManifest(unittest.TestCase):
     def test_required_fields(self):
         m = self.manifest
         self.assertEqual(m.get("name"), "monet")
-        self.assertEqual(m.get("version"), "0.1.0")
+        # The version lives here only; test_doc_changelog checks it against the newest release.
+        self.assertRegex(m.get("version", ""), r"\A\d+\.\d+\.\d+\Z")
         self.assertEqual(m.get("license"), "MIT")
         self.assertEqual(m.get("homepage"), REPO_URL)
         self.assertEqual(m.get("repository"), REPO_URL)
