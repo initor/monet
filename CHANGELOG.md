@@ -4,6 +4,8 @@ This file lists the notable changes to monet in each release. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-16
+
 ### Added
 
 - `/monet:think [--higher | --deeper | --wider] <task>` rewrites a task into a more ambitious prompt, after Felix Rieseberg's [How to be more ambitious](https://felixrieseberg.com/how-to-be-more-ambitious-a-tutorial-for-humans-with-models/). It checks which raw data, tools, and judges the session can reach, and the prompt it writes carries its own check and guardrails. With `--wider`, it can run a small crew and a red team as subagents. It runs only when typed.
