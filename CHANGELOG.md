@@ -8,6 +8,10 @@ This file lists the notable changes to monet in each release. The format follows
 
 - `/monet:think [--higher | --deeper | --wider] <task>` rewrites a task into a more ambitious prompt, after Felix Rieseberg's [How to be more ambitious](https://felixrieseberg.com/how-to-be-more-ambitious-a-tutorial-for-humans-with-models/). It checks which raw data, tools, and judges the session can reach, and the prompt it writes carries its own check and guardrails. With `--wider`, it can run a small crew and a red team as subagents. It runs only when typed.
 
+### Changed
+
+- The README intro names the work monet takes over and the first command to type, `/monet:review-local`. It no longer promises prose that reads like you, since that needs a voice persona.
+
 ## [0.2.0] - 2026-10-14
 
 This release breaks one thing: the interview-prep commands, such as `/monet:prep`, are gone.
