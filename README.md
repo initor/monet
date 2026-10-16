@@ -1,6 +1,6 @@
 # monet
 
-monet is a Claude Code plugin with engineering workflow skills. It drafts commits and pull requests, reviews code, and shapes prose so it reads like you. It also turns findings into shareable pages and runs a fleet of agents through a plan. Each skill is a slash command such as `/monet:ship`, and the `monet` agent routes a plain request to the right skill.
+monet is a Claude Code plugin for the work that starts once Claude has written the code: reviewing the change, then turning it into a commit and a pull request. After you install it, make a change and type `/monet:review-local` for a read-only review before you push. When the change is ready, `/monet:ship` drafts the commit and the PR, then commits, pushes, and opens the PR once you say yes.
 
 ## How it works
 
