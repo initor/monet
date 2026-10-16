@@ -299,6 +299,9 @@ func TestWaitReturnsEarlyAndRejectsUnknownJobs(t *testing.T) {
 	t.Parallel()
 	d := store.Dir{Root: t.TempDir()}
 	id := start(t, d, job(t.TempDir(), "sleep 3"))
+	// The job outlives the early Wait below. Wait for it to end before the
+	// t.TempDir cleanups, which run after this one, remove the dirs it writes.
+	t.Cleanup(func() { _, _ = Wait(d, id, 30*time.Second) })
 	st, err := Wait(d, id, 200*time.Millisecond)
 	if err != nil || (st.State != StateQueued && st.State != StateRunning) {
 		t.Fatalf("%+v %v", st, err)
