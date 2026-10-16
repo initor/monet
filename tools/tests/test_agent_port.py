@@ -40,12 +40,14 @@ TABLE = (
     ('"I\'m at 80% context", "starting a new session", "draft a prompt to pick this up"', "`monet:handoff`"),
     ('"teach me this", "help me understand what we did", "walk me through this PR/file/change"',
      "`monet:teach`"),
+    ('"be more ambitious with X", "think higher, deeper or wider about X", "an out-of-the-box take on X"',
+     "`monet:think` (typed only)"),
     ('"drive a browser", "operate Slack/Docs for me", "take over a Chrome window"', "`monet:web-operator`"),
 )
 
 ROUTED = {"git-changes", "git-draft-commit", "git-draft-pr", "ship", "voice", "distill-voice",
           "review-code", "pr", "review-local", "paint", "hairline-create", "visual-design", "roadmap",
-          "gang", "handoff", "teach", "web-operator"}
+          "gang", "handoff", "teach", "think", "web-operator"}
 
 # Quoted phrases in the dispatch steps that hold I, me, or my, verbatim from the snapshot.
 STEP_PHRASES = (
@@ -117,6 +119,7 @@ class AgentPort(unittest.TestCase):
         self.assertIn("`monet:cwd-context`", step(self.body, 0))
         self.assertIn("type `/monet:teach` in the main session", step(self.body, 10))
         self.assertIn("type `/monet:gang` in a session", step(self.body, 14))
+        self.assertIn("type `/monet:think", step(self.body, 15))
 
     def test_moved_out_of_import(self):
         self.assertEqual(tracked("import/agents"), set())

@@ -31,6 +31,7 @@ Match the user's intent to a skill. The numbered dispatch steps below carry the 
 | "orchestrate", "run this plan with a fleet", "fleet", "gang" | `monet:gang` | codebase | after the plan approval only (then pushes the integration branch and opens wave PRs without asking) |
 | "I'm at 80% context", "starting a new session", "draft a prompt to pick this up" | `monet:handoff` | any | writes one scratch file |
 | "teach me this", "help me understand what we did", "walk me through this PR/file/change" | `monet:teach` | any | writes a tmp checklist only |
+| "be more ambitious with X", "think higher, deeper or wider about X", "an out-of-the-box take on X" | `monet:think` (typed only) | any | read-only (crew agents only on the user's yes) |
 | "drive a browser", "operate Slack/Docs for me", "take over a Chrome window" | `monet:web-operator` | any | yes (gates outward actions) |
 
 When invoked:
@@ -147,7 +148,11 @@ When invoked:
    - `plan <spec-dir>` turns specs into a linted, scheduled task graph and asks for one approval. `plan --adopt <file>` transcribes an existing plan. `run` pilots one task, then drives the graph to `main` through wave PRs. `/monet:gang status` prints at most five lines. Each verb takes `--slug <slug>`, which defaults to the repo root's base name in lowercase, with each run of characters outside `[a-z0-9]` turned into `-` (`.config` becomes `config`).
    - After the plan approval, it pushes the integration branch and opens wave PRs without asking. That is a standing exception to the rule against PRs from an integration branch, for gang runs only. It merges a wave PR only with `--merge-on-green`, and it never force-pushes or pushes to `main`.
 
-15) Safety defaults:
+15) Ambition: asking for more than the obvious task (any posture):
+   - If the user asks to "be more ambitious" / "think higher, deeper or wider" / "give me an out-of-the-box take on X", don't run `monet:think` yourself: tell the user to type `/monet:think [--higher | --deeper | --wider] <task>`. It is typed only (`disable-model-invocation`), because "think" sits in so many prompts that auto-routing would misfire.
+   - Picks one lens (altitude, depth, or range), lists the raw material, instruments, and judges the session can actually reach, and prints one card ending in a rewritten prompt. With `--wider`, it runs a small crew plus a red team as subagents, only on the user's yes. Writes and commits nothing.
+
+16) Safety defaults:
    - Don't run destructive or irreversible commands without asking.
    - Don't run `git commit`, `git push`, or doc writes unless the user explicitly asks.
 
