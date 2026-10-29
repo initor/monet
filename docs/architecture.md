@@ -1,6 +1,6 @@
 # Architecture
 
-This page shows how the monet plugin is wired: the skills, the monet agent, the `ste-lite` output style, the `userConfig` values, and the data dir. For the list of skills, see the [skill catalog in the README](../README.md).
+This page shows how the monet plugin is wired: the skills, the monet agent, the `ste-lite` output style, the relay hook, the `userConfig` values, and the data dir. For the list of skills, see the [skill catalog in the README](../README.md).
 
 ```mermaid
 flowchart LR
@@ -42,6 +42,10 @@ The agent sets no `permissionMode`, because plugins ignore `permissionMode`.
 ## The output style
 
 The plugin ships one output style, `monet:ste-lite`. The file `output-styles/ste-lite.md` is a relative symlink to `../skills/voice/reference/ste-lite.md`. So the STE-lite card lives in one place. The `voice` skill and the output style read the same file. Edit the card in `skills/voice/reference/ste-lite.md` only.
+
+## The hook
+
+The plugin ships one hook. `hooks/hooks.json` runs `hooks/handoff-relay.js` after each tool use, through the `hooks/run-node.sh` shim that finds `node`. The hook acts only in a project that has `.claude/handoff-relay.json`. When the context of the session reaches the threshold in that file, the hook tells the session to follow the procedure that the file names. `/monet:gang run` writes that file, so that its coordinator hands the run to a new background session.
 
 ## userConfig
 
