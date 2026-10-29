@@ -4,6 +4,8 @@ This file lists the notable changes to monet in each release. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-29
+
 ### Added
 
 - `/monet:gang run` keeps a run going across sessions. When the context of the coordinator reaches 80% of its window, it writes a handoff and starts a new background session with `claude --bg`. The new session takes the driver lease and resumes from git and the run files, with no prompt from the user. Each kickoff prompt carries the standing orders and the words of the user, copied by `skills/gang/scripts/relay.mjs`.
