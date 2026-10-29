@@ -30,7 +30,8 @@ USER_LINE = "Refer to the user as the user, or with they or them."
 ARGUMENT_HINT = ("plan <spec-dir> [--slug <slug>] | plan --adopt <file> [--adopt-source <file>] [--slug <slug>]"
                  " | run [--slug <slug>] [--merge-on-green] | status [--slug <slug>]")
 ALLOWED_TOOLS = ["Bash", "Read", "Write", "Edit", "Grep", "Glob", "Agent", "Workflow", "Monitor",
-                 "AskUserQuestion", "ScheduleWakeup", "TaskCreate", "TaskUpdate"]
+                 "AskUserQuestion", "ScheduleWakeup", "TaskCreate", "TaskUpdate", "TaskStop", "ListAgents",
+                 "SendMessage"]
 # The acceptance grep, built from parts so that this file does not match it.
 PERSONAL = re.compile("|".join(["way" + "ne", "pot" + "ato", "wa" + "wen",
                                 r"~/\.cl" + "aude", r"\$HOME/\.cl" + "aude"]), re.IGNORECASE)

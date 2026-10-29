@@ -4,6 +4,12 @@ This file lists the notable changes to monet in each release. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `/monet:gang run` keeps a run going across sessions. When the context of the coordinator reaches 80% of its window, it writes a handoff and starts a new background session with `claude --bg`. The new session takes the driver lease and resumes from git and the run files, with no prompt from the user. Each kickoff prompt carries the standing orders and the words of the user, copied by `skills/gang/scripts/relay.mjs`.
+- A plugin hook, `hooks/handoff-relay.js`, gives the relay notice. It acts only in a project that has `.claude/handoff-relay.json`, and only on tool calls of the session itself, not of its subagents.
+- `/monet:gang run` can keep a private Notion page as the tracker of the run, with an executive summary on top and a dated log below it. The coordinator reads the comments of the user on that page and acts on them.
+
 ## [0.3.0] - 2026-10-16
 
 ### Added
