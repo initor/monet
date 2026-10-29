@@ -1,0 +1,17 @@
+{
+  "description": "Handoff relay: in a project with .claude/handoff-relay.json, tells the session to hand off to a new background session when its context reaches the threshold.",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run-node.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/handoff-relay.js\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
