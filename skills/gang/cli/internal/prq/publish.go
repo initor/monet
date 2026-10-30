@@ -63,29 +63,33 @@ func Prepare(repo string, d store.Dir, p *plan.Plan, id string) (Prepared, error
 	if c.Base, err = gitx.RevParse(repo, "refs/remotes/origin/"+p.Repo.Base); err != nil {
 		return Prepared{}, err
 	}
-	sha, conflicts, err := gitx.Replay(repo, l.Commit, l.Parent, c.Base, l.Message)
+	// Next skipped every landing whose replay changes nothing, so this one changes something.
+	sha, tree, _, conflicts, err := replayOnto(repo, l, c.Base)
 	switch {
 	case err != nil:
 		return Prepared{}, err
 	case len(conflicts) > 0:
 		return Prepared{}, exit.New(exit.Conflict, "%s does not replay onto origin/%s: %s", id, p.Repo.Base, strings.Join(conflicts, ", "))
 	}
-	trees, err := gitx.Run(repo, "rev-parse", sha+"^{tree}", c.Base+"^{tree}")
-	if err != nil {
-		return Prepared{}, err
-	}
-	replay, base, _ := strings.Cut(trees, "\n")
-	if replay == base {
-		return Prepared{}, exit.New(exit.Refused, "%s is already on origin/%s: its replay changes nothing", id, p.Repo.Base)
-	}
 	c.SHA = sha
-	if err := c.reuse(repo, replay); err != nil {
+	if err := c.reuse(repo, tree); err != nil {
 		return Prepared{}, err
 	}
 	if err := wave.Scan(repo, c.Base, c.SHA); err != nil {
 		return Prepared{}, err
 	}
 	return c, nil
+}
+
+// replayOnto replays landing l alone onto the base commit. It returns the replay
+// commit and its tree, whether that tree is the base tree, and the conflicting paths.
+func replayOnto(repo string, l Landing, base string) (sha, tree string, same bool, conflicts []string, err error) {
+	if sha, conflicts, err = gitx.Replay(repo, l.Commit, l.Parent, base, l.Message); err != nil || len(conflicts) > 0 {
+		return
+	}
+	trees, err := gitx.Run(repo, "rev-parse", sha+"^{tree}", base+"^{tree}")
+	tree, baseTree, _ := strings.Cut(trees, "\n")
+	return sha, tree, err == nil && tree == baseTree, nil, err
 }
 
 // reuse sets c.SHA to origin/<c.Branch> when that branch exists and holds the
@@ -134,8 +138,8 @@ func Body(repo string, p *plan.Plan, c Prepared) (string, error) {
 		return "", err
 	}
 	reqs := cmp.Or(strings.Join(c.Task.Requirements, ", "), "-")
-	return fmt.Sprintf("Task %s of gang run `%s`: %s\n\n- Requirements: %s\n- Review: CLEAN %v at %s\n- Changed lines: %d\n\nOpened by `gang pr open`.\n",
-		c.ID, p.Slug, c.Task.Goal, reqs, ledger.RequiredLenses(c.Task), c.Tip[:7], n), nil
+	return fmt.Sprintf("Task %s of gang run `%s`: %s\n\n- Requirements: %s\n- Review: CLEAN %v at %s\n- Changed lines: %d\n\nOpened by `gang pr open`.\n\nTask: %s\n",
+		c.ID, p.Slug, c.Task.Goal, reqs, ledger.RequiredLenses(c.Task), c.Tip[:7], n, c.ID), nil
 }
 
 var prURLRe = regexp.MustCompile(`https?://\S+/pull/(\d+)`)

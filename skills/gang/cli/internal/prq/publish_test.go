@@ -114,7 +114,7 @@ func TestPrepareRefusesWhatCannotShip(t *testing.T) {
 		msg      string
 		setup    func(t *testing.T, repo string, d store.Dir)
 	}{
-		{"already on the base", "T1", exit.Refused, "T1 is already on origin/main", func(t *testing.T, repo string, _ store.Dir) {
+		{"already on the base", "T1", exit.Refused, "nothing left to ship", func(t *testing.T, repo string, _ store.Dir) {
 			shipOnOrigin(t, repo, "chore: same a", map[string]string{"a/T1.go": "package a\n"})
 		}},
 		{"conflict", "T1", exit.Conflict, "T1 does not replay onto origin/main: a/T1.go", func(t *testing.T, repo string, _ store.Dir) {
@@ -233,7 +233,7 @@ func TestBodyNamesGoalRequirementsReviewAndSize(t *testing.T) {
 		}
 		prep.Task.Risk, prep.Task.Requirements = c.risk, strings.Fields(c.ids)
 		got, err := Body(repo, p, prep)
-		want := "Task T2 of gang run `demo`: Make T2 pass its test.\n\n- Requirements: " + c.reqs + "\n- Review: CLEAN " + c.lenses + " at " + prep.Tip[:7] + "\n- Changed lines: " + c.lines + "\n\nOpened by `gang pr open`.\n"
+		want := "Task T2 of gang run `demo`: Make T2 pass its test.\n\n- Requirements: " + c.reqs + "\n- Review: CLEAN " + c.lenses + " at " + prep.Tip[:7] + "\n- Changed lines: " + c.lines + "\n\nOpened by `gang pr open`.\n\nTask: T2\n"
 		if err != nil || got != want {
 			t.Errorf("Body = %q, %v, want %q", got, err, want)
 		}
@@ -265,7 +265,7 @@ func TestPublishOpensTheNextTask(t *testing.T) {
 		t.Fatalf("gh calls = %q, want one %q", calls, call)
 	}
 	body, err := os.ReadFile(state + "/body.md")
-	if err != nil || !strings.HasPrefix(string(body), "Task T1 of gang run `demo`") || !strings.HasSuffix(string(body), "`gang pr open`.\n") {
+	if err != nil || !strings.HasPrefix(string(body), "Task T1 of gang run `demo`") || !strings.HasSuffix(string(body), "\nTask: T1\n") {
 		t.Fatalf("body = %q, %v", body, err)
 	}
 	if _, err := os.Stat(d.Run("pr-body-T1.md")); !os.IsNotExist(err) {

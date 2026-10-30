@@ -1,6 +1,8 @@
 package prq
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -44,6 +46,31 @@ func TestNextSkipsOpenAndMergedRows(t *testing.T) {
 	wantNext(t, repo, "T3", merged, open)
 	wantNext(t, repo, "", merged, open, Row{Task: "T3", State: StateMerged})
 	wantNext(t, repo, "T1", Row{Task: "T1", State: StateClosed})
+}
+
+// A hand squash of T1 and F01 drops their Task lines, so only the replay shows that F01 is on the base.
+func TestNextSkipsALandingAlreadyOnTheBase(t *testing.T) {
+	for _, c := range []struct{ name, f01, want string }{
+		{"same change", "F01\n", "T2"},
+		{"replay conflict", "other\n", "F01"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			repo := nextTrunk(t, "T1", "F01", "T2")
+			testkit.CommitRef(t, repo, "refs/remotes/origin/main", "feat: squash t1 and f01", map[string]string{"T1.txt": "T1\n", "F01.txt": c.f01})
+			wantNext(t, repo, c.want, Row{Task: "T1", State: StateMerged})
+		})
+	}
+}
+
+func TestNextFailsWhenAReplayFails(t *testing.T) {
+	repo := nextTrunk(t, "T1")
+	tree := testkit.Git(t, repo, "rev-parse", "gang-demo^{tree}")
+	if err := os.Remove(filepath.Join(repo, ".git/objects", tree[:2], tree[2:])); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok, err := Next(repo, store.Dir{Root: t.TempDir()}, testkit.Plan()); err == nil {
+		t.Fatalf("Next = %+v, %v, nil; want the replay error", got, ok)
+	}
 }
 
 func TestNextFailsOnAStray(t *testing.T) {
