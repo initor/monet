@@ -34,12 +34,16 @@ func Excluded(name string, globs []string) bool {
 // Count returns the lines added plus the lines deleted between the tree-ish
 // values from and to, as git diff --numstat counts them with rename detection.
 // It skips binary files and the paths that Excluded matches. For a rename it
-// matches the new path.
+// matches the new path. It needs git 2.40, for --attr-source.
 func Count(repo, from, to string, exclude []string) (int, error) {
+	// --attr-source reads attributes from the from tree, so no .gitattributes in
+	// the checkout or in the task can mark a file -diff and hide its lines. -l1000
+	// pins git's default rename limit: diff.renameLimit cannot turn a rename into a
+	// delete and an add, and the rename search stays bounded.
 	// --diff-algorithm=myers keeps a diff.algorithm setting from changing a count.
 	// --end-of-options and -- keep a revision from being read as an option or
 	// as a path.
-	out, err := gitx.Run(repo, "diff", "--numstat", "-z", "-M", "--diff-algorithm=myers", "--end-of-options", from, to, "--")
+	out, err := gitx.Run(repo, "--attr-source="+from, "diff", "--numstat", "-z", "-M", "-l1000", "--diff-algorithm=myers", "--end-of-options", from, to, "--")
 	if err != nil {
 		return 0, err
 	}
@@ -98,4 +102,14 @@ func Check(l plan.Limits, reason string, n int) string {
 		return fmt.Sprintf("size %d is above limits.task_lines %d: split the task, or give size.reason", n, l.TaskLines)
 	}
 	return ""
+}
+
+// Measure counts the changed lines from from to to, the way gang merge counts
+// a task (Count with DefaultExclude), and returns Check's refusal text for it
+// ("" within the budget).
+func Measure(repo, from, to string, l plan.Limits, reason string) (n int, refusal string, err error) {
+	if n, err = Count(repo, from, to, DefaultExclude); err != nil {
+		return 0, "", err
+	}
+	return n, Check(l, reason, n), nil
 }

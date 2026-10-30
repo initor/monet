@@ -467,6 +467,18 @@ func TestMergeRepairTaskMayUseTheCeiling(t *testing.T) {
 	}
 }
 
+// A conflicted tree holds the markers of both sides, so measuring it would
+// refuse a task that only needs a sync. The conflict is reported first.
+func TestMergeReportsAConflictBeforeTheSize(t *testing.T) {
+	f := newFixture(t)
+	a1 := f.commit(t, "gang/A1", "file.txt", strings.Repeat("a\n", 150), "A1")
+	f.commit(t, "integration", "file.txt", "trunk\n", "")
+	f.clean(t, "A1", a1, ledger.LensReview)
+	if r := f.merge(t, "A1", a1); r.Status != Conflict || !reflect.DeepEqual(r.Files, []string{"file.txt"}) {
+		t.Fatalf("got %+v, want CONFLICT on file.txt", r)
+	}
+}
+
 // The size is the change the merge makes on the trunk, so lines that the
 // trunk gained after the task branched do not count against the task.
 func TestMergeSizeCountsTheTaskNotTheTrunk(t *testing.T) {
