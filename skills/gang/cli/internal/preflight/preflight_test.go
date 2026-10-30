@@ -255,6 +255,9 @@ func TestRemoteMatches(t *testing.T) {
 			t.Errorf("%q must match github.com/acme/widget", origin)
 		}
 	}
+	if !remoteMatches("/repo", "git@github.com:acme/widget.git", "https://github.com/acme/widget.git/") {
+		t.Error("the plan remote is normalized too")
+	}
 	for _, c := range []struct{ origin, remote string }{
 		{"git@github.com:acme/widget-old.git", "github.com/acme/widget"},
 		{"https://github.com/acme/widget-old", "acme/widget"},
