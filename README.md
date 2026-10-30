@@ -50,7 +50,7 @@ Type a skill as `/monet:<name>`, or ask in plain words and let Claude pick it. A
 | --- | --- |
 | `/monet:cwd-context` | Use when a session or skill needs to know whether the current working directory is a git codebase or a non-git workspace (defaults to operation). |
 | `/monet:distill-voice` | Use when the user hands you a piece of writing, or names a corpus of their own, and wants its mechanics extracted into a named persona that the voice skill can apply. |
-| `/monet:gang` | Use when the user asks to "orchestrate" a build, says "run this plan with a fleet", or wants a "fleet" or "gang" of agents to turn specs into a task graph and land every task on main through wave PRs. |
+| `/monet:gang` | Use when the user asks to "orchestrate" a build, says "run this plan with a fleet", or wants a "fleet" or "gang" of agents to turn specs into a task graph and land every task on main as its own small PR. |
 | `/monet:git-changes` | Use when drafting a commit or PR, or asked "what changed?". |
 | `/monet:git-draft-commit` | Use when the user asks to draft a commit message for the current uncommitted changes. |
 | `/monet:git-draft-pr` | Use when the user asks to draft a pull request or write a PR description for the current branch's changes. |

@@ -15,7 +15,7 @@ This file is the schema of `plan.json`. A task in the plan is its brief. Lint ru
   "limits": {"task_lines": 100, "split_lines": 300, "fix_rounds": 3, "repair_tries": 2, "blocked_stop": 3, "null_stop": 6, "retries": 2},
   "models": {},
   "forbidden": ["git stash", "git rebase", "force-push", "push to main"],
-  "done": "every task is reachable from origin/main and no wave PR is open",
+  "done": "every task has its Task line on origin/main and no gang PR is open",
   "requirements": [{"id": "API-1", "source": "specs/api.md:12"}],
   "tasks": []
 }

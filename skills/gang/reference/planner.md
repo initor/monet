@@ -49,7 +49,7 @@ Write `<dir>/run/planning/base.json`. It holds every run-wide field of `plan.jso
 | `locks` | Shared resources that one gate at a time can use, such as a GPU or a cluster |
 | `limits`, `models` | `{}`, so that the defaults apply |
 | `forbidden` | `"git stash"`, `"git rebase"`, `"force-push"`, `"push to main"`, and the spec's own rules |
-| `done` | `"every task is reachable from origin/main and no wave PR is open"` |
+| `done` | `"every task has its Task line on origin/main and no gang PR is open"` |
 | `requirements` | `[]` until the inventory fills it |
 
 Match `repo.wave_title` to the repo's own PR title rules, such as a Conventional Commits check. Lint fails when the title for wave 99 is over 72 characters.
@@ -127,7 +127,7 @@ Run `<gang> render`. Then send all reviewers and the critic in one message, with
 
 1. Show the user the task count, the wave count, the critical chain, the range, and the path of `<dir>/plan/plan.md`. Never paste the whole plan.
 2. Also show `repo.remote`, `repo.gh_account`, `repo.integration`, and `repo.base` from `plan.json`. This approval is the only gate before the pushes and the PRs.
-3. Ask with AskUserQuestion: "Approve the plan for <slug>? Gang then pushes <integration> to <remote> as <gh_account> and opens wave PRs into <base> without asking." The options are "Approve and start the pilot", "Approve only", and "Change it".
+3. Ask with AskUserQuestion: "Approve the plan for <slug>? Gang then pushes one branch per task to <remote> as <gh_account> and opens one PR per task into <base> without asking." The options are "Approve and start the pilot", "Approve only", and "Change it".
 4. For "Change it", ask what to change if the user gave no words. Send a fixer with those words, then go back to "3. Assemble and lint".
 5. For an approval, run `<gang> plan commit --message "plan: <slug>"`. It prints the new SHA of `refs/gang/<slug>/plan`.
 6. If it exits 3, the ref moved. Run it one more time.
