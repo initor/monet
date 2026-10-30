@@ -38,7 +38,8 @@ func Prepare(repo string, d store.Dir, p *plan.Plan, id string) (Prepared, error
 	if r, ok := Current(rows); ok {
 		return Prepared{}, exit.New(exit.Refused, "PR #%d for %s is open: one PR at a time", r.PR, r.Task)
 	}
-	if _, err := gitx.Run(repo, "fetch", "--quiet", "origin"); err != nil {
+	// Prune, so that reuse never reads the stale ref of a deleted PR branch.
+	if _, err := gitx.Run(repo, "fetch", "--quiet", "--prune", "origin"); err != nil {
 		return Prepared{}, fmt.Errorf("fetch origin: %w", err)
 	}
 	l, ok, err := Next(repo, d, p)
@@ -82,7 +83,8 @@ func Prepare(repo string, d store.Dir, p *plan.Plan, id string) (Prepared, error
 	return c, nil
 }
 
-// reuse sets c.SHA to origin/<c.Branch> when that branch exists and holds the replay's tree on c.Base, and refuses any other tip.
+// reuse sets c.SHA to origin/<c.Branch> when that branch exists and holds the
+// replay's tree on c.Base, and refuses any other tip.
 func (c *Prepared) reuse(repo, tree string) error {
 	tip, err := gitx.RevParse(repo, "refs/remotes/origin/"+c.Branch)
 	if errors.Is(err, gitx.ErrNotFound) {
