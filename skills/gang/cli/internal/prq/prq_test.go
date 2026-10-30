@@ -207,3 +207,27 @@ func TestMergeRefusesUnlessTheOldestCommitIsTheTask(t *testing.T) {
 		}
 	}
 }
+
+func TestMergeInGateModeNeedsGangGateSuccess(t *testing.T) {
+	const vercel, gate = `{"__typename":"StatusContext","context":"vercel","state":"SUCCESS"}`, `{"__typename":"StatusContext","context":"gang/gate","state":"SUCCESS"}`
+	for _, c := range []struct{ mode, checks, refusal string }{
+		{plan.ChecksGate, vercel, "PR #7 has no gang/gate success"},
+		{plan.ChecksGate, vercel + "," + strings.Replace(gate, "SUCCESS", "SKIPPED", 1), "PR #7 has no gang/gate success"},
+		{plan.ChecksGate, strings.Replace(vercel, "SUCCESS", "FAILURE", 1), "PR #7 is not green, failed: vercel"},
+		{plan.ChecksGate, vercel + "," + gate, ""},
+		{plan.ChecksGitHub, vercel, ""},
+	} {
+		repo, d, p, ghDir, head := openPR(t)
+		p.Repo.Checks = c.mode
+		testkit.Answer(t, ghDir, "pr-view.json", prView("OPEN", head, c.checks))
+		_, err := Merge(repo, d, p, "T1")
+		if c.refusal != "" {
+			wantExit(t, err, exit.Refused, c.refusal)
+		} else if err != nil {
+			t.Fatalf("%s: Merge = %v", c.mode, err)
+		}
+		if merged := len(testkit.Calls(t, ghDir)) == 2; merged != (c.refusal == "") {
+			t.Fatalf("%s: gh calls = %q, want a pr merge only without a refusal", c.mode, testkit.Calls(t, ghDir))
+		}
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -128,6 +129,19 @@ func Live(d store.Dir, p *plan.Plan, id string) (Row, gh.State, error) {
 	return r, st, nil
 }
 
+// Green is gh.Classify, and with repo.checks gate a PR is green only when
+// gang/gate also succeeded: a third-party status never stands in for the gate.
+func Green(p *plan.Plan, st gh.State) (green, red bool, failed []string) {
+	green, red, failed = gh.Classify(st)
+	return green && (p.Repo.Checks != plan.ChecksGate || gateSuccess(st)), red, failed
+}
+
+func gateSuccess(st gh.State) bool {
+	return slices.ContainsFunc(st.Checks, func(c gh.Check) bool {
+		return c.Name == "gang/gate" && c.Conclusion == "SUCCESS"
+	})
+}
+
 // Merge squash-merges the open PR of task id with --match-head-commit, and
 // marks its row merged. It returns the squash subject.
 func Merge(repo string, d store.Dir, p *plan.Plan, id string) (string, error) {
@@ -135,9 +149,12 @@ func Merge(repo string, d store.Dir, p *plan.Plan, id string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if green, _, failed := gh.Classify(st); !green {
+	if green, _, failed := Green(p, st); !green {
 		if len(failed) > 0 {
 			return "", exit.New(exit.Refused, "PR #%d is not green, failed: %s", r.PR, strings.Join(failed, ","))
+		}
+		if p.Repo.Checks == plan.ChecksGate && !gateSuccess(st) {
+			return "", exit.New(exit.Refused, "PR #%d has no gang/gate success", r.PR)
 		}
 		return "", exit.New(exit.Refused, "PR #%d is not green", r.PR)
 	}
