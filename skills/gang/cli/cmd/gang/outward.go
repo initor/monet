@@ -1,9 +1,13 @@
 package main
 
 import (
+	"errors"
 	"flag"
+	"time"
 
 	"gang/internal/exit"
+	"gang/internal/lock"
+	"gang/internal/store"
 )
 
 // owArgs parses flags anywhere in args (plan 01 parseFlags) and requires
@@ -17,4 +21,16 @@ func owArgs(fs *flag.FlagSet, args []string, n int) ([]string, error) {
 		return nil, exit.New(exit.Usage, "%s: want %d argument(s), got %d", fs.Name(), n, len(pos))
 	}
 	return pos, nil
+}
+
+// requireDriver renews the driver lease for holder, before any outward step.
+func requireDriver(c *Ctx, holder string) error {
+	if holder == "" {
+		return exit.New(exit.Usage, "--holder <session> is required: the driver lease holder")
+	}
+	err := lock.Renew(store.Dir{Root: c.Dir}.Run("locks"), "driver", holder, 12*time.Hour, c.Now())
+	if errors.Is(err, lock.ErrHeld) {
+		return exit.New(exit.Held, "%v", err)
+	}
+	return err
 }
