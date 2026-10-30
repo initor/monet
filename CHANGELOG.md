@@ -4,6 +4,26 @@ This file lists the notable changes to monet in each release. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `/monet:gang run` ships each trunk task as its own small PR, one at a time, in trunk order. A PR holds at most 100 changed lines by default. A plan may lower that limit with `limits.task_lines`, and may lower the limit for a task that cannot be split with `limits.split_lines` (300 by default).
+- `gang pr open <id>` pushes the branch `gang/<slug>/<id>` and opens the PR of that task. `gang pr gate <id> <job>` posts the result of a gate job as the commit status `gang/gate`, for a repo with no CI (`repo.checks: gate`). `gang pr fix <id> <fix id>` pushes a CI fix onto the PR as a new commit, and a PR takes at most 2 fix commits. `gang pr merge <id>` squash-merges the PR and keeps each `Task:` line of its commits. Each of these commands takes the driver lease with `--holder <session>`.
+- `gang watch` prints `PR_NEXT <id>` for the next task to open, and `PR_GREEN` and `PR_RED` for the open PR. `PR_RED` names `no-checks` when the CI of the repo gives no check within `limits.checks_grace_min` minutes (10 by default). In gate mode, a PR is green only when `gang/gate` has passed.
+- `gang size <id>` prints how many lines a task would change on the base. The engine runs it before a task is done.
+
+### Changed
+
+- `plan/plan.json` gains `repo.checks`, which is `github` (the default) or `gate`, and the size limits `limits.task_lines`, `limits.split_lines` and `limits.checks_grace_min`.
+- Wave PRs are no longer how a run ships. The wave commands stay for a run that still has an open wave PR.
+- A run that 0.4.0 started switches to the queue with the steps under "Switch a 0.4.0 run to the queue" in `skills/gang/reference/coordinator.md`. Build `<gang>` again first, because a 0.4.0 binary refuses the new `checks` field.
+
+### Known issues
+
+- A branch that `gang pr open` pushed before it failed stays on origin. Once the base moves, it blocks a retry with `exists at ... with another change or base`. Delete that branch on GitHub, then run the command again.
+- A task id must not repeat a `Task:` id that is already on the base from an earlier run. The queue counts such a task as shipped.
+- A failed push is always exit 2 with `push rejected`, even when the cause is the network. Retry the command.
+- The wave commands still count any green check as green in gate mode. Use them only to finish a wave PR that is already open.
+
 ## [0.4.0] - 2026-10-29
 
 ### Added
