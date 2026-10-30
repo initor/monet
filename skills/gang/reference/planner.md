@@ -81,7 +81,7 @@ Send one drafter per area, with the `plan_draft` role. Each prompt holds:
 
 Tell each drafter these rules:
 
-- One task is one commit of at most 1200 changed lines.
+- One task is one commit of at most `limits.task_lines` changed lines, 100 by default, tests included. A task that cannot be split further carries `size.reason`, and no task goes above `limits.split_lines`, 300 by default.
 - `goal` is one sentence that a stranger can run.
 - Each `acceptance` line is one check that passes or fails.
 - `verify.tests_first` names tests that fail before the change and pass after it.
@@ -104,7 +104,7 @@ Tell each drafter these rules:
 
 Run `<gang> render`. Then send all reviewers and the critic in one message, with the `plan_review` role.
 
-- **One reviewer per area.** It reads the draft and the area's specs. It writes findings to `<dir>/run/planning/review-<area>.md`, each with a severity and a task id. It checks requirement coverage, concrete goals, checkable acceptance, honest sizes, a `scope.write` that covers each file, and tests that fail first.
+- **One reviewer per area.** It reads the draft and the area's specs. It writes findings to `<dir>/run/planning/review-<area>.md`, each with a severity and a task id. It checks requirement coverage, concrete goals, checkable acceptance, honest sizes, a `scope.write` that covers each file, and tests that fail first. It also checks that each size is within `limits.task_lines` or carries `size.reason`.
 - **One global critic.** It reads `<dir>/plan/plan.md` and the output of `<gang> schedule`. It writes `<dir>/run/planning/critic.md`. It checks cross-area `depends_on` edges from `interfaces`, `merge_after` where the trunk must stay green, peers, locks, `risk`, and the critical chain.
 
 ### 5. Fix
@@ -144,7 +144,7 @@ The transcribers read the Markdown plan. That is `<file>`, or the path in the to
 3. Count the source tasks: `jq '.tasks | length' <source>`.
 4. Transcribe every task, the merged tasks too. `gang done` reads merged tasks from git, so the run skips them.
 5. Cut the task list into slices of 5 tasks. Send one transcriber per slice, with the `plan_draft` role.
-6. Give each transcriber its task ids, the line range of each task when known, and the "Task fields" table in `<skill>/reference/schema.md`.
+6. Give each transcriber its task ids and the line range of each task when known. Give it the ids of its tasks that are merged. A merged task has a commit with a whole-line `Task: <id>` on the integration branch. Also give it the values of `limits.task_lines` and `limits.split_lines`, and the "Task fields" table in `<skill>/reference/schema.md`.
 7. Each transcriber writes `{"tasks": [...]}` to `<dir>/plan/drafts/<first id>.json`.
 8. It also writes `<dir>/run/planning/req-<first id>.json`: each requirement id of its tasks, with the plan line as `source`.
 9. Merge the requirement files and make the skeleton with the two `jq` commands in "1. Inventory the requirements".
@@ -159,6 +159,6 @@ Tell each transcriber these rules:
 - Keep each `id`, `branch`, `wave`, size, requirement id, and lock as the source has it.
 - A source task above `limits.task_lines` becomes parts. A merged source task is the exception, because `gang done` reads merged tasks by id, and parts get new ids. It stays whole and carries `size.reason` "merged before adopt". If its size is above `limits.split_lines`, write `limits.split_lines` as `size.lines`, and put the real size in `notes`.
 - Each part sets `source` to the source task id. The first part takes the source task's dependencies, and each next part depends on the one before. A task that depends on, or merges after, the source task names its last part.
-- A part takes its own `id`, `branch`, size, and requirement ids, and keeps the source task's `wave` and locks. A requirement that several parts cover needs a reason in the `notes` of each, as rule 4 says.
+- A part takes its own `id`, `branch`, size, and requirement ids, and keeps the source task's `wave` and locks. A requirement that several parts cover needs a reason in the `notes` of each. The notes name the requirement id with the reason, as rule 4 checks.
 - Write the source's deps as `depends_on`, and its merge-after list as `merge_after`.
 - Where the source lacks a field, use its closest text, and name the gap in `notes`.

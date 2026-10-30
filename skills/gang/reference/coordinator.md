@@ -137,7 +137,7 @@ If the list is empty, or its last `sha` is not the start of `result.trunkTip`, r
 | Stop reason | Action |
 |---|---|
 | `DONE` | Every task in scope merged. After the pilot, launch `r1`. After a full segment, keep the event loop on until the done predicate holds, then close. |
-| `BLOCKED` | Send a read-only subagent to read the task's `report.md` and its newest review. Then split the task, write a ruling, or edit the plan. Lint, commit the plan, and relaunch. |
+| `BLOCKED` | Send a read-only subagent to read the task's `report.md` and its newest review. Then split the task, write a ruling, or edit the plan. A reason that starts with `merge REFUSED: size` means that the task is too big. Split it into parts that each fit the budget. Lint, commit the plan, and relaunch. |
 | `TRUNK_RED` | Send read-only investigators for the failing health checks. Add a repair task `R<n>`, with requirement `R-<n>` and a ruling in its `owner.md`. Relaunch with `--only R<n>`. |
 | `INTERRUPTED` | A usage limit or an outage ended the segment. Archive the result. Call ScheduleWakeup until the usage reset, 1 hour at most per call. Then relaunch. Resume comes from git. |
 | `STOPPED` | Act on the reason in the stop line. Run `<gang> standing clear-stop`, then relaunch. |
