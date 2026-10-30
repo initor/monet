@@ -1,6 +1,7 @@
 package prq
 
 import (
+	"fmt"
 	"regexp"
 	"slices"
 	"strings"
@@ -8,6 +9,8 @@ import (
 	"gang/internal/exit"
 	"gang/internal/gitx"
 	"gang/internal/plan"
+	"gang/internal/repair"
+	"gang/internal/size"
 	"gang/internal/store"
 	"gang/internal/wave"
 )
@@ -42,7 +45,9 @@ func FixLanding(repo string, d store.Dir, p *plan.Plan, id, fixID string) (Row, 
 // Fix replays fix task fixID onto the open PR of task id as one new commit,
 // pushes it as a fast-forward, and records the new head and one more fix. It
 // returns the new row.
-func Fix(repo string, d store.Dir, p *plan.Plan, id, fixID string) (Row, error) {
+// A fix that takes the whole PR above limits.split_lines is refused, and so is one
+// above limits.task_lines unless reason or the size.reason of the task says why.
+func Fix(repo string, d store.Dir, p *plan.Plan, id, fixID, reason string) (Row, error) {
 	r, l, err := FixLanding(repo, d, p, id, fixID)
 	if err != nil {
 		return Row{}, err
@@ -64,6 +69,23 @@ func Fix(repo string, d store.Dir, p *plan.Plan, id, fixID string) (Row, error) 
 	if err := wave.Scan(repo, r.HeadSHA, sha); err != nil {
 		return Row{}, err
 	}
+	base, err := gitx.Run(repo, "merge-base", "refs/remotes/origin/"+p.Repo.Base, sha)
+	if err != nil {
+		return Row{}, err
+	}
+	n, err := size.Count(repo, base, sha, size.DefaultExclude)
+	if err != nil {
+		return Row{}, err
+	}
+	if t, ok := repair.TaskFor(p, id); ok && strings.TrimSpace(reason) == "" {
+		reason = t.Size.Reason
+	}
+	switch {
+	case n > p.Limits.SplitLines:
+		return Row{}, exit.New(exit.Refused, "PR #%d would have %d changed lines after %s, above limits.split_lines %d: the queue stops, and the checkpoint splits %s", r.PR, n, fixID, p.Limits.SplitLines, id)
+	case n > p.Limits.TaskLines && strings.TrimSpace(reason) == "":
+		return Row{}, exit.New(exit.Refused, "PR #%d would have %d changed lines after %s, above limits.task_lines %d: pass --reason <why>, and record it as a ruling", r.PR, n, fixID, p.Limits.TaskLines)
+	}
 	if _, err := gitx.Run(repo, "push", "--quiet", "origin", sha+":refs/heads/"+r.Branch); err != nil {
 		return Row{}, exit.New(exit.Refused, "push rejected: %v", err)
 	}
@@ -71,9 +93,11 @@ func Fix(repo string, d store.Dir, p *plan.Plan, id, fixID string) (Row, error) 
 	if err != nil {
 		return Row{}, err
 	}
-	if i := slices.IndexFunc(rows, func(x Row) bool { return x.Task == id }); i >= 0 {
-		r = rows[i]
+	i := slices.IndexFunc(rows, func(x Row) bool { return x.Task == id })
+	if i < 0 {
+		return Row{}, fmt.Errorf("prs.tsv has no row for %s: PR #%d is pushed at %s", id, r.PR, sha)
 	}
+	r = rows[i]
 	r.HeadSHA, r.Fixes = sha, r.Fixes+1
 	return r, Put(d, r)
 }
