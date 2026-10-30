@@ -149,13 +149,14 @@ The transcribers read the Markdown plan. That is `<file>`, or the path in the to
 8. It also writes `<dir>/run/planning/req-<first id>.json`: each requirement id of its tasks, with the plan line as `source`.
 9. Merge the requirement files and make the skeleton with the two `jq` commands in "1. Inventory the requirements".
 10. Run `<gang> plan assemble` as in "3. Assemble and lint". Then run `<gang> lint --adopt-source <source>`.
-11. Fix lint problems with one fixer per slice. Rule 8 must pass: the task count and the edge set match `<source>`.
+11. Fix lint problems with one fixer per slice. Rule 8 must pass: the task count and the edge set match `<source>`. A part counts as its `source` task.
 12. Keep the source waves. Run `<gang> schedule` without `--write`, then `<gang> render`.
 13. Go to "7. Approve".
 
 Tell each transcriber these rules:
 
 - Copy the plan. Do not redesign it.
-- Keep each `id`, `branch`, `wave`, size, requirement id, and lock as the source has it.
+- Keep each `id`, `branch`, `wave`, size, requirement id, and lock as the source has it, except in a task that becomes parts.
+- A source task above `limits.task_lines` becomes parts. Each part sets `source` to the source task id. The first part takes the source task's dependencies, and each next part depends on the one before.
 - Write the source's deps as `depends_on`, and its merge-after list as `merge_after`.
 - Where the source lacks a field, use its closest text, and name the gap in `notes`.

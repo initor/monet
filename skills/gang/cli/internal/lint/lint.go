@@ -414,7 +414,8 @@ func (l *linter) roles(task, field string, m map[string]plan.Role) {
 }
 
 // adopt is rule 8: the plan has the source plan's tasks and edges, no more
-// and no fewer.
+// and no fewer. A task with a source stands for that source task, so the
+// parts of a split task count once and an edge between two parts drops out.
 func (l *linter) adopt(path string) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -450,13 +451,19 @@ func (l *linter) adopt(path string) {
 		}
 	}
 	ids, edges := map[string]bool{}, map[string]bool{}
+	edge := func(from, kind, to string) {
+		from, to = l.group(from), l.group(to)
+		if from != to {
+			edges[from+" "+kind+" "+to] = true
+		}
+	}
 	for _, t := range l.p.Tasks {
-		ids[t.ID] = true
+		ids[l.group(t.ID)] = true
 		for _, to := range t.DependsOn {
-			edges[t.ID+" depends_on "+to] = true
+			edge(t.ID, "depends_on", to)
 		}
 		for _, to := range t.MergeAfter {
-			edges[t.ID+" merge_after "+to] = true
+			edge(t.ID, "merge_after", to)
 		}
 	}
 	if len(ids) != len(srcIDs) {
@@ -474,6 +481,17 @@ func (l *linter) adopt(path string) {
 	for _, e := range missing(edges, srcEdges) {
 		l.add(8, strings.Fields(e)[0], "edge %s is in the plan but not in the source", e)
 	}
+}
+
+// group returns the source task that the plan task id stands for: its source,
+// or id itself when it has none or is not a plan task.
+func (l *linter) group(id string) string {
+	for _, t := range l.p.Tasks {
+		if t.ID == id && t.Source != "" {
+			return t.Source
+		}
+	}
+	return id
 }
 
 // firstList decodes the first of keys present in raw as a string list.

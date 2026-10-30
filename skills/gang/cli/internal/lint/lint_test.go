@@ -416,3 +416,38 @@ func TestAdoptSource(t *testing.T) {
 		t.Errorf("missing source: %v", ps)
 	}
 }
+
+// A task with a source stands for that source task, so the parts of a split
+// task count once and an edge between two parts drops out.
+func TestAdoptSplit(t *testing.T) {
+	src := `{"tasks":[{"id":"T1"},{"id":"T2","depends_on":["T1"]}]}`
+	cases := []struct {
+		name, source, plan string
+		want               []string
+	}{
+		{"parts keep the source id", src,
+			`{"tasks":[{"id":"T10","source":"T1"},{"id":"T11","source":"T1","depends_on":["T10"]},{"id":"T2","depends_on":["T11"]}]}`, nil},
+		{"dependent loses its edge", src,
+			`{"tasks":[{"id":"T10","source":"T1"},{"id":"T11","source":"T1","depends_on":["T10"]},{"id":"T2"}]}`,
+			[]string{"rule 8: T2 : edge T2 depends_on T1 is in the source but not in the plan"}},
+		{"first part takes the source dependencies", `{"tasks":[{"id":"T0"},{"id":"T1","depends_on":["T0"],"merge_after":["T0"]}]}`,
+			`{"tasks":[{"id":"T0"},{"id":"T10","source":"T1","depends_on":["T0"],"merge_after":["T0"]},{"id":"T11","source":"T1","depends_on":["T10"]}]}`, nil},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			p, err := plan.Load(writeSource(t, c.plan))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got []string
+			for _, pr := range Lint(p, Options{AdoptSource: writeSource(t, c.source)}) {
+				if pr.Rule == 8 {
+					got = append(got, pr.String())
+				}
+			}
+			if !reflect.DeepEqual(got, c.want) {
+				t.Errorf("rule 8 problems %q, want %q", got, c.want)
+			}
+		})
+	}
+}

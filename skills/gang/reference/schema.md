@@ -48,6 +48,7 @@ This file is the schema of `plan.json`. A task in the plan is its brief. Lint ru
 | `wave` | int | (scheduling) | set by `gang schedule`, or kept from an adopted plan |
 | `model` | role overrides | (models) | optional, rare. The same shape as the run-wide `models` |
 | `notes` | string | (any) | optional. Names the requirement id, with the reason, when a requirement is covered twice. |
+| `source` | string | (lint) | optional. In an adopted plan, the id of the source task that this task is a part of. |
 
 REPORT is a fixed return schema that the engine gives each agent. STANDING is `run/standing.md`, pasted into every brief.
 
@@ -62,4 +63,4 @@ Lint fails with exit 1 and names every problem. It checks:
 5. Two tasks whose `scope.write` globs overlap must list each other in `peers`.
 6. `size.lines` is at most `limits.task_lines`, or at most `limits.split_lines` when `size.reason` says why the task cannot be split. A plan may lower both limits, not raise them above the defaults. `limits.split_lines` is at least `limits.task_lines`.
 7. Model values are aliases from the allowed set (`opus`, `sonnet`, `haiku`, `fable`). A raw model id fails. Role keys and efforts must be known ones.
-8. With `--adopt-source <file>`, the task count and the edge set match the source plan.
+8. With `--adopt-source <file>`, the task count and the edge set match the source plan. A task stands for its `source`, or for its own `id` when `source` is empty. An edge between two tasks of one source drops out.
