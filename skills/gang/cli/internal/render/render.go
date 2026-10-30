@@ -73,7 +73,11 @@ func Markdown(p *plan.Plan, s *schedule.Result) string {
 		w("- Branch: %s\n", code(plan.BranchFor(&t)))
 		w("- Wave: %d\n", t.Wave)
 		w("- Risk: %s\n", t.Risk)
-		w("- Size: %d lines, timebox %d min\n", t.Size.Lines, t.TimeboxMin)
+		size := fmt.Sprintf("%d lines", t.Size.Lines)
+		if r := strings.Join(strings.Fields(t.Size.Reason), " "); r != "" {
+			size += fmt.Sprintf(" (size.reason: %s)", r)
+		}
+		w("- Size: %s, timebox %d min\n", size, t.TimeboxMin)
 		w("- Scope write: %s\n", codes(t.Scope.Write))
 		w("- Scope shared: %s\n", codes(t.Scope.Shared))
 		w("- Peers: %s\n", ids(t.Peers))

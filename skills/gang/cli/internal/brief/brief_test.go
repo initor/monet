@@ -8,6 +8,7 @@ import (
 
 	"gang/internal/notes"
 	"gang/internal/plan"
+	"gang/internal/size"
 	"gang/internal/store"
 )
 
@@ -31,7 +32,7 @@ func fixturePlan() *plan.Plan {
 			Interfaces:   plan.Interfaces{Consumes: []string{"file:config.yaml"}, Produces: []string{"py:config.load"}},
 			Acceptance:   []string{"Unknown keys fail with exit 1.", "Defaults fill missing keys."},
 			Verify:       plan.Verify{TestsFirst: []string{"TestLoadRejectsUnknownKeys"}, Commands: []string{"go test ./internal/config/..."}},
-			Size:         plan.Size{Lines: 300},
+			Size:         plan.Size{Lines: 300, Reason: "schema and loader cannot be split"},
 			TimeboxMin:   45,
 			Forbidden:    []string{"git stash", "edit go.mod"},
 			Risk:         "high",
@@ -116,6 +117,39 @@ func TestRenderRepairBrief(t *testing.T) {
 	}
 	if got != string(want) {
 		t.Fatalf("brief differs from testdata/repair.golden\n--- got ---\n%s--- want ---\n%s", got, want)
+	}
+}
+
+// The budget line takes its numbers from the plan's limits, and size.Check
+// agrees with it: the limit that it states passes, and one more line fails.
+func TestRenderStatesTheBudget(t *testing.T) {
+	const rest = ", tests included, lock and binary files not counted"
+	for _, c := range []struct {
+		name, reason string
+		task, split  int
+		limit        int
+		want         string
+	}{
+		{"no reason", "", 100, 300, 100, "budget: 100 changed lines" + rest},
+		{"blank reason", " \t ", 100, 300, 100, "budget: 100 changed lines" + rest},
+		{"lowered task_lines", "", 60, 200, 60, "budget: 60 changed lines" + rest},
+		{"reason on one line", "one parser\nand its loader", 60, 200, 200, "budget: up to 200 changed lines (size.reason: one parser and its loader)" + rest},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			p := fixturePlan()
+			p.Limits.TaskLines, p.Limits.SplitLines = c.task, c.split
+			p.Tasks[0].Size = plan.Size{Lines: 80, Reason: c.reason}
+			got, err := Render(store.Dir{Root: t.TempDir()}, p, "B2")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if want := "\nTIMEBOX\nlines: 80\n" + c.want + "\nminutes: 45\n"; !strings.Contains(got, want) {
+				t.Errorf("brief lacks %q\n%s", want, got)
+			}
+			if at, over := size.Check(p.Limits, c.reason, c.limit), size.Check(p.Limits, c.reason, c.limit+1); at != "" || over == "" {
+				t.Errorf("size.Check gives %q at %d lines and %q at %d lines, want a pass and then a refusal", at, c.limit, over, c.limit+1)
+			}
+		})
 	}
 }
 
