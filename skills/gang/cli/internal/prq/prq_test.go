@@ -168,12 +168,12 @@ func TestMergeKeepsTheRowOpenWhenGHFails(t *testing.T) {
 	}
 	_, err := Merge(repo, d, p, "T1")
 	rows, _ := Read(d)
-	if err == nil || errors.As(err, new(*exit.Error)) || !strings.HasPrefix(err.Error(), "gh pr merge 7 ") || rows[0].State != StateOpen {
+	if err == nil || errors.As(err, new(*exit.Error)) || !strings.HasPrefix(err.Error(), "gh pr merge 7 ") || !strings.HasSuffix(err.Error(), "/pr-merge: No such file or directory") || rows[0].State != StateOpen {
 		t.Fatalf("err = %v, rows = %+v, want the plain gh error and an open row", err, rows)
 	}
 }
 
-func TestMergeRefusesAPRWithNoCommitAboveTheBase(t *testing.T) {
+func TestMergeFailsOnAPRWithNoCommitAboveTheBase(t *testing.T) {
 	repo, d, p, ghDir, _ := openPR(t)
 	base := testkit.Git(t, repo, "rev-parse", "refs/remotes/origin/main")
 	if err := Put(d, Row{Task: "T1", PR: 7, HeadSHA: base, State: StateOpen}); err != nil {
@@ -187,10 +187,14 @@ func TestMergeRefusesAPRWithNoCommitAboveTheBase(t *testing.T) {
 
 func TestMergeRefusesUnlessTheOldestCommitIsTheTask(t *testing.T) {
 	const refusal = "PR #7: the oldest commit above origin/main is not the T1 task commit"
-	for _, msg := range []string{"T1: work\n\nTask: T9\nTask: T1", "T1: work"} {
+	// The last case is a local origin/main older than the PR base: another task's squash sits below T1.
+	for _, msgs := range [][]string{{"T1: work\n\nTask: T9\nTask: T1"}, {"T1: work"}, {"T2: ship (#6)\n\nTask: T2", "T1: work\n\nTask: T1"}} {
 		repo, d, p, ghDir, _ := openPR(t)
 		testkit.Git(t, repo, "branch", "stale", "refs/remotes/origin/main")
-		head := testkit.CommitOn(t, repo, "stale", msg, map[string]string{"a/T1.go": "package a\n"})
+		head := ""
+		for _, msg := range msgs {
+			head = testkit.CommitOn(t, repo, "stale", msg, map[string]string{"stale.txt": msg})
+		}
 		if err := Put(d, Row{Task: "T1", PR: 7, HeadSHA: head, State: StateOpen}); err != nil {
 			t.Fatal(err)
 		}
@@ -199,7 +203,7 @@ func TestMergeRefusesUnlessTheOldestCommitIsTheTask(t *testing.T) {
 		wantExit(t, err, exit.Refused, refusal)
 		rows, _ := Read(d)
 		if calls := testkit.Calls(t, ghDir); err.Error() != refusal || len(calls) != 1 || rows[0].State != StateOpen {
-			t.Fatalf("commit message %q: err = %q, gh calls = %q, rows = %+v, want %q, only the pr view, an open row", msg, err, calls, rows, refusal)
+			t.Fatalf("commit messages %q: err = %q, gh calls = %q, rows = %+v, want %q, only the pr view, an open row", msgs, err, calls, rows, refusal)
 		}
 	}
 }
