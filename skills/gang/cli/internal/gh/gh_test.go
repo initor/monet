@@ -57,6 +57,29 @@ func TestPostStatusNamesTheHostAndTheRepo(t *testing.T) {
 	}
 }
 
+func TestEveryRemoteFormReachesGHNormalized(t *testing.T) {
+	state, _ := testkit.FakeGH(t)
+	testkit.Answer(t, state, "status", "{}")
+	if RepoArgs("") != nil {
+		t.Fatal("an empty remote must give no --repo flag")
+	}
+	for _, remote := range []string{"https://github.com/acme/widget.git", "git@github.com:acme/widget.git", "github.com/acme/widget/", "ssh://git@github.com/acme/widget", "acme/widget"} {
+		want := "github.com/acme/widget"
+		if remote == "acme/widget" {
+			want = remote
+		}
+		if got := RepoArgs(remote); !reflect.DeepEqual(got, []string{"--repo", want}) {
+			t.Errorf("RepoArgs(%q) = %q, want --repo %s", remote, got, want)
+		}
+		before := len(testkit.Calls(t, state))
+		err := PostStatus(remote, "abc", "success", "gang/gate", "d")
+		wantCall := "api --hostname github.com --method POST repos/acme/widget/statuses/abc -f state=success -f context=gang/gate -f description=d"
+		if calls := testkit.Calls(t, state); err != nil || len(calls) != before+1 || calls[before] != wantCall {
+			t.Errorf("PostStatus(%q): err = %v, %d calls before, calls = %q", remote, err, before, calls)
+		}
+	}
+}
+
 func TestClassify(t *testing.T) {
 	ok := Check{"build", "COMPLETED", "SUCCESS"}
 	cases := []struct {

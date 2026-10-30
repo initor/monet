@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -254,7 +253,7 @@ func remoteMatches(repo, origin, remote string) bool {
 	if filepath.IsAbs(origin) || strings.HasPrefix(origin, "./") || strings.HasPrefix(origin, "../") {
 		return absTo(repo, origin) == absTo(repo, remote)
 	}
-	return normalizeRemote(origin) == normalizeRemote(remote)
+	return gh.NormalizeRemote(origin) == gh.NormalizeRemote(remote)
 }
 
 func absTo(repo, path string) string {
@@ -262,24 +261,6 @@ func absTo(repo, path string) string {
 		path = filepath.Join(repo, path)
 	}
 	return filepath.Clean(path)
-}
-
-// normalizeRemote drops a scheme, a user@ prefix, and a trailing .git or /,
-// and turns host:path into host/path.
-func normalizeRemote(raw string) string {
-	s := strings.TrimSpace(raw)
-	if strings.Contains(s, "://") {
-		if u, err := url.Parse(s); err == nil {
-			s = u.Hostname() + u.Path
-		}
-	} else if i := strings.Index(s, ":"); i > 0 && !strings.Contains(s[:i], "/") {
-		host := s[:i]
-		if j := strings.LastIndex(host, "@"); j >= 0 {
-			host = host[j+1:]
-		}
-		s = host + "/" + strings.TrimPrefix(s[i+1:], "/")
-	}
-	return strings.TrimSuffix(strings.TrimSuffix(s, "/"), ".git")
 }
 
 func samePath(a, b string) bool {

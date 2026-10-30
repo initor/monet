@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os/exec"
 	"slices"
 	"sort"
@@ -39,7 +40,25 @@ func RepoArgs(remote string) []string {
 	if remote == "" {
 		return nil
 	}
-	return []string{"--repo", remote}
+	return []string{"--repo", NormalizeRemote(remote)}
+}
+
+// NormalizeRemote drops a scheme, a user@ prefix, and a trailing .git or /,
+// and turns host:path into host/path.
+func NormalizeRemote(raw string) string {
+	s := strings.TrimSpace(raw)
+	if strings.Contains(s, "://") {
+		if u, err := url.Parse(s); err == nil {
+			s = u.Hostname() + u.Path
+		}
+	} else if i := strings.Index(s, ":"); i > 0 && !strings.Contains(s[:i], "/") {
+		host := s[:i]
+		if j := strings.LastIndex(host, "@"); j >= 0 {
+			host = host[j+1:]
+		}
+		s = host + "/" + strings.TrimPrefix(s[i+1:], "/")
+	}
+	return strings.TrimSuffix(strings.TrimSuffix(s, "/"), ".git")
 }
 
 // PRState reads PR n of remote ([HOST/]OWNER/REPO, as in plan repo.remote).
@@ -82,6 +101,7 @@ func PRState(remote string, n int) (State, error) {
 
 // PostStatus posts the commit status context on sha in remote ([HOST/]OWNER/REPO), with gh api.
 func PostStatus(remote, sha, state, context, description string) error {
+	remote = NormalizeRemote(remote)
 	host, repo := "github.com", remote
 	if parts := strings.Split(remote, "/"); len(parts) == 3 {
 		host, repo = parts[0], parts[1]+"/"+parts[2]
