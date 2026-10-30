@@ -148,8 +148,8 @@ func Load(path string) (*Plan, error) {
 // nil slices and maps into empty ones, and sets an empty risk to "low".
 func (p *Plan) Normalize() {
 	l := &p.Limits
-	orDefault(&l.TaskLines, 1200)
-	orDefault(&l.SplitLines, 1600)
+	orDefault(&l.TaskLines, 100)
+	orDefault(&l.SplitLines, 300)
 	orDefault(&l.FixRounds, 3)
 	orDefault(&l.RepairTries, 2)
 	orDefault(&l.BlockedStop, 3)

@@ -115,7 +115,7 @@ func testPlan() *plan.Plan {
 				Interfaces:   plan.Interfaces{Produces: []string{"file:alpha/a.txt"}},
 				Acceptance:   []string{"alpha/a.txt exists"},
 				Verify:       plan.Verify{TestsFirst: []string{"test:alpha"}},
-				Size:         plan.Size{Lines: 200}, TimeboxMin: 30, Wave: 1,
+				Size:         plan.Size{Lines: 200, Reason: "fixture above the budget"}, TimeboxMin: 30, Wave: 1,
 			},
 			{
 				ID: "B1", Title: "add beta", Goal: "Add beta/b.txt.",
@@ -125,7 +125,7 @@ func testPlan() *plan.Plan {
 				Interfaces:   plan.Interfaces{Consumes: []string{"file:alpha/a.txt"}},
 				Acceptance:   []string{"beta/b.txt exists"},
 				Verify:       plan.Verify{TestsFirst: []string{"test:beta"}},
-				Size:         plan.Size{Lines: 300}, TimeboxMin: 45, Locks: []string{"db"}, Risk: "high", Wave: 2,
+				Size:         plan.Size{Lines: 300, Reason: "fixture above the budget"}, TimeboxMin: 45, Locks: []string{"db"}, Risk: "high", Wave: 2,
 			},
 		},
 	}
