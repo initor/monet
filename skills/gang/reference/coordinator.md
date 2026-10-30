@@ -72,6 +72,18 @@ Use this when the session that drove the run is gone, for example after a crash 
 9. Do the relaunch checklist. Its `preflight` step takes or renews the driver lease for this session.
 10. Arm the event loop. With a tracker page, update it as in `<skill>/reference/tracker.md`, comments first. After a relay, its note is "Took the run over from <old session name>".
 
+## Switch a 0.4.0 run to the queue
+
+A run that 0.4.0 started keeps its trunk. The queue reads its `merge <id>: <title>` commits as landings, in trunk order.
+
+1. If a wave PR is open, finish it first, as 0.4.0 does: run `<gang> wave merge <k>` with merge-on-green, else the user merges it with a merge commit. While it is open, `PR_GREEN` and `PR_RED` can name a wave number, not a task id.
+2. From then on, never run `<gang> push`, `<gang> wave open`, or `<gang> wave merge`, and ignore `WAVE_READY`.
+3. Stop the armed Monitor with the description `gang <slug> events`, because an old `<gang> watch` fails on the new `repo.checks` field. If an engine runs, run `<gang> standing stop "switching to the pr queue"`, wait for the engine to stop, and run `<gang> standing clear-stop`.
+4. Build `<gang>` again, as "Build first" says, so that it has the `pr` commands.
+5. Set `repo.checks` in `plan/plan.json`: `gate` when `origin/<base>` has no `.github/workflows` folder, else `github`. Run `<gang> lint`, then `<gang> plan commit --message "plan: ship through the pr queue"`.
+6. Run `git -C <repo> fetch origin`, because `<gang> watch` never fetches. Arm the event loop. The next pass of `<gang> watch` prints `PR_NEXT <id>` for the oldest trunk task that is not on `<base>`.
+7. If `<gang> pr open` refuses that task as already on `<base>`, an earlier wave PR was likely squashed, and its `Task:` lines did not reach `<base>`. Tell the user, and stop the queue.
+
 ## Event loop
 
 - Run the Monitor tool on `<gang> watch --interval 60s`, with `timeout_ms` 1800000 and the description `gang <slug> events`.
@@ -178,11 +190,11 @@ Before each relaunch, confirm each item:
 ## Close
 
 1. Run `git -C <repo> fetch origin`.
-2. Run `git -C <repo> log --oneline origin/<base>..<integration>`. It must print nothing. If every wave PR merged and it still prints commits, a wave PR was likely squashed. Tell the user.
-3. Run `gh pr list --head <integration> --state open`. It must print nothing.
+2. Run `jq -r '.tasks[].id' <dir>/plan/plan.json | LC_ALL=C sort | LC_ALL=C comm -23 - <(git -C <repo> log --format=%B origin/<base> | sed -n 's/^Task: \([A-Z][A-Z]*[0-9][0-9]*\)$/\1/p' | LC_ALL=C sort -u)`. It must print nothing: each task has its `Task:` line on `origin/<base>`. Squash merges never make the trunk commits ancestors of `origin/<base>`, so this step checks the `Task:` lines.
+3. Read `<dir>/run/prs.tsv`. No row may be `open`.
 4. Run `jq -r '.tasks[].id' <dir>/plan/plan.json | LC_ALL=C sort | LC_ALL=C comm -23 - <(<gang> done)`. It must print nothing.
-5. With an empty `repo.gh_account`, skip steps 2 and 3. Wave PRs ran as dry runs, so nothing reaches `main`.
-6. If one of these commands prints a line, the run is not done. Keep the event loop on.
+5. With an empty `repo.gh_account`, skip steps 2 and 3. PRs ran as dry runs, so nothing reaches `main`.
+6. If one of these steps finds something, the run is not done. Keep the event loop on.
 7. Run `<gang> status`. Then add a `## Metrics` section to `<dir>/run/status.md` by hand.
 8. The metrics are the user's touches, wall clock, tokens, blockers found in review, and mutation survivors.
 9. Take each number from the archived results, `<gang> ledger summary`, and the `survivors` column of `run/ledger.tsv`. Write `unknown` for a number with no source.
@@ -197,4 +209,4 @@ Clean up after the close, and when `<gang> preflight` fails on the worktree coun
 
 1. Run `<gang> worktrees > <dir>/run/cleanup.sh`. Each line is one `git worktree remove <path>` command.
 2. Auto mode blocks deletions, so do not run the file. Give the user one command: `! bash <dir>/run/cleanup.sh`.
-3. Never delete a branch. Leave remote branches to the user.
+3. Never delete a branch. List the PR branches that are left with `git -C <repo> ls-remote --heads origin 'refs/heads/gang/<slug>/*'`, and give the list to the user.

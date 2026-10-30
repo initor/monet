@@ -8,7 +8,7 @@ The tracker page is a Notion page that the user links at launch and keeps privat
 
 - At launch, after the pilot starts.
 - At each heartbeat.
-- When a wave PR opens or merges, and at each checkpoint.
+- When a PR opens or merges, and at each checkpoint.
 - When a step says to tell the user an outcome or to ask the user for a decision, since no one may watch the terminal of a background session.
 - At a relay, before the lease moves, and at close.
 
@@ -29,7 +29,7 @@ Before each update, read the open comments with the Notion get-comments tool, wi
 Send one Agent subagent, the writer. Its brief holds the page link, the output of `<gang> status`, the newest 20 lines under `## Log` in `<dir>/run/status.md`, the note for this update, and these rules:
 
 - Fetch the page right before the write.
-- Rewrite only the executive summary. It says what the run builds and where it stands: tasks merged of the total, the current wave, and the open wave PR. It says what blocks the run and what the user must decide, what comes next, and when the run should end. Write it as short paragraphs and bullets, and give the architecture diagram as a Mermaid code block, so that a targeted edit can change all of it.
+- Rewrite only the executive summary. It says what the run builds and where it stands: tasks merged of the total, the tasks on the base, and the open PR. It says what blocks the run and what the user must decide, what comes next, and when the run should end. Write it as short paragraphs and bullets, and give the architecture diagram as a Mermaid code block, so that a targeted edit can change all of it.
 - Add one log line at the top of the log: `<YYYY-MM-DD HH:MM> <note>`, with the time from `date`. When the product UI changed, put a new screenshot of it under that line. Never edit an older log line, since the user may comment on it.
 - Use only targeted edits. Never replace the whole page, since that can drop the comments and edits of the user.
 - Change nothing else on the page, and write on no other page.
