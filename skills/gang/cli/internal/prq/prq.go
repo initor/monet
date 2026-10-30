@@ -148,6 +148,11 @@ func Merge(repo string, d store.Dir, p *plan.Plan, id string) (string, error) {
 	if len(cs) == 0 {
 		return "", fmt.Errorf("PR #%d has no commit above origin/%s", r.PR, p.Repo.Base)
 	}
+	// Landings reads the first Task line of the squash message, which is the
+	// first one of the oldest commit, so that line must name the task.
+	if m := taskLine.FindStringSubmatch(cs[0].msg); m == nil || m[1] != id {
+		return "", exit.New(exit.Refused, "PR #%d: the oldest commit above origin/%s is not the %s task commit", r.PR, p.Repo.Base, id)
+	}
 	subject, body := fmt.Sprintf("%s (#%d)", cs[0].subject, r.PR), ""
 	for _, c := range cs {
 		if m := taskLine.FindStringSubmatch(c.msg); m != nil {
