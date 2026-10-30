@@ -17,8 +17,15 @@ func queueFixture(t *testing.T) (repo string, d store.Dir, p *plan.Plan) {
 	testkit.Origin(t, repo)
 	d = testkit.GangDir(t, repo, p)
 	testkit.Git(t, repo, "branch", p.Repo.Integration, "main")
-	testkit.MergeTask(t, repo, p.Repo.Integration, "T1", map[string]string{"a/T1.go": "package a\n"})
+	land(t, repo, d, "T1", map[string]string{"a/T1.go": "package a\n"})
 	return repo, d, p
+}
+
+// land merges task id onto gang-demo and records a CLEAN review of its tip.
+func land(t *testing.T, repo string, d store.Dir, id string, files map[string]string) {
+	t.Helper()
+	tip := testkit.MergeTask(t, repo, "gang-demo", id, files)
+	testkit.LedgerRow(t, d, id, tip, "review", "CLEAN")
 }
 
 func wantExit(t *testing.T, err error, code int, msg string) {
@@ -59,8 +66,8 @@ func TestPrepareChecksTheQueue(t *testing.T) {
 			got, err := Prepare(repo, d, p, c.id)
 			if c.refusal != "" {
 				wantExit(t, err, exit.Refused, c.refusal)
-			} else if err != nil || got.ID != "T1" || got.Subject != "T1: work" || got.Branch != "gang/demo/T1" {
-				t.Fatalf(`Prepare = %+v, %v, want T1, "T1: work", gang/demo/T1`, got, err)
+			} else if err != nil || got.ID != "T1" || got.Subject != "T1: work" || got.Branch != "gang/demo/T1" || got.Task == nil || got.Task.ID != "T1" {
+				t.Fatalf(`Prepare = %+v, %v, want T1, "T1: work", gang/demo/T1, task T1`, got, err)
 			}
 		})
 	}
@@ -79,6 +86,7 @@ func TestPrepareReplaysOnlyTheTask(t *testing.T) {
 	repo, d, p := queueFixture(t)
 	tip := testkit.CommitOn(t, repo, "gang/T2", "T2: work\n\nTask: T2", map[string]string{"b/T2.go": "package b\n"})
 	testkit.GangMerge(t, repo, p.Repo.Integration, "T2", "Build T2", tip)
+	testkit.LedgerRow(t, d, "T2", tip, "review", "CLEAN")
 	shipOnOrigin(t, repo, "feat: ship t1\n\nTask: T1", map[string]string{"a/T1.go": "package a\n", "x.txt": "x\n"})
 	c, err := Prepare(repo, d, p, "T2")
 	if err != nil {
@@ -110,6 +118,20 @@ func TestPrepareRefusesWhatCannotShip(t *testing.T) {
 		{"conflict", "T1", exit.Conflict, "T1 does not replay onto origin/main: a/T1.go", func(t *testing.T, repo string, _ store.Dir) {
 			shipOnOrigin(t, repo, "chore: other a", map[string]string{"a/T1.go": "package other\n"})
 		}},
+		{"unreviewed", "T2", exit.Refused, "T2 tip ", func(t *testing.T, repo string, _ store.Dir) {
+			testkit.MergeTask(t, repo, "gang-demo", "T2", map[string]string{"b/T2.go": "package b\n"})
+			shipOnOrigin(t, repo, "feat: ship t1\n\nTask: T1", map[string]string{"x.txt": "x\n"})
+		}},
+		{"not in the plan", "Z9", exit.Refused, "Z9 is not a task of the plan", func(t *testing.T, repo string, d store.Dir) {
+			testkit.CommitOn(t, repo, "gang-demo", "feat: z\n\nTask: Z9", map[string]string{"z.txt": "z\n"})
+			if err := Put(d, Row{Task: "T1", PR: 7, State: StateMerged}); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"secret", "T2", exit.Refused, "k.pem:1:private-key", func(t *testing.T, repo string, d store.Dir) {
+			land(t, repo, d, "T2", map[string]string{"k.pem": "-----BEGIN " + "EC PRIVATE KEY-----\n"})
+			shipOnOrigin(t, repo, "feat: ship t1\n\nTask: T1", map[string]string{"a/T1.go": "package a\n"})
+		}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			repo, d, p := queueFixture(t)
@@ -117,6 +139,29 @@ func TestPrepareRefusesWhatCannotShip(t *testing.T) {
 			_, err := Prepare(repo, d, p, c.id)
 			wantExit(t, err, c.code, c.msg)
 		})
+	}
+}
+
+func TestReviewedNeedsEveryRequiredLens(t *testing.T) {
+	_, d, p := queueFixture(t)
+	p.Tasks[0].Risk = "high"
+	tip := strings.Repeat("a", 40)
+	testkit.LedgerRow(t, d, "T1", tip, "review", "CLEAN")
+	_, err := reviewed(d, p, "T1", tip)
+	wantExit(t, err, exit.Refused, "T1 tip aaaaaaa is not ledger CLEAN: missing [adversarial]")
+	testkit.LedgerRow(t, d, "T1", tip, "adversarial", "CLEAN")
+	if _, err := reviewed(d, p, "T1", tip); err != nil {
+		t.Fatalf("reviewed with both lenses = %v, want nil", err)
+	}
+}
+
+func TestReviewedReturnsALedgerReadError(t *testing.T) {
+	_, d, p := queueFixture(t)
+	if err := store.WriteFileAtomic(d.Run("ledger.tsv"), []byte("task\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reviewed(d, p, "T1", strings.Repeat("a", 40)); err == nil || errors.As(err, new(*exit.Error)) {
+		t.Fatalf("reviewed on an unreadable ledger = %v, want a plain read error", err)
 	}
 }
 

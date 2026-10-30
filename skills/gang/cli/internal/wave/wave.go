@@ -129,7 +129,7 @@ func Push(repo string, d store.Dir, p *plan.Plan, dryRun bool) (string, error) {
 	default:
 		return "", err
 	}
-	if err := scan(repo, from, tip); err != nil {
+	if err := Scan(repo, from, tip); err != nil {
 		return "", err
 	}
 	if dryRun {
@@ -164,11 +164,11 @@ func setPRHeads(d store.Dir, tip string) error {
 	return write(d, rows)
 }
 
-// scan checks each commit's patch and message in from..tip, so a secret added
+// Scan checks each commit's patch and message in from..tip, so a secret added
 // and then deleted inside the range is still caught. A merge shows its diff
 // against its first parent, which covers lines added while resolving it.
 // Binary and -diff files are diffed as text, with no textconv filter.
-func scan(repo, from, tip string) error {
+func Scan(repo, from, tip string) error {
 	patch, err := gitx.Run(repo, "log", "-p", "--text", "--no-textconv", "--unified=0", "--no-color", "--no-ext-diff",
 		"--no-renames", "--diff-merges=first-parent", "--format=", from+".."+tip)
 	if err != nil {
