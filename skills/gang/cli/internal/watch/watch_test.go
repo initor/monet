@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"gang/internal/plan"
+	"gang/internal/prq"
 	"gang/internal/store"
 	"gang/internal/testkit"
 	"gang/internal/wave"
@@ -42,6 +43,13 @@ func (f watchFixture) openWave(t *testing.T, k, pr int) {
 	t.Helper()
 	body := fmt.Sprintf("wave\tpr\thead_sha\tstate\topened_at\n%d\t%d\tabc\topen\t2026-10-11T00:00:00Z\n", k, pr)
 	if err := os.WriteFile(f.d.Run("waves.tsv"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func (f watchFixture) openPR(t *testing.T, head string) {
+	t.Helper()
+	if err := prq.Put(f.d, prq.Row{Task: "T1", PR: 8, Branch: "gang/demo/T1", HeadSHA: head, State: prq.StateOpen}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -149,6 +157,7 @@ func TestNoGHAccountNeverCallsGH(t *testing.T) {
 	f := watchFixture{repo: repo, d: d, p: p}
 	f.merge(t, "T1")
 	f.openWave(t, 9, 3) // a stray open row must not make watch call gh
+	f.openPR(t, "h1")   // nor must an open prs.tsv row
 	want(t, poll(t, f, t0))
 	if err := os.Remove(d.Run("waves.tsv")); err != nil {
 		t.Fatal(err)
@@ -168,6 +177,37 @@ func TestPRRedNamesFailingChecksAndRepeatsOnANewHead(t *testing.T) {
 	// A fix is pushed, CI runs again on head h2, and the same checks fail.
 	f.pr(t, "OPEN", "MERGEABLE", "h2", check("unit", "FAILURE"), check("build", "SUCCESS"), check("lint", "TIMED_OUT"))
 	want(t, poll(t, f, t0.Add(2*time.Minute)), "PR_RED 1 7 lint,unit")
+}
+
+// Contract 0.8 per task: the key holds the PR head, so a new head raises the event again.
+func TestPRGreenAndRedNameTheTask(t *testing.T) {
+	f := newWatchFixture(t)
+	f.openPR(t, "h1")
+	f.pr(t, "OPEN", "MERGEABLE", "h1", check("build", "SUCCESS"))
+	want(t, poll(t, f, t0), "PR_GREEN T1 8")
+	want(t, poll(t, f, t0.Add(time.Minute)))
+	f.pr(t, "OPEN", "MERGEABLE", "h2", check("unit", "FAILURE"))
+	want(t, poll(t, f, t0.Add(2*time.Minute)), "PR_RED T1 8 unit")
+	f.pr(t, "OPEN", "MERGEABLE", "h3", check("unit", "FAILURE"))
+	want(t, poll(t, f, t0.Add(3*time.Minute)), "PR_RED T1 8 unit")
+}
+
+// Steps are (GitHub state, row state, check conclusion). A PR that is not open raises no event.
+func TestPRStateFromGitHubSettlesTheRow(t *testing.T) {
+	f := newWatchFixture(t)
+	f.openPR(t, "h1")
+	for _, s := range [][3]string{{"CLOSED", prq.StateClosed, "FAILURE"}, {"OPEN", prq.StateOpen, "IN_PROGRESS"}, {"MERGED", prq.StateMerged, "FAILURE"}} {
+		f.pr(t, s[0], "UNKNOWN", "h2", check("unit", s[2]))
+		want(t, poll(t, f, t0))
+		rows, err := prq.Read(f.d)
+		if err != nil || len(rows) != 1 || rows[0].State != s[1] || rows[0].HeadSHA != "h1" {
+			t.Fatalf("after %s: rows = %+v, err = %v", s[0], rows, err)
+		}
+	}
+	want(t, poll(t, f, t0))
+	if calls := testkit.Calls(t, f.gh); len(calls) != 3 {
+		t.Fatalf("calls = %q, want one pr view per settle and none after the merge", calls)
+	}
 }
 
 func TestMergedPRFreesTheNextWave(t *testing.T) {
