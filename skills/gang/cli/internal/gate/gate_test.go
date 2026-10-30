@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"gang/internal/exit"
 	"gang/internal/lock"
 	"gang/internal/store"
 )
@@ -325,6 +326,47 @@ func TestStartRejectsBadJobs(t *testing.T) {
 	} {
 		if _, err := Start(d, exe(t), j); err == nil {
 			t.Errorf("%s: accepted", name)
+		}
+	}
+}
+
+// Every job here is task T1 at head h1, and T1-1 is a task job.
+func TestPRStatusOnlyForAFinishedJobAtTheHead(t *testing.T) {
+	t.Parallel()
+	d := store.Dir{Root: t.TempDir()}
+	for _, w := range []struct{ id, kind, state string }{
+		{"pr-T1-1", KindPR, StatePassed}, {"pr-T1-2", KindPR, StateFailed}, {"pr-T1-3", KindPR, StateTimeout},
+		{"pr-T1-4", KindPR, StateRunning}, {"pr-T1-5", KindPR, StateError}, {"pr-T1-6", KindPR, StateQueued},
+		{"T1-1", KindTask, StatePassed},
+	} {
+		j := Job{ID: w.id, Task: "T1", Kind: w.kind, Head: "h1"}
+		if err := errors.Join(writeJSON(d.Run("jobs", w.id, "job.json"), j), writeStatus(d, JobStatus{ID: w.id, State: w.state})); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.WriteFileAtomic(d.Run("jobs", "pr-T1-7", "job.json"), []byte("{"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		id, task, head, want string
+		err                  error
+	}{
+		{"pr-T1-1", "T1", "h1", "success", nil},
+		{"pr-T1-2", "T1", "h1", "failure", nil},
+		{"pr-T1-3", "T1", "h1", "failure", nil},
+		{"pr-T1-4", "T1", "h1", "", exit.New(exit.Pending, "gate job pr-T1-4 is still running: post after it ends")},
+		{"pr-T1-5", "T1", "h1", "", exit.New(exit.Refused, "gate job pr-T1-5 could not run: run the gate again")},
+		{"pr-T1-6", "T1", "h1", "", exit.New(exit.Pending, "gate job pr-T1-6 is still queued: post after it ends")},
+		{"pr-T1-1", "T1", "h2", "", exit.New(exit.Refused, "job pr-T1-1 did not gate head h2 of T1")},
+		{"pr-T1-1", "T1", "0123456789", "", exit.New(exit.Refused, "job pr-T1-1 did not gate head 0123456 of T1")},
+		{"pr-T1-1", "T2", "h1", "", exit.New(exit.Refused, "job pr-T1-1 did not gate head h1 of T2")},
+		{"T1-1", "T1", "h1", "", exit.New(exit.Refused, "job T1-1 did not gate head h1 of T1")},
+		{"pr-T1-9", "T1", "h1", "", exit.New(exit.Refused, "unknown job pr-T1-9")},
+		{"pr-T1-7", "T1", "h1", "", exit.New(exit.Refused, "unknown job pr-T1-7")},
+		{"../jobs/pr-T1-1", "T1", "h1", "", exit.New(exit.Refused, "unknown job ../jobs/pr-T1-1")},
+	} {
+		if got, err := PRStatus(d, c.id, c.task, c.head); got != c.want || !reflect.DeepEqual(err, c.err) {
+			t.Errorf("PRStatus(%s, %s, %s) = %q, %#v, want %q, %#v", c.id, c.task, c.head, got, err, c.want, c.err)
 		}
 	}
 }
