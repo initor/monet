@@ -197,7 +197,7 @@ func TestPRStateFromGitHubSettlesTheRow(t *testing.T) {
 	f := newWatchFixture(t)
 	f.openPR(t, "h1")
 	for _, s := range [][3]string{{"CLOSED", prq.StateClosed, "FAILURE"}, {"OPEN", prq.StateOpen, "IN_PROGRESS"}, {"MERGED", prq.StateMerged, "FAILURE"}} {
-		f.pr(t, s[0], "UNKNOWN", "h1", check("unit", s[2]))
+		f.pr(t, s[0], "UNKNOWN", "h2", check("unit", s[2]))
 		want(t, poll(t, f, t0))
 		rows, err := prq.Read(f.d)
 		if err != nil || len(rows) != 1 || rows[0].State != s[1] || rows[0].HeadSHA != "h1" {
