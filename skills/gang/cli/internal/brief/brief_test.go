@@ -8,6 +8,7 @@ import (
 
 	"gang/internal/notes"
 	"gang/internal/plan"
+	"gang/internal/size"
 	"gang/internal/store"
 )
 
@@ -119,19 +120,20 @@ func TestRenderRepairBrief(t *testing.T) {
 	}
 }
 
-// The budget line takes its numbers from the plan's limits and follows
-// size.Check: a reason that is blank once trimmed counts as none.
+// The budget line takes its numbers from the plan's limits, and size.Check
+// agrees with it: the limit that it states passes, and one more line fails.
 func TestRenderStatesTheBudget(t *testing.T) {
 	const rest = ", tests included, lock and binary files not counted"
 	for _, c := range []struct {
 		name, reason string
 		task, split  int
+		limit        int
 		want         string
 	}{
-		{"no reason", "", 100, 300, "budget: 100 changed lines" + rest},
-		{"blank reason", " \t ", 100, 300, "budget: 100 changed lines" + rest},
-		{"lowered task_lines", "", 60, 200, "budget: 60 changed lines" + rest},
-		{"reason on one line", "one parser\nand its loader", 60, 200, "budget: up to 200 changed lines (size.reason: one parser and its loader)" + rest},
+		{"no reason", "", 100, 300, 100, "budget: 100 changed lines" + rest},
+		{"blank reason", " \t ", 100, 300, 100, "budget: 100 changed lines" + rest},
+		{"lowered task_lines", "", 60, 200, 60, "budget: 60 changed lines" + rest},
+		{"reason on one line", "one parser\nand its loader", 60, 200, 200, "budget: up to 200 changed lines (size.reason: one parser and its loader)" + rest},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			p := fixturePlan()
@@ -143,6 +145,9 @@ func TestRenderStatesTheBudget(t *testing.T) {
 			}
 			if want := "\nTIMEBOX\nlines: 80\n" + c.want + "\nminutes: 45\n"; !strings.Contains(got, want) {
 				t.Errorf("brief lacks %q\n%s", want, got)
+			}
+			if at, over := size.Check(p.Limits, c.reason, c.limit), size.Check(p.Limits, c.reason, c.limit+1); at != "" || over == "" {
+				t.Errorf("size.Check gives %q at %d lines and %q at %d lines, want a pass and then a refusal", at, c.limit, over, c.limit+1)
 			}
 		})
 	}

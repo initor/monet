@@ -181,15 +181,15 @@ func TestMarkdownUnscheduledAndCodeWithBacktick(t *testing.T) {
 	}
 }
 
-// A blank size.reason counts as none, as in size.Check, and a reason with a
-// newline stays on the one line of its bullet.
+// A blank size.reason counts as none, as in size.Check. The white space of a
+// reason, newlines included, becomes single spaces, as in the brief.
 func TestMarkdownSizeReason(t *testing.T) {
 	p := goldenPlan()
-	p.Tasks[0].Size.Reason = "two\nlines"
+	p.Tasks[0].Size.Reason = "two\n\tlines  here"
 	p.Tasks[1].Size.Reason = "   "
 	got := Markdown(p, nil)
 	for _, want := range []string{
-		"- Size: 300 lines (size.reason: two lines), timebox 40 min\n",
+		"- Size: 300 lines (size.reason: two lines here), timebox 40 min\n",
 		"- Size: 150 lines, timebox 30 min\n",
 	} {
 		if !strings.Contains(got, want) {
