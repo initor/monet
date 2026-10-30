@@ -74,11 +74,12 @@ func TestPrepareReturnsAStrayError(t *testing.T) {
 	}
 }
 
-// T1 ships on origin behind the local ref, so only a fetch skips it.
+// T2 is cut beside T1, as in a 0.4.0 wave. T1 ships on origin behind the local ref, so only a fetch skips it.
 func TestPrepareReplaysOnlyTheTask(t *testing.T) {
 	repo, d, p := queueFixture(t)
-	testkit.MergeTask(t, repo, p.Repo.Integration, "T2", map[string]string{"b/T2.go": "package b\n"})
-	shipOnOrigin(t, repo, "feat: ship t1\n\nTask: T1", map[string]string{"x.txt": "x\n"})
+	tip := testkit.CommitOn(t, repo, "gang/T2", "T2: work\n\nTask: T2", map[string]string{"b/T2.go": "package b\n"})
+	testkit.GangMerge(t, repo, p.Repo.Integration, "T2", "Build T2", tip)
+	shipOnOrigin(t, repo, "feat: ship t1\n\nTask: T1", map[string]string{"a/T1.go": "package a\n", "x.txt": "x\n"})
 	c, err := Prepare(repo, d, p, "T2")
 	if err != nil {
 		t.Fatal(err)
@@ -87,7 +88,7 @@ func TestPrepareReplaysOnlyTheTask(t *testing.T) {
 	for name, v := range map[string][2]string{
 		"base":    {c.Base, shipped},
 		"parents": {testkit.Git(t, repo, "rev-list", "--parents", "-n", "1", c.SHA), c.SHA + " " + shipped},
-		"tree":    {testkit.Git(t, repo, "ls-tree", "-r", "--name-only", c.SHA), "README.md\nb/T2.go\nx.txt"},
+		"tree":    {testkit.Git(t, repo, "ls-tree", "-r", "--name-only", c.SHA), "README.md\na/T1.go\nb/T2.go\nx.txt"},
 		"message": {testkit.Git(t, repo, "log", "-1", "--format=%B", c.SHA), c.Message},
 	} {
 		if v[0] != v[1] {
@@ -122,7 +123,7 @@ func TestPrepareRefusesWhatCannotShip(t *testing.T) {
 func TestPrepareStopsWhenTheFetchFails(t *testing.T) {
 	repo, d, p := queueFixture(t)
 	testkit.Git(t, repo, "remote", "set-url", "origin", t.TempDir()+"/gone.git")
-	if _, err := Prepare(repo, d, p, "T1"); err == nil || !strings.HasPrefix(err.Error(), "fetch origin: ") {
+	if _, err := Prepare(repo, d, p, "T1"); err == nil || !strings.HasPrefix(err.Error(), "fetch origin: ") || errors.As(err, new(*exit.Error)) {
 		t.Fatalf("Prepare error = %v, want one that starts with %q", err, "fetch origin: ")
 	}
 }
