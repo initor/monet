@@ -71,10 +71,11 @@ func TestEveryRemoteFormReachesGHNormalized(t *testing.T) {
 		if got := RepoArgs(remote); !reflect.DeepEqual(got, []string{"--repo", want}) {
 			t.Errorf("RepoArgs(%q) = %q, want --repo %s", remote, got, want)
 		}
+		before := len(testkit.Calls(t, state))
 		err := PostStatus(remote, "abc", "success", "gang/gate", "d")
 		wantCall := "api --hostname github.com --method POST repos/acme/widget/statuses/abc -f state=success -f context=gang/gate -f description=d"
-		if calls := testkit.Calls(t, state); err != nil || calls[len(calls)-1] != wantCall {
-			t.Errorf("PostStatus(%q): err = %v, last call = %q", remote, err, calls[len(calls)-1])
+		if calls := testkit.Calls(t, state); err != nil || len(calls) != before+1 || calls[before] != wantCall {
+			t.Errorf("PostStatus(%q): err = %v, %d calls before, calls = %q", remote, err, before, calls)
 		}
 	}
 }
