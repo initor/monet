@@ -101,9 +101,16 @@ func MergeTree(dir, ours, theirs string) (tree string, conflicts []string, err e
 	if err != nil {
 		return "", nil, err
 	}
+	tree, conflicts = parseMergeTree(out, code)
+	return tree, conflicts, nil
+}
+
+// parseMergeTree reads the output and exit code of git merge-tree --write-tree
+// --name-only: the tree, and the conflicts that MergeTree describes.
+func parseMergeTree(out []byte, code int) (tree string, conflicts []string) {
 	lines := strings.Split(strings.TrimRight(string(out), "\n"), "\n")
 	if code == 0 {
-		return lines[0], nil, nil
+		return lines[0], nil
 	}
 	// After the tree come the conflicted paths, an empty line, then messages.
 	rest := lines[1:]
@@ -120,7 +127,31 @@ func MergeTree(dir, ours, theirs string) (tree string, conflicts []string, err e
 	if len(conflicts) == 0 {
 		conflicts = []string{"merge-tree exited 1 without naming a path"}
 	}
-	return lines[0], conflicts, nil
+	return lines[0], conflicts
+}
+
+// Replay applies the change from parent to commit on top of onto and writes it
+// as one commit with onto as its only parent and msg as its message. It moves
+// no ref and uses no index or work tree. A merge commit's first parent as
+// parent replays only what that merge brought in. A conflict returns no SHA and
+// the conflicted paths, as MergeTree reports them. onto is resolved once.
+func Replay(dir, commit, parent, onto, msg string) (sha string, conflicts []string, err error) {
+	if onto, err = RevParse(dir, onto); err != nil {
+		return "", nil, err
+	}
+	out, code, err := git(dir, nil, []int{1}, "merge-tree", "--write-tree", "--name-only",
+		"--merge-base="+parent, onto, commit)
+	if err != nil {
+		return "", nil, err
+	}
+	tree, conflicts := parseMergeTree(out, code)
+	if len(conflicts) > 0 {
+		return "", conflicts, nil
+	}
+	if sha, err = CommitTree(dir, tree, []string{onto}, msg); err != nil {
+		return "", nil, err
+	}
+	return sha, nil, nil
 }
 
 // CommitTree creates a commit of tree with the given parents and message.
