@@ -35,7 +35,7 @@ type event struct {
 var eventsHeader = []string{"key", "at"}
 
 // Poll runs one watch pass and returns the new event lines. A gh error is
-// returned beside any events found, and blocks WAVE_READY for this pass.
+// returned beside any events found. Only one on a wave PR blocks WAVE_READY.
 // Without repo.gh_account it never runs gh (Contract 0.9). The events.tsv key
 // of a PR event is its line plus " @<head sha>", so a new push can raise the
 // same event again (Contract 0.8).

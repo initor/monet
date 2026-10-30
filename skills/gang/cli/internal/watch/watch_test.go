@@ -327,3 +327,71 @@ func TestReadyWave(t *testing.T) {
 		}
 	}
 }
+
+// A gh error on a task PR comes back beside the events and does not block WAVE_READY.
+func TestTaskPRGHErrorComesBesideTheEvents(t *testing.T) {
+	f := newWatchFixture(t)
+	f.merge(t, "T1")
+	f.openPR(t, "h1") // no pr-view.json answer: gh fails
+	lines, err := Poll(f.repo, f.d, f.p, t0)
+	if err == nil || !reflect.DeepEqual(lines, []string{"WAVE_READY 1"}) {
+		t.Fatalf("lines %q, err %v", lines, err)
+	}
+}
+
+func TestPRNextNamesTheNextTaskOnce(t *testing.T) {
+	f := newWatchFixture(t)
+	f.p.Repo.GHAccount, f.p.Repo.Base = "", "dev" // PR_NEXT reads only git and prs.tsv
+	testkit.Git(t, f.repo, "update-ref", "refs/remotes/origin/dev", "refs/heads/main")
+	f.merge(t, "T1")
+	want(t, poll(t, f, t0), "WAVE_READY 1", "PR_NEXT T1")
+	want(t, poll(t, f, t0.Add(time.Minute)))
+	f.p.Repo.GHAccount = "acme-bot"
+	f.openPR(t, "h1")
+	f.pr(t, "OPEN", "MERGEABLE", "h1", check("build", "IN_PROGRESS"))
+	testkit.CommitOn(t, f.repo, f.p.Repo.Integration, "feat: add T2\n\nTask: T2", map[string]string{"t2.go": "package x\n"})
+	want(t, poll(t, f, t0.Add(2*time.Minute)), "WAVE_READY 2")
+	f.pr(t, "MERGED", "UNKNOWN", "h1")
+	want(t, poll(t, f, t0.Add(3*time.Minute)), "PR_NEXT T2")
+	testkit.CommitRef(t, f.repo, "refs/remotes/origin/dev", "feat: ship T2\n\nTask: T2", map[string]string{"t2": "x\n"})
+	want(t, poll(t, f, t0.Add(4*time.Minute)))
+}
+
+func TestPRNextWaitsOnAStrayAndAGHError(t *testing.T) {
+	f := newWatchFixture(t)
+	testkit.Origin(t, f.repo)
+	f.merge(t, "T1")
+	testkit.CommitOn(t, f.repo, f.p.Repo.Integration, "chore: stray", map[string]string{"s.go": "package x\n"})
+	f.openPR(t, "h1")
+	f.pr(t, "CLOSED", "UNKNOWN", "h1")
+	lines, err := Poll(f.repo, f.d, f.p, t0) // the row closes, then PR_NEXT meets the stray
+	if err == nil || !reflect.DeepEqual(lines, []string{"WAVE_READY 1"}) {
+		t.Fatalf("lines %q, err %v", lines, err)
+	}
+	testkit.Answer(t, f.gh, "pr-view.json", "") // gh fails: PR_NEXT must not ask for the stray again
+	if lines, err = Poll(f.repo, f.d, f.p, t0.Add(time.Minute)); err == nil || len(lines) != 0 || strings.Contains(err.Error(), "not task landings") {
+		t.Fatalf("lines %q, err %v", lines, err)
+	}
+}
+
+func TestPRRedAfterTheGraceWithNoChecks(t *testing.T) {
+	f := newWatchFixture(t)
+	f.p.Limits.ChecksGraceMin = 3
+	t.Setenv("GIT_COMMITTER_DATE", t0.Format(time.RFC3339))
+	head := testkit.CommitOn(t, f.repo, "pr", "T1: work\n\nTask: T1", map[string]string{"a.txt": "a\n"})
+	f.openPR(t, head)
+	f.pr(t, "OPEN", "MERGEABLE", head)
+	want(t, poll(t, f, t0.Add(2*time.Minute)))
+	f.pr(t, "OPEN", "MERGEABLE", head, check("build", "IN_PROGRESS"))
+	want(t, poll(t, f, t0.Add(3*time.Minute)))
+	f.pr(t, "OPEN", "MERGEABLE", head)
+	f.p.Repo.Checks = plan.ChecksGate
+	want(t, poll(t, f, t0.Add(3*time.Minute)))
+	f.p.Repo.Checks = plan.ChecksGitHub
+	want(t, poll(t, f, t0.Add(3*time.Minute)), "PR_RED T1 8 no-checks")
+	want(t, poll(t, f, t0.Add(4*time.Minute)))
+	f.pr(t, "OPEN", "MERGEABLE", "h1") // the PR head moved: its checks may not have started
+	want(t, poll(t, f, t0.Add(4*time.Minute)))
+	f.openPR(t, "h1") // git cannot read this head
+	want(t, poll(t, f, t0.Add(4*time.Minute)))
+}
