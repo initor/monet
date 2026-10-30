@@ -35,7 +35,7 @@ func TestPrepareChecksTheQueue(t *testing.T) {
 		rows              []Row
 	}{
 		{"the next task", "T1", "", nil},
-		{"a PR is open", "T1", "PR #7 for T9 is open", []Row{{Task: "T9", PR: 7, State: StateOpen}}},
+		{"a PR is open", "T2", "PR #7 for T1 is open", []Row{{Task: "T1", PR: 7, State: StateOpen}}},
 		{"another task is next", "T2", "the next task to ship is T1, not T2", nil},
 		{"nothing left", "T1", "nothing left to ship", []Row{{Task: "T1", PR: 7, State: StateMerged}}},
 	} {
