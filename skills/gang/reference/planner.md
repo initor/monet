@@ -41,6 +41,7 @@ Write `<dir>/run/planning/base.json`. It holds every run-wide field of `plan.jso
 | `repo.integration` | `gang/<slug>`. In adopt mode, the existing integration branch |
 | `repo.gh_account` | `gh api user --jq .login`. Leave it empty for a local origin with no GitHub |
 | `repo.wave_title` | A PR title template with `{k}` and `{slug}`, such as `chore(gang): land wave {k} of {slug}` |
+| `repo.checks` | `gate` when `origin/<base>` has no `.github/workflows` folder, else `github` |
 | `commands.gate` | The repo's own check command, from its `Makefile`, `package.json`, or CI config |
 | `commands.health` | The gate commands plus the slow suites, such as end-to-end tests |
 | `commands.wave_gate` | The smoke test that the wave PR's CI also runs |
@@ -53,7 +54,7 @@ Write `<dir>/run/planning/base.json`. It holds every run-wide field of `plan.jso
 
 Match `repo.wave_title` to the repo's own PR title rules, such as a Conventional Commits check. Lint fails when the title for wave 99 is over 72 characters.
 
-Ask the user once with AskUserQuestion to confirm `commands`, `locks`, `repo.integration`, and `repo.wave_title`. These fields decide what green means and what each wave PR is called.
+Ask the user once with AskUserQuestion to confirm `commands`, `locks`, `repo.integration`, `repo.checks`, and `repo.wave_title`. These fields decide what green means and what each wave PR is called.
 
 ## From specs
 

@@ -28,6 +28,7 @@ func Markdown(p *plan.Plan, s *schedule.Result) string {
 		{"Integration", code(p.Repo.Integration)},
 		{"GitHub account", code(p.Repo.GHAccount)},
 		{"Wave title", code(p.Repo.WaveTitle)},
+		{"Checks", code(p.Repo.Checks)},
 		{"Gate", codes(p.Commands.Gate)},
 		{"Health", codes(p.Commands.Health)},
 		{"Wave gate", codes(p.Commands.WaveGate)},
@@ -165,8 +166,8 @@ func env(m map[string]string) string {
 }
 
 func limits(l plan.Limits) string {
-	return fmt.Sprintf("task_lines %d, split_lines %d, fix_rounds %d, repair_tries %d, blocked_stop %d, null_stop %d, retries %d, gate_slots %d, gate_timeout_min %d, stall_min %d, max_worktrees %d",
-		l.TaskLines, l.SplitLines, l.FixRounds, l.RepairTries, l.BlockedStop, l.NullStop, l.Retries, l.GateSlots, l.GateTimeoutMin, l.StallMin, l.MaxWorktrees)
+	return fmt.Sprintf("task_lines %d, split_lines %d, fix_rounds %d, repair_tries %d, blocked_stop %d, null_stop %d, retries %d, gate_slots %d, gate_timeout_min %d, stall_min %d, max_worktrees %d, checks_grace_min %d",
+		l.TaskLines, l.SplitLines, l.FixRounds, l.RepairTries, l.BlockedStop, l.NullStop, l.Retries, l.GateSlots, l.GateTimeoutMin, l.StallMin, l.MaxWorktrees, l.ChecksGraceMin)
 }
 
 // roles lists role overrides as role=model/effort in plan.Roles order, then

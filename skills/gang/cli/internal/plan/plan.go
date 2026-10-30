@@ -35,6 +35,7 @@ type Repo struct {
 	Integration string `json:"integration"`
 	GHAccount   string `json:"gh_account"`
 	WaveTitle   string `json:"wave_title"`
+	Checks      string `json:"checks"`
 }
 
 type Commands struct {
@@ -55,6 +56,7 @@ type Limits struct {
 	GateTimeoutMin int `json:"gate_timeout_min"`
 	StallMin       int `json:"stall_min"`
 	MaxWorktrees   int `json:"max_worktrees"`
+	ChecksGraceMin int `json:"checks_grace_min"`
 }
 
 type Role struct {
@@ -125,6 +127,10 @@ var Efforts = []string{"low", "medium", "high", "xhigh", "max"}
 // DefaultWaveTitle is the wave PR title template Normalize fills in.
 const DefaultWaveTitle = "chore(gang): land wave {k} of {slug}"
 
+// The repo.checks values: github means the repo's own CI gives the PR checks,
+// and gate means gang gives them, as the commit status gang/gate.
+const ChecksGitHub, ChecksGate = "github", "gate"
+
 // Load reads a plan strictly: unknown fields and trailing data are errors.
 // The plan comes back normalized.
 func Load(path string) (*Plan, error) {
@@ -145,8 +151,9 @@ func Load(path string) (*Plan, error) {
 	return &p, nil
 }
 
-// Normalize fills zero limits and an empty wave title with defaults, turns
-// nil slices and maps into empty ones, and sets an empty risk to "low".
+// Normalize fills zero limits, an empty wave title, and an empty repo.checks
+// with defaults, turns nil slices and maps into empty ones, and sets an empty
+// risk to "low".
 func (p *Plan) Normalize() {
 	l := &p.Limits
 	orDefault(&l.TaskLines, 100)
@@ -160,8 +167,12 @@ func (p *Plan) Normalize() {
 	orDefault(&l.GateTimeoutMin, 60)
 	orDefault(&l.StallMin, 60)
 	orDefault(&l.MaxWorktrees, 400)
+	orDefault(&l.ChecksGraceMin, 10)
 	if p.Repo.WaveTitle == "" {
 		p.Repo.WaveTitle = DefaultWaveTitle
+	}
+	if p.Repo.Checks == "" {
+		p.Repo.Checks = ChecksGitHub
 	}
 	nonNil(&p.Commands.Gate)
 	nonNil(&p.Commands.Health)
