@@ -37,12 +37,13 @@ func Excluded(name string, globs []string) bool {
 // matches the new path. It needs git 2.40, for --attr-source.
 func Count(repo, from, to string, exclude []string) (int, error) {
 	// --attr-source reads attributes from the from tree, so no .gitattributes in
-	// the checkout or in the task can mark a file -diff and hide its lines. -l0 sets
-	// no rename limit, so diff.renameLimit cannot turn a rename into a delete and an
-	// add. --diff-algorithm=myers keeps a diff.algorithm setting from changing a count.
+	// the checkout or in the task can mark a file -diff and hide its lines. -l1000
+	// pins git's default rename limit: diff.renameLimit cannot turn a rename into a
+	// delete and an add, and the rename search stays bounded.
+	// --diff-algorithm=myers keeps a diff.algorithm setting from changing a count.
 	// --end-of-options and -- keep a revision from being read as an option or
 	// as a path.
-	out, err := gitx.Run(repo, "--attr-source="+from, "diff", "--numstat", "-z", "-M", "-l0", "--diff-algorithm=myers", "--end-of-options", from, to, "--")
+	out, err := gitx.Run(repo, "--attr-source="+from, "diff", "--numstat", "-z", "-M", "-l1000", "--diff-algorithm=myers", "--end-of-options", from, to, "--")
 	if err != nil {
 		return 0, err
 	}
