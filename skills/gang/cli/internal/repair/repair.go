@@ -16,8 +16,8 @@ var idRE = regexp.MustCompile(`^F[0-9]{2,}$`)
 
 // TaskFor returns the plan task with id, or a synthetic repair task for an
 // F<nn> id missing from the plan. The synthetic task has branch gang/<id>,
-// no deps, risk low, the whole repo as scope, and the run-wide locks that
-// gate run --health also takes.
+// no deps, risk low, the whole repo as scope, a size reason, and the run-wide
+// locks that gate run --health also takes.
 func TaskFor(p *plan.Plan, id string) (*plan.Task, bool) {
 	if t, ok := p.Task(id); ok {
 		return t, true
@@ -37,7 +37,7 @@ func TaskFor(p *plan.Plan, id string) (*plan.Task, bool) {
 		Interfaces:   plan.Interfaces{Consumes: []string{}, Produces: []string{}},
 		Acceptance:   []string{"Every command in plan.commands.health passes on the integration branch."},
 		Verify:       plan.Verify{TestsFirst: []string{}, Commands: []string{}},
-		Size:         plan.Size{Lines: p.Limits.TaskLines},
+		Size:         plan.Size{Lines: p.Limits.TaskLines, Reason: "repair of a red trunk"},
 		TimeboxMin:   p.Limits.StallMin,
 		Forbidden:    []string{},
 		Locks:        append([]string{}, p.Locks...),

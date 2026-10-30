@@ -13,6 +13,7 @@ import (
 	"gang/internal/ledger"
 	"gang/internal/plan"
 	"gang/internal/repair"
+	"gang/internal/size"
 	"gang/internal/store"
 )
 
@@ -43,10 +44,11 @@ var taskLine = regexp.MustCompile(`^Task: ([A-Z]+[0-9]+)$`)
 // Merge refuses, in Contract 6 order: unknown task (repair.TaskFor), tip differs from sha, no
 // commit in <integration>..<sha> with the line "Task: <id>" (Contract 0
 // rule 2), ledger not CLEAN for sha, a depends_on or merge_after task not
-// merged. Then it reports ALREADY, CONFLICT, or MERGED. A sha that is
-// already in the integration branch has an empty range, so its Task line
-// must be in the integration branch's history instead. The returned error
-// is for git or file failures only.
+// merged. Then it reports ALREADY or CONFLICT. A merge that changes more
+// lines on the trunk than size.Check allows is refused last, and any other
+// merge is MERGED. A sha that is already in the integration branch has an
+// empty range, so its Task line must be in the integration branch's history
+// instead. The returned error is for git or file failures only.
 func Merge(repo string, d store.Dir, p *plan.Plan, id, sha string) (Result, error) {
 	ref := "refs/heads/" + p.Repo.Integration
 	trunk, err := gitx.RevParse(repo, ref)
@@ -126,6 +128,13 @@ func Merge(repo string, d store.Dir, p *plan.Plan, id, sha string) (Result, erro
 	}
 	if len(conflicts) > 0 {
 		return Result{Status: Conflict, TrunkSHA: trunk, Files: conflicts, Reason: "merge conflict"}, nil
+	}
+	n, err := size.Count(repo, trunk, strings.TrimSpace(tree), size.DefaultExclude)
+	if err != nil {
+		return Result{}, err
+	}
+	if why := size.Check(p.Limits, t.Size.Reason, n); why != "" {
+		return refuse("%s", why)
 	}
 	commit, err := gitx.CommitTree(repo, strings.TrimSpace(tree), []string{trunk, sha}, fmt.Sprintf("merge %s: %s", id, t.Title))
 	if err != nil {
