@@ -39,14 +39,14 @@ func TestReadWithoutAFile(t *testing.T) {
 	}
 }
 
-func TestOpenFindsTheOpenRow(t *testing.T) {
+func TestCurrentFindsTheOpenRow(t *testing.T) {
 	merged := Row{Task: "T1", State: StateMerged}
 	closed := Row{Task: "T3", State: StateClosed}
 	open := Row{Task: "T2", State: StateOpen}
-	if got, ok := Open([]Row{merged, open}); !ok || got != open {
-		t.Fatalf("Open = %+v, %v; want %+v, true", got, ok, open)
+	if got, ok := Current([]Row{merged, open}); !ok || got != open {
+		t.Fatalf("Current = %+v, %v; want %+v, true", got, ok, open)
 	}
-	if got, ok := Open([]Row{merged, closed}); ok {
-		t.Fatalf("Open = %+v, true; want no open row", got)
+	if got, ok := Current([]Row{merged, closed}); ok {
+		t.Fatalf("Current = %+v, true; want no open row", got)
 	}
 }
