@@ -14,7 +14,7 @@ Before step 1, run `<gang> status`. If its `driver` line does not name `<session
 2. If an engine segment runs, let it stop at a checkpoint.
    - Run `<gang> standing show`. If it has no `STOP:` line, run `<gang> standing stop "handoff relay"`. If it has one, keep it: the engine is stopping already, and that line names the next action of the new session.
    - Never stop the engine with TaskStop, since that kills agents in flight. Tasks in flight still finish their reviews, fixes, and merges, so the wait can take an hour or more.
-   - Until the Workflow completion notification comes, keep the event loop going, and handle each event as "Event loop" in `<skill>/reference/coordinator.md` says, with one exception: never launch the engine again. For a `PR_RED` event, add the CI task as "Red wave PR" steps 1 to 5 say, and put its launch under Next in the handoff.
+   - Until the Workflow completion notification comes, keep the event loop going, and handle each event as "Event loop" in `<skill>/reference/coordinator.md` says, with one exception: never launch the engine again. For a `PR_RED` event, add the CI task as "Red PR" steps 1 to 4 say, and put its launch under Next in the handoff.
    - When the notification comes, do item 1 of the relaunch checklist, and log the stop under `## Log`. If the stop line is the "handoff relay" one, run `<gang> standing clear-stop`.
 3. Stop each background task of this session with TaskStop: the Monitor and any other watcher. Note the command of each task other than the Monitor. End the heartbeat with ScheduleWakeup and `stop: true`. A gate job runs as its own process, not as a task of this session, so leave it running.
 4. Copy the newest words of the user: `node <skill>/scripts/relay.mjs words --out <dir>/run/owner-words.md`. If it does not exit 0, note why under State, and go on.
@@ -22,7 +22,7 @@ Before step 1, run `<gang> status`. If its `driver` line does not name `<session
 6. Write the handoff to `<dir>/run/handoff/<stamp>.md`. `<stamp>` is the output of `date +%Y-%m-%d-%H%M`. Give it the sections Goal, Done, Next, Blocked, Decisions, Corrections, Gotchas, and State. Under State, list:
    - the slug, the last run tag and its stop reason, merge-on-green, and a stop line that step 2 kept;
    - the tracker page link, each open tracker discussion, and each tracker comment in progress;
-   - each open wave PR, and each event line that the Monitor printed after the last one that this session handled;
+   - the open row of `<dir>/run/prs.tsv`, and each event line that the Monitor printed after the last one that this session handled;
    - each gate job that runs, and each task other than the Monitor that step 3 stopped, with its command.
 7. Write the kickoff: `node <skill>/scripts/relay.mjs prompt --dir <dir> --slug <slug> --handoff <dir>/run/handoff/<stamp>.md`. Add `--merge-on-green` when the run uses it. It writes `<stamp>.prompt.txt` beside the handoff, with the standing orders and the words of the user in it, word for word, and it prints the command for step 9.
    - Exit 2 with "no permission mode" means that it found no mode for this session. Run it again with `--mode <mode>`, the mode that this session runs in.
