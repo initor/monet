@@ -41,10 +41,10 @@ Write `<dir>/run/planning/base.json`. It holds every run-wide field of `plan.jso
 | `repo.integration` | `gang/<slug>`. In adopt mode, the existing integration branch |
 | `repo.gh_account` | `gh api user --jq .login`. Leave it empty for a local origin with no GitHub |
 | `repo.wave_title` | A PR title template with `{k}` and `{slug}`, such as `chore(gang): land wave {k} of {slug}` |
-| `repo.checks` | `gate` when `origin/<base>` has no `.github/workflows` folder, else `github` |
+| `repo.checks` | `gate` when `git -C <repo> ls-tree origin/<base> .github/workflows` prints nothing, else `github` |
 | `commands.gate` | The repo's own check command, from its `Makefile`, `package.json`, or CI config |
 | `commands.health` | The gate commands plus the slow suites, such as end-to-end tests |
-| `commands.wave_gate` | The smoke test that `<gang> gate --wave` runs before `commands.health`, for a wave that 0.4.0 opened |
+| `commands.wave_gate` | The smoke test that `<gang> gate run --wave` runs before `commands.health`, for a wave that 0.4.0 opened |
 | `env` | Variables that every gate needs, such as a pinned `KUBECONFIG` |
 | `locks` | Shared resources that one gate at a time can use, such as a GPU or a cluster |
 | `limits`, `models` | `{}`, so that the defaults apply |
