@@ -2,8 +2,10 @@ package prq
 
 import (
 	"errors"
+	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"gang/internal/exit"
 	"gang/internal/plan"
@@ -226,4 +228,52 @@ func TestBodyNamesGoalRequirementsReviewAndSize(t *testing.T) {
 			t.Error("Body outside a repo returned no error")
 		}
 	}
+}
+
+func TestPublishOpensTheNextTask(t *testing.T) {
+	repo, d, p := queueFixture(t)
+	shipOnOrigin(t, repo, "chore: move the base", map[string]string{"x.txt": "x\n"}) // the replay differs from the task tip
+	state, _ := testkit.FakeGH(t)
+	testkit.Answer(t, state, "pr-create", "https://github.com/acme/widget/pull/17\n")
+	now := time.Date(2026, 10, 29, 5, 0, 0, 0, time.FixedZone("PDT", -7*3600)) // 12:00:00Z
+	if url, err := Publish(repo, d, p, "T1", now, false); err != nil || url != "https://github.com/acme/widget/pull/17" {
+		t.Fatalf("Publish = %q, %v", url, err)
+	}
+	tip := testkit.Git(t, testkit.Git(t, repo, "remote", "get-url", "origin"), "rev-parse", "refs/heads/gang/demo/T1")
+	rows, err := Read(d)
+	if want := (Row{Task: "T1", PR: 17, Branch: "gang/demo/T1", HeadSHA: tip, State: StateOpen, OpenedAt: "2026-10-29T12:00:00Z"}); err != nil || len(rows) != 1 || rows[0] != want {
+		t.Fatalf("rows = %+v, %v, want %+v", rows, err, want)
+	}
+	call := "pr create --repo github.com/acme/widget --base main --head gang/demo/T1 --title T1: work --body-file " + d.Run("pr-body-T1.md")
+	if calls := testkit.Calls(t, state); len(calls) != 1 || calls[0] != call {
+		t.Fatalf("gh calls = %q, want one %q", calls, call)
+	}
+	body, err := os.ReadFile(state + "/body.md")
+	if err != nil || !strings.HasPrefix(string(body), "Task T1 of gang run `demo`") || !strings.HasSuffix(string(body), "`gang pr open`.\n") {
+		t.Fatalf("body = %q, %v", body, err)
+	}
+	if _, err := os.Stat(d.Run("pr-body-T1.md")); !os.IsNotExist(err) {
+		t.Fatalf("the body file is left behind: %v", err)
+	}
+}
+
+func TestPublishDryRunPushesAndRecordsNothing(t *testing.T) {
+	repo, d, p := queueFixture(t)
+	p.Repo.GHAccount = "" // a dry run needs no account
+	state, _ := testkit.FakeGH(t)
+	got, err := Publish(repo, d, p, "T1", time.Time{}, true)
+	if err != nil || !strings.HasPrefix(got, "git -C "+repo+" push origin ") || !strings.Contains(got, ":refs/heads/gang/demo/T1\n\nT1: work\n\nTask T1 of gang run") {
+		t.Fatalf("Publish = %q, %v", got, err)
+	}
+	if _, err := os.Stat(d.Run("prs.tsv")); !os.IsNotExist(err) || len(testkit.Calls(t, state)) != 0 || testkit.Git(t, repo, "ls-remote", "origin", "refs/heads/gang/*") != "" {
+		t.Fatal("a dry run wrote prs.tsv, called gh, or pushed")
+	}
+	_, err = Publish(repo, d, p, "T2", time.Time{}, true)
+	wantExit(t, err, exit.Refused, "the next task to ship is T1, not T2")
+}
+
+// Contract 0.9: with no GitHub account only a dry run is allowed, and the check comes before any git call (this dir is no repo).
+func TestPublishWithoutGHAccountNeedsDryRun(t *testing.T) {
+	_, err := Publish(t.TempDir(), store.Dir{Root: t.TempDir()}, &plan.Plan{}, "T1", time.Time{}, false)
+	wantExit(t, err, exit.Refused, "works only with --dry-run")
 }
