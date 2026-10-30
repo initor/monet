@@ -192,6 +192,18 @@ func TestPRGreenAndRedNameTheTask(t *testing.T) {
 	want(t, poll(t, f, t0.Add(3*time.Minute)), "PR_RED T1 8 unit")
 }
 
+func TestPRGreenInGateModeWaitsForGangGate(t *testing.T) {
+	f := newWatchFixture(t)
+	f.p.Repo.Checks = plan.ChecksGate
+	f.openPR(t, "h1")
+	f.pr(t, "OPEN", "MERGEABLE", "h1", check("vercel", "SUCCESS"))
+	want(t, poll(t, f, t0))
+	f.pr(t, "OPEN", "MERGEABLE", "h1", check("vercel", "SUCCESS"), check("gang/gate", "SUCCESS"))
+	want(t, poll(t, f, t0.Add(time.Minute)), "PR_GREEN T1 8")
+	f.pr(t, "OPEN", "MERGEABLE", "h2", check("vercel", "FAILURE"))
+	want(t, poll(t, f, t0.Add(2*time.Minute)), "PR_RED T1 8 vercel")
+}
+
 // Steps are (GitHub state, row state, check conclusion). A PR that is not open raises no event.
 func TestPRStateFromGitHubSettlesTheRow(t *testing.T) {
 	f := newWatchFixture(t)
