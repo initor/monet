@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"gang/internal/exit"
 	"gang/internal/lock"
 	"gang/internal/store"
 )
@@ -436,4 +437,38 @@ func markDead(d store.Dir, id string) (JobStatus, error) {
 // terminal reports whether a job in state s has ended.
 func terminal(s string) bool {
 	return s == StatePassed || s == StateFailed || s == StateTimeout || s == StateError
+}
+
+// PRStatus returns the commit status that PR gate job id gives to head, the
+// open PR head of task: success for a passed job, failure for a failed or
+// timed-out one.
+func PRStatus(d store.Dir, id, task, head string) (string, error) {
+	unknown := exit.New(exit.Refused, "unknown job %s", id)
+	if !validID(id) {
+		return "", unknown
+	}
+	var j Job
+	if b, err := os.ReadFile(d.Run("jobs", id, "job.json")); err != nil || json.Unmarshal(b, &j) != nil {
+		return "", unknown
+	}
+	if head == "" || j.Kind != KindPR || j.Task != task || j.Head != head {
+		return "", exit.New(exit.Refused, "job %s did not gate head %s of %s", id, head[:min(len(head), 7)], task)
+	}
+	st, err := Wait(d, id, 0)
+	// A job with no status.json never ran: Start stopped after it wrote job.json.
+	if errors.Is(err, os.ErrNotExist) {
+		st, err = JobStatus{State: StateError}, nil
+	}
+	if err != nil {
+		return "", err
+	}
+	switch st.State {
+	case StatePassed:
+		return "success", nil
+	case StateFailed, StateTimeout:
+		return "failure", nil
+	case StateError:
+		return "", exit.New(exit.Refused, "gate job %s could not run: run the gate again", id)
+	}
+	return "", exit.New(exit.Pending, "gate job %s is still %s: post after it ends", id, st.State)
 }
