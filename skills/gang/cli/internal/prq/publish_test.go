@@ -173,26 +173,39 @@ func TestPrepareStopsWhenTheFetchFails(t *testing.T) {
 	}
 }
 
-// Each row pushes a head onto origin/gang/demo/T1. shipOnOrigin moves the base to "ship", and the local origin/main stays at the old base.
+// Each row pushes a head onto origin/gang/demo/T1. shipOnOrigin moves the
+// base to "ship", and the local origin/main stays at the old base. A gone row
+// then deletes the branch inside origin, which leaves its tracking ref stale.
+// A local tag survives every row: only gone tracking refs are pruned.
 func TestPrepareReusesOnlyAnEqualBranch(t *testing.T) {
 	const another = "origin/gang/demo/T1 exists at %s with another change or base: gang never moves it"
-	for _, c := range []struct{ name, tree, parents, msg, want string }{
-		{"equal", "gang-demo", "-p ship", "pushed", ""},
-		{"another tree", "origin/main", "-p ship", "pushed", another},
-		{"another base", "gang-demo", "-p origin/main", "pushed", another},
-		{"two parents", "gang-demo", "-p ship -p gang-demo", "pushed", another},
-		{"secret on the pushed head", "gang-demo", "-p ship", "-----BEGIN " + "EC PRIVATE KEY-----", "private-key"},
+	for _, c := range []struct {
+		name, tree, parents, msg, want string
+		gone                           bool
+	}{
+		{"equal", "gang-demo", "-p ship", "pushed", "", false},
+		{"another tree", "origin/main", "-p ship", "pushed", another, false},
+		{"another base", "gang-demo", "-p origin/main", "pushed", another, false},
+		{"another base, deleted on origin", "gang-demo", "-p origin/main", "pushed", "", true},
+		{"two parents", "gang-demo", "-p ship -p gang-demo", "pushed", another, false},
+		{"secret on the pushed head", "gang-demo", "-p ship", "-----BEGIN " + "EC PRIVATE KEY-----", "private-key", false},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			repo, d, p := queueFixture(t)
 			shipOnOrigin(t, repo, "chore: empty", nil)
 			head := testkit.Git(t, repo, append([]string{"commit-tree", c.tree + "^{tree}", "-m", c.msg}, strings.Fields(c.parents)...)...)
 			testkit.Git(t, repo, "push", "-q", "origin", head+":refs/heads/gang/demo/T1")
+			if c.gone {
+				origin := testkit.Git(t, repo, "remote", "get-url", "origin")
+				testkit.Git(t, origin, "update-ref", "-d", "refs/heads/gang/demo/T1")
+			}
+			testkit.Git(t, repo, "tag", "local-only")
 			got, err := Prepare(repo, d, p, "T1")
+			testkit.Git(t, repo, "rev-parse", "-q", "--verify", "refs/tags/local-only")
 			if c.want != "" {
 				wantExit(t, err, exit.Refused, strings.Replace(c.want, "%s", head[:7], 1))
-			} else if err != nil || got.SHA != head {
-				t.Fatalf("Prepare = %q, %v, want the pushed head %s", got.SHA, err, head)
+			} else if err != nil || (got.SHA == head) == c.gone {
+				t.Fatalf("Prepare = %q, %v, want the pushed head %s unless it is gone (gone = %v)", got.SHA, err, head, c.gone)
 			}
 		})
 	}
