@@ -40,7 +40,8 @@ This file is the schema of `plan.json`. A task in the plan is its brief. Lint ru
 | `acceptance` | strings, 1 or more | ACCEPTANCE | one checkable line each |
 | `verify.tests_first` | test ids, 1 or more | VERIFY | these fail before the change and pass after |
 | `verify.commands` | strings | VERIFY | extra commands beyond the run gate |
-| `size.lines`, `timebox_min` | ints | TIMEBOX | `size.lines` is at most `limits.task_lines` |
+| `size.lines`, `timebox_min` | ints | TIMEBOX | `size.lines` is at most `limits.task_lines`, or `limits.split_lines` with a `size.reason` |
+| `size.reason` | string | (lint) | optional. Says why a task above `limits.task_lines` cannot be split. Lint fails such a task when this field is blank |
 | `forbidden` | strings | FORBIDDEN | added to the run-wide list |
 | `locks` | names | (scheduling) | each name is in the run-wide `locks` |
 | `risk` | `low` or `high` | (review) | `high` adds an adversarial reviewer |
@@ -59,6 +60,6 @@ Lint fails with exit 1 and names every problem. It checks:
 3. ids are unique. Every reference resolves. Task branches do not collide. The graph has no cycle across `depends_on` and `merge_after`.
 4. Each requirement is covered by at least one task. A requirement covered by two or more tasks must be named by its id, with the reason, in the `notes` of each of them.
 5. Two tasks whose `scope.write` globs overlap must list each other in `peers`.
-6. `size.lines` is at most `limits.task_lines`.
+6. `size.lines` is at most `limits.task_lines`, or at most `limits.split_lines` when `size.reason` says why the task cannot be split. A plan may lower both limits, not raise them above the defaults. `limits.split_lines` is at least `limits.task_lines`.
 7. Model values are aliases from the allowed set (`opus`, `sonnet`, `haiku`, `fable`). A raw model id fails. Role keys and efforts must be known ones.
 8. With `--adopt-source <file>`, the task count and the edge set match the source plan.

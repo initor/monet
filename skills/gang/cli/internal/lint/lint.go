@@ -360,11 +360,27 @@ func covers(prefix string, glob bool, other string) bool {
 	return glob || len(other) == len(prefix) || strings.HasSuffix(prefix, "/") || other[len(prefix)] == '/'
 }
 
-// sizes is rule 6.
+// sizes is rule 6, the size budget. A plan may lower limits.task_lines and
+// limits.split_lines but not raise them above the defaults, and split_lines may
+// not fall below task_lines. A task above task_lines needs a size.reason, and
+// no task goes above split_lines, with a reason or without one.
 func (l *linter) sizes() {
+	lim, dflt := l.p.Limits, plan.DefaultLimits()
+	if lim.TaskLines > dflt.TaskLines {
+		l.add(6, "-", "limits.task_lines %d is above the default %d: a plan may lower it, not raise it", lim.TaskLines, dflt.TaskLines)
+	}
+	if lim.SplitLines > dflt.SplitLines {
+		l.add(6, "-", "limits.split_lines %d is above the default %d: a plan may lower it, not raise it", lim.SplitLines, dflt.SplitLines)
+	}
+	if lim.SplitLines < lim.TaskLines {
+		l.add(6, "-", "limits.split_lines %d is below limits.task_lines %d", lim.SplitLines, lim.TaskLines)
+	}
 	for _, t := range l.p.Tasks {
-		if t.Size.Lines > l.p.Limits.TaskLines {
-			l.add(6, t.ID, "size.lines %d is above limits.task_lines %d", t.Size.Lines, l.p.Limits.TaskLines)
+		switch {
+		case t.Size.Lines > lim.SplitLines:
+			l.add(6, t.ID, "size.lines %d is above limits.split_lines %d: split the task", t.Size.Lines, lim.SplitLines)
+		case t.Size.Lines > lim.TaskLines && strings.TrimSpace(t.Size.Reason) == "":
+			l.add(6, t.ID, "size.lines %d is above limits.task_lines %d: split the task, or say in size.reason why it cannot be split", t.Size.Lines, lim.TaskLines)
 		}
 	}
 }

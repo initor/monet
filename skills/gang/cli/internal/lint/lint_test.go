@@ -1,6 +1,7 @@
 package lint
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -138,6 +139,17 @@ func TestEachRuleFiresAlone(t *testing.T) {
 		}},
 
 		{"too large", 6, func(p *plan.Plan) { p.Tasks[1].Size.Lines = 1201 }},
+		{"size above task_lines without a reason", 6, func(p *plan.Plan) { p.Tasks[0].Size.Lines = p.Limits.TaskLines + 1 }},
+		{"size above task_lines with a blank reason", 6, func(p *plan.Plan) {
+			p.Tasks[0].Size = plan.Size{Lines: p.Limits.TaskLines + 1, Reason: "  "}
+		}},
+		{"size above split_lines with a reason", 6, func(p *plan.Plan) {
+			p.Tasks[0].Size = plan.Size{Lines: p.Limits.SplitLines + 1, Reason: "generated"}
+		}},
+		{"task_lines raised", 6, func(p *plan.Plan) { p.Limits.TaskLines = plan.DefaultLimits().TaskLines + 1 }},
+		{"split_lines raised", 6, func(p *plan.Plan) { p.Limits.SplitLines = plan.DefaultLimits().SplitLines + 1 }},
+		{"split_lines below task_lines", 6, func(p *plan.Plan) { p.Limits.SplitLines = p.Limits.TaskLines - 1 }},
+		{"lowered limit", 6, func(p *plan.Plan) { p.Limits.TaskLines = 60; p.Tasks[0].Size.Lines = 70 }},
 
 		{"raw model id in plan models", 7, func(p *plan.Plan) { p.Models["review"] = plan.Role{Model: "claude-opus-4-1"} }},
 		{"bad effort in task model", 7, func(p *plan.Plan) {
@@ -264,6 +276,84 @@ func TestOverlap(t *testing.T) {
 		if got := overlap(c.b, c.a); got != c.want {
 			t.Errorf("overlap(%q, %q) = %v, want %v", c.b, c.a, got, c.want)
 		}
+	}
+}
+
+// Each size problem names the limit it breaks, and for a task, the way out.
+// A task above split_lines is not offered a reason, because a reason cannot
+// clear it.
+func TestSizeBudgetMessages(t *testing.T) {
+	d := plan.DefaultLimits()
+	lowered := func(p *plan.Plan) {
+		p.Limits.TaskLines, p.Limits.SplitLines = 60, 90
+		p.Tasks[1].Size.Lines = 40
+	}
+	cases := []struct {
+		name   string
+		mutate func(p *plan.Plan)
+		want   string
+	}{
+		{"task above task_lines", func(p *plan.Plan) {
+			lowered(p)
+			p.Tasks[0].Size.Lines = 70
+		}, "rule 6: A1 : size.lines 70 is above limits.task_lines 60: split the task, or say in size.reason why it cannot be split"},
+		{"task above split_lines with a reason", func(p *plan.Plan) {
+			lowered(p)
+			p.Tasks[0].Size = plan.Size{Lines: 95, Reason: "generated table"}
+		}, "rule 6: A1 : size.lines 95 is above limits.split_lines 90: split the task"},
+		{"task above split_lines without a reason", func(p *plan.Plan) {
+			lowered(p)
+			p.Tasks[0].Size.Lines = 95
+		}, "rule 6: A1 : size.lines 95 is above limits.split_lines 90: split the task"},
+		{"task_lines raised", func(p *plan.Plan) { p.Limits.TaskLines = d.TaskLines + 1 },
+			fmt.Sprintf("rule 6: - : limits.task_lines %d is above the default %d: a plan may lower it, not raise it", d.TaskLines+1, d.TaskLines)},
+		{"split_lines raised", func(p *plan.Plan) { p.Limits.SplitLines = d.SplitLines + 1 },
+			fmt.Sprintf("rule 6: - : limits.split_lines %d is above the default %d: a plan may lower it, not raise it", d.SplitLines+1, d.SplitLines)},
+		{"split_lines below task_lines", func(p *plan.Plan) { p.Limits.SplitLines = p.Limits.TaskLines - 1 },
+			fmt.Sprintf("rule 6: - : limits.split_lines %d is below limits.task_lines %d", d.TaskLines-1, d.TaskLines)},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			p := validPlan()
+			c.mutate(p)
+			if ps := Lint(p, Options{}); len(ps) != 1 || ps[0].String() != c.want {
+				t.Errorf("problems %v, want [%s]", ps, c.want)
+			}
+		})
+	}
+}
+
+func TestSizeReasonAllowsUpToSplitLines(t *testing.T) {
+	p := validPlan()
+	p.Tasks[0].Size = plan.Size{Lines: p.Limits.SplitLines, Reason: "generated table"}
+	if ps := Lint(p, Options{}); len(ps) != 0 {
+		t.Errorf("a reason up to split_lines is clean, got %v", ps)
+	}
+}
+
+// A size at task_lines needs no reason, split_lines may equal task_lines, and
+// a plan that lowers both limits and keeps to them is clean.
+func TestSizeBudgetAllowsTheLimits(t *testing.T) {
+	cases := []struct {
+		name   string
+		mutate func(p *plan.Plan)
+	}{
+		{"size at task_lines without a reason", func(p *plan.Plan) { p.Tasks[0].Size.Lines = p.Limits.TaskLines }},
+		{"split_lines equal to task_lines", func(p *plan.Plan) { p.Limits.SplitLines = p.Limits.TaskLines }},
+		{"lowered limits with sizes inside them", func(p *plan.Plan) {
+			p.Limits.TaskLines, p.Limits.SplitLines = 60, 90
+			p.Tasks[0].Size.Lines = 60
+			p.Tasks[1].Size = plan.Size{Lines: 90, Reason: "generated table"}
+		}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			p := validPlan()
+			c.mutate(p)
+			if ps := Lint(p, Options{}); len(ps) != 0 {
+				t.Errorf("problems %v, want none", ps)
+			}
+		})
 	}
 }
 

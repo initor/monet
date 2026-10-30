@@ -105,8 +105,11 @@ type Verify struct {
 	Commands   []string `json:"commands"`
 }
 
+// Size is a task's planned diff size. Reason says why a task above
+// limits.task_lines cannot be split.
 type Size struct {
-	Lines int `json:"lines"`
+	Lines  int    `json:"lines"`
+	Reason string `json:"reason,omitempty"`
 }
 
 // Roles is the closed role set.
@@ -183,6 +186,14 @@ func (p *Plan) Normalize() {
 			t.Risk = "low"
 		}
 	}
+}
+
+// DefaultLimits returns the limits of a zero Plan after Normalize. Lint holds a
+// plan to them: a plan may lower task_lines and split_lines, not raise them.
+func DefaultLimits() Limits {
+	var p Plan
+	p.Normalize()
+	return p.Limits
 }
 
 func orDefault(v *int, d int) {
