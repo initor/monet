@@ -1,6 +1,7 @@
 package prq
 
 import (
+	"errors"
 	"testing"
 
 	"gang/internal/exit"
@@ -30,6 +31,10 @@ func TestFixLandingFindsTheReviewedFix(t *testing.T) {
 	r, l, err := FixLanding(repo, d, p, "T1", "F01")
 	if err != nil || r.PR != 7 || r.Fixes != 0 || l.ID != "F01" || l.Subject != "fix: tidy a" {
 		t.Fatalf("FixLanding = %+v, %+v, %v, want PR 7 with no fix and F01 %q", r, l, err, "fix: tidy a")
+	}
+	testkit.Git(t, repo, "update-ref", "-d", "refs/remotes/origin/main")
+	if _, _, err := FixLanding(repo, d, p, "T1", "F01"); err == nil || errors.As(err, new(*exit.Error)) {
+		t.Fatalf("FixLanding without origin/main = %v, want a plain git error", err)
 	}
 }
 
@@ -62,4 +67,49 @@ func TestFixLandingRefusals(t *testing.T) {
 			wantExit(t, err, exit.Refused, c.refusal)
 		})
 	}
+}
+
+func TestFixPushesOneFastForwardCommit(t *testing.T) {
+	repo, d, p, _ := fixFixture(t)
+	got, err := Fix(repo, d, p, "T1", "F01")
+	rows, _ := Read(d)
+	want := Row{Task: "T1", PR: 7, Branch: "gang/demo/T1", HeadSHA: got.HeadSHA, State: StateOpen, Fixes: 1}
+	if err != nil || got != want || len(rows) != 1 || rows[0] != want {
+		t.Fatalf("Fix = %+v, %v, prs.tsv = %+v, want %+v", got, err, rows, want)
+	}
+	for _, c := range [][2]string{
+		{testkit.Git(t, repo, "log", "-1", "--format=%P %B", got.HeadSHA), testkit.Git(t, repo, "rev-parse", "refs/heads/pr") + " fix: tidy a\n\nTask: F01\nFixes: T1"},
+		{testkit.Git(t, repo, "ls-remote", "origin", "refs/heads/gang/demo/T1"), got.HeadSHA + "\trefs/heads/gang/demo/T1"},
+		{testkit.Git(t, repo, "show", got.HeadSHA+":a/T1.go"), "package a // tidy"},
+	} {
+		if c[0] != c[1] {
+			t.Errorf("got %q, want %q", c[0], c[1])
+		}
+	}
+}
+
+func TestFixRefusesAReplayThatCannotShip(t *testing.T) {
+	repo, d, p, ghDir := fixFixture(t)
+	first, err := Fix(repo, d, p, "T1", "F01")
+	if err != nil {
+		t.Fatal(err)
+	}
+	testkit.Answer(t, ghDir, "pr-view.json", prView("OPEN", first.HeadSHA, checkOK))
+	testkit.Git(t, repo, "push", "-q", "-f", "origin", testkit.CommitOn(t, repo, "other", "chore: moved", nil)+":refs/heads/gang/demo/T1")
+	testkit.CommitOn(t, repo, p.Repo.Integration, "feat: b\n\nTask: T2", map[string]string{"b.txt": "1\n", "c.txt": "1\n"})
+	refuse := func(id string, files map[string]string, code int, msg string) {
+		if files != nil {
+			testkit.LedgerRow(t, d, id, testkit.CommitOn(t, repo, p.Repo.Integration, "fix: x\n\nTask: "+id+"\nFixes: T1", files), "review", "CLEAN")
+		}
+		_, err := Fix(repo, d, p, "T1", id)
+		wantExit(t, err, code, msg)
+		if rows, _ := Read(d); len(rows) != 1 || rows[0] != first {
+			t.Errorf("after %s, prs.tsv = %+v, want %+v", id, rows, first)
+		}
+	}
+	refuse("F01", nil, exit.Refused, "F01 is already in PR #7: its replay changes nothing")
+	refuse("F04", map[string]string{"b.txt": "2\n", "c.txt": "2\n"}, exit.Conflict, "F04 does not replay onto PR #7: b.txt, c.txt")
+	refuse("F05", map[string]string{"k.pem": "-----BEGIN " + "EC PRIVATE KEY-----\n"}, exit.Refused, "k.pem:1:private-key")
+	refuse("F06", map[string]string{"d.txt": "d\n"}, exit.Refused, "push rejected: ")
+	refuse("F09", nil, exit.Refused, "F09 is not a task commit on gang-demo above origin/main")
 }
