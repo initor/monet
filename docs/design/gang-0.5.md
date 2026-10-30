@@ -195,7 +195,7 @@ This section is 0.6.0 behavior.
 | Risk | Mitigation |
 |---|---|
 | One open PR at a time makes the queue slow when CI is slow. | The engine keeps working on the trunk meanwhile. Parallel PRs are a later step. |
-| A fix commit on the trunk does not replay cleanly onto the open PR. | The queue stops, a sync task rebuilds the PR, and the checkpoint decides. |
+| A fix commit on the trunk does not replay cleanly onto the open PR. | The queue stops, and the checkpoint decides. From 0.5.x, a sync task rebuilds the PR. |
 | From 0.6.0, the classifier in a relayed session does not honor a grant that the relay carried. | The pilot forces one relay. A block goes to the tracker. |
 | Tasks of 100 lines multiply the agent count and the token cost. | The owner accepted this cost for small PRs. Review stays per task. |
 | The base moves outside the run. | The replay conflict path in 5.1. |
