@@ -31,7 +31,7 @@ func fixturePlan() *plan.Plan {
 			Interfaces:   plan.Interfaces{Consumes: []string{"file:config.yaml"}, Produces: []string{"py:config.load"}},
 			Acceptance:   []string{"Unknown keys fail with exit 1.", "Defaults fill missing keys."},
 			Verify:       plan.Verify{TestsFirst: []string{"TestLoadRejectsUnknownKeys"}, Commands: []string{"go test ./internal/config/..."}},
-			Size:         plan.Size{Lines: 300},
+			Size:         plan.Size{Lines: 300, Reason: "schema and loader cannot be split"},
 			TimeboxMin:   45,
 			Forbidden:    []string{"git stash", "edit go.mod"},
 			Risk:         "high",
@@ -116,6 +116,35 @@ func TestRenderRepairBrief(t *testing.T) {
 	}
 	if got != string(want) {
 		t.Fatalf("brief differs from testdata/repair.golden\n--- got ---\n%s--- want ---\n%s", got, want)
+	}
+}
+
+// The budget line takes its numbers from the plan's limits and follows
+// size.Check: a reason that is blank once trimmed counts as none.
+func TestRenderStatesTheBudget(t *testing.T) {
+	const rest = ", tests included, lock and binary files not counted"
+	for _, c := range []struct {
+		name, reason string
+		task, split  int
+		want         string
+	}{
+		{"no reason", "", 100, 300, "budget: 100 changed lines" + rest},
+		{"blank reason", " \t ", 100, 300, "budget: 100 changed lines" + rest},
+		{"lowered task_lines", "", 60, 200, "budget: 60 changed lines" + rest},
+		{"reason on one line", "one parser\nand its loader", 60, 200, "budget: up to 200 changed lines (size.reason: one parser and its loader)" + rest},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			p := fixturePlan()
+			p.Limits.TaskLines, p.Limits.SplitLines = c.task, c.split
+			p.Tasks[0].Size = plan.Size{Lines: 80, Reason: c.reason}
+			got, err := Render(store.Dir{Root: t.TempDir()}, p, "B2")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if want := "\nTIMEBOX\nlines: 80\n" + c.want + "\nminutes: 45\n"; !strings.Contains(got, want) {
+				t.Errorf("brief lacks %q\n%s", want, got)
+			}
+		})
 	}
 }
 

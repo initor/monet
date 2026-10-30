@@ -62,13 +62,23 @@ func Render(d store.Dir, p *plan.Plan, id string) (string, error) {
 		list("requirements", reqs)+list("consumes", t.Interfaces.Consumes)+list("produces", t.Interfaces.Produces))
 	section(&b, "ACCEPTANCE", bullets(t.Acceptance))
 	section(&b, "VERIFY", list("tests_first", t.Verify.TestsFirst)+list("commands", t.Verify.Commands)+list("gate", repair.GateFor(p, t)))
-	section(&b, "TIMEBOX", fmt.Sprintf("lines: %d\nminutes: %d", t.Size.Lines, t.TimeboxMin))
+	section(&b, "TIMEBOX", fmt.Sprintf("lines: %d\n%s\nminutes: %d", t.Size.Lines, budget(p.Limits, t.Size.Reason), t.TimeboxMin))
 	section(&b, "FORBIDDEN", bullets(dedupe(append(append([]string{}, p.Forbidden...), t.Forbidden...))))
 	section(&b, "REPORT", reportLine)
 	section(&b, "STANDING", orNone(standing))
 	section(&b, "OWNER RULINGS", orNone(owner))
 	section(&b, "PRIOR REPORT", prior)
 	return b.String(), nil
+}
+
+// budget states how many lines the task may change. A reason that is blank
+// once trimmed counts as none, the rule of size.Check.
+func budget(l plan.Limits, reason string) string {
+	const rest = ", tests included, lock and binary files not counted"
+	if strings.TrimSpace(reason) == "" {
+		return fmt.Sprintf("budget: %d changed lines%s", l.TaskLines, rest)
+	}
+	return fmt.Sprintf("budget: up to %d changed lines (size.reason: %s)%s", l.SplitLines, strings.Join(strings.Fields(reason), " "), rest)
 }
 
 func readOptional(path string) (string, error) {

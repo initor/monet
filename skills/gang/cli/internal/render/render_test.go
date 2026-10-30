@@ -33,7 +33,7 @@ func goldenPlan() *plan.Plan {
 				Interfaces:   plan.Interfaces{Produces: []string{"py:alpha.parse"}},
 				Acceptance:   []string{"parse returns a tree"},
 				Verify:       plan.Verify{TestsFirst: []string{"test:test_parse"}},
-				Size:         plan.Size{Lines: 300}, TimeboxMin: 40, Wave: 1,
+				Size:         plan.Size{Lines: 300, Reason: "generated parser tables"}, TimeboxMin: 40, Wave: 1,
 			},
 			{
 				ID: "B1", Title: "beta cli", Goal: "Add the beta command.", Branch: "feat/beta",
@@ -94,7 +94,7 @@ const golden = "# Plan: demo\n" +
 	"- Branch: `gang/A1`\n" +
 	"- Wave: 1\n" +
 	"- Risk: low\n" +
-	"- Size: 300 lines, timebox 40 min\n" +
+	"- Size: 300 lines (size.reason: generated parser tables), timebox 40 min\n" +
 	"- Scope write: `alpha/**`\n" +
 	"- Scope shared: `docs/index.md`\n" +
 	"- Peers: none\n" +
@@ -178,5 +178,22 @@ func TestMarkdownUnscheduledAndCodeWithBacktick(t *testing.T) {
 	}
 	if !strings.Contains(got, "| Gate | `` echo `date` `` |\n") {
 		t.Error("a command holding a backtick is not wrapped in double backticks")
+	}
+}
+
+// A blank size.reason counts as none, as in size.Check, and a reason with a
+// newline stays on the one line of its bullet.
+func TestMarkdownSizeReason(t *testing.T) {
+	p := goldenPlan()
+	p.Tasks[0].Size.Reason = "two\nlines"
+	p.Tasks[1].Size.Reason = "   "
+	got := Markdown(p, nil)
+	for _, want := range []string{
+		"- Size: 300 lines (size.reason: two lines), timebox 40 min\n",
+		"- Size: 150 lines, timebox 30 min\n",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("plan.md lacks %q", want)
+		}
 	}
 }

@@ -39,6 +39,7 @@ gate:
 
 TIMEBOX
 lines: 300
+budget: up to 300 changed lines (size.reason: schema and loader cannot be split), tests included, lock and binary files not counted
 minutes: 45
 
 FORBIDDEN

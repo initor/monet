@@ -30,6 +30,7 @@ gate:
 
 TIMEBOX
 lines: 100
+budget: up to 300 changed lines (size.reason: repair of a red trunk), tests included, lock and binary files not counted
 minutes: 60
 
 FORBIDDEN
