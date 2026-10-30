@@ -69,6 +69,15 @@ func TestLoadNormalizes(t *testing.T) {
 	}
 }
 
+// DefaultLimits is what Normalize fills into a plan that sets no limits.
+func TestDefaultLimitsMatchNormalize(t *testing.T) {
+	var p Plan
+	p.Normalize()
+	if DefaultLimits() != p.Limits {
+		t.Errorf("DefaultLimits() %+v, want %+v", DefaultLimits(), p.Limits)
+	}
+}
+
 func TestSaveRoundTrip(t *testing.T) {
 	p, err := Load(writeFile(t, `{"version":1,"slug":"demo","tasks":[{"id":"A1","depends_on":[],"model":{"review":{"model":"sonnet","effort":""}}}]}`))
 	if err != nil {
@@ -95,6 +104,39 @@ func TestSaveRoundTrip(t *testing.T) {
 	}
 	if !reflect.DeepEqual(back, p) {
 		t.Errorf("round trip changed the plan:\n%+v\n%+v", back, p)
+	}
+}
+
+// size.reason survives Save and Load, and omitempty keeps an empty one out of
+// the file.
+func TestSizeReasonRoundTrips(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "plan.json")
+	p := &Plan{Version: 1, Tasks: []Task{
+		{ID: "A1", Size: Size{Lines: 150, Reason: "generated table"}},
+		{ID: "B1", Size: Size{Lines: 40}},
+	}}
+	if err := Save(path, p); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := strings.Count(string(data), `"reason":`); n != 1 {
+		t.Errorf("file has %d reason keys, want 1:\n%s", n, data)
+	}
+	back, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(back.Tasks) != 2 {
+		t.Fatalf("Load returned %d tasks, want 2", len(back.Tasks))
+	}
+	if got, want := back.Tasks[0].Size, (Size{Lines: 150, Reason: "generated table"}); got != want {
+		t.Errorf("A1 size %+v, want %+v", got, want)
+	}
+	if got, want := back.Tasks[1].Size, (Size{Lines: 40}); got != want {
+		t.Errorf("B1 size %+v, want %+v", got, want)
 	}
 }
 
