@@ -67,12 +67,13 @@ const golden = "# Plan: demo\n" +
 	"| Integration | `gang-demo` |\n" +
 	"| GitHub account | `example` |\n" +
 	"| Wave title | `chore(gang): land wave {k} of {slug}` |\n" +
+	"| Checks | `github` |\n" +
 	"| Gate | `make check` |\n" +
 	"| Health | `make check`, `make e2e` |\n" +
 	"| Wave gate | `make smoke \\| tee smoke.log` |\n" +
 	"| Env | `KUBECONFIG=./.kube/config` |\n" +
 	"| Locks | `db` |\n" +
-	"| Limits | task_lines 100, split_lines 300, fix_rounds 3, repair_tries 2, blocked_stop 3, null_stop 6, retries 2, gate_slots 3, gate_timeout_min 60, stall_min 60, max_worktrees 400 |\n" +
+	"| Limits | task_lines 100, split_lines 300, fix_rounds 3, repair_tries 2, blocked_stop 3, null_stop 6, retries 2, gate_slots 3, gate_timeout_min 60, stall_min 60, max_worktrees 400, checks_grace_min 10 |\n" +
 	"| Models | review=sonnet/- |\n" +
 	"| Forbidden | `git stash`, `force-push` |\n" +
 	"| Done | every task is on main |\n" +
@@ -192,6 +193,19 @@ func TestMarkdownSizeReason(t *testing.T) {
 		"- Size: 300 lines (size.reason: two lines here), timebox 40 min\n",
 		"- Size: 150 lines, timebox 30 min\n",
 	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("plan.md lacks %q", want)
+		}
+	}
+}
+
+// plan.md shows the plan's own repo.checks and checks_grace_min, not defaults.
+func TestMarkdownChecksFields(t *testing.T) {
+	p := goldenPlan()
+	p.Repo.Checks = "gate"
+	p.Limits.ChecksGraceMin = 3
+	got := Markdown(p, nil)
+	for _, want := range []string{"| Checks | `gate` |\n", ", checks_grace_min 3 |\n"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("plan.md lacks %q", want)
 		}

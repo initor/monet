@@ -43,12 +43,20 @@ func TestLoadNormalizes(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := Limits{TaskLines: 800, SplitLines: 300, FixRounds: 3, RepairTries: 2, BlockedStop: 3,
-		NullStop: 6, Retries: 2, GateSlots: 3, GateTimeoutMin: 60, StallMin: 60, MaxWorktrees: 400}
+		NullStop: 6, Retries: 2, GateSlots: 3, GateTimeoutMin: 60, StallMin: 60, MaxWorktrees: 400, ChecksGraceMin: 10}
 	if p.Limits != want {
 		t.Errorf("limits %+v, want %+v", p.Limits, want)
 	}
 	if p.Repo.WaveTitle != "chore(gang): land wave {k} of {slug}" {
 		t.Errorf("wave_title %q, want the Contract 1 default", p.Repo.WaveTitle)
+	}
+	if p.Repo.Checks != "github" {
+		t.Errorf("checks %q, want github", p.Repo.Checks)
+	}
+	if g, err := Load(writeFile(t, `{"version":1,"repo":{"checks":"gate"},"limits":{"checks_grace_min":3}}`)); err != nil {
+		t.Error(err)
+	} else if g.Repo.Checks != "gate" || g.Limits.ChecksGraceMin != 3 {
+		t.Errorf("explicit checks %q and grace %d, want gate and 3", g.Repo.Checks, g.Limits.ChecksGraceMin)
 	}
 	tk := p.Tasks[0]
 	if tk.Risk != "low" {

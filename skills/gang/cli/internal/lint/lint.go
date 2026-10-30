@@ -89,6 +89,9 @@ func (l *linter) shape() {
 	if p.Repo.Integration != "" && p.Repo.Integration == p.Repo.Base {
 		l.add(1, "-", "repo.integration must differ from repo.base %q", p.Repo.Base)
 	}
+	if c := p.Repo.Checks; c != plan.ChecksGitHub && c != plan.ChecksGate {
+		l.add(1, "-", "repo.checks %q must be github or gate", c)
+	}
 	for _, name := range p.Locks {
 		if !lock.ValidName(name) {
 			l.add(1, "-", "lock %q must start with a letter or digit and hold only letters, digits, '.', '_', and '-'", name)

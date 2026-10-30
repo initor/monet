@@ -92,6 +92,7 @@ func TestEachRuleFiresAlone(t *testing.T) {
 		}},
 		{"wave title without {k}", 1, func(p *plan.Plan) { p.Repo.WaveTitle = "chore(gang): land {slug}" }},
 		{"lock name with a slash", 1, func(p *plan.Plan) { p.Locks = append(p.Locks, "k8s/kind") }},
+		{"checks value", 1, func(p *plan.Plan) { p.Repo.Checks = "travis" }},
 
 		{"empty goal", 2, func(p *plan.Plan) { p.Tasks[0].Goal = " " }},
 		{"no acceptance", 2, func(p *plan.Plan) { p.Tasks[0].Acceptance = []string{} }},
@@ -166,6 +167,19 @@ func TestEachRuleFiresAlone(t *testing.T) {
 				t.Errorf("rules %v, want [%d]: %v", got, c.rule, ps)
 			}
 		})
+	}
+}
+
+// repo.checks is github or gate and nothing else.
+func TestChecksValue(t *testing.T) {
+	p := validPlan()
+	p.Repo.Checks = "gate"
+	if ps := Lint(p, Options{}); len(ps) != 0 {
+		t.Errorf("checks gate: %v, want clean", ps)
+	}
+	p.Repo.Checks = "travis"
+	if ps := Lint(p, Options{}); len(ps) != 1 || ps[0].Msg != `repo.checks "travis" must be github or gate` {
+		t.Errorf("checks travis: %v, want the repo.checks problem alone", ps)
 	}
 }
 
