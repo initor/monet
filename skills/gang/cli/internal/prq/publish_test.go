@@ -11,7 +11,6 @@ import (
 	"gang/internal/testkit"
 )
 
-// queueFixture: a repo with an origin, and a gang-demo trunk where gang merge has landed T1.
 func queueFixture(t *testing.T) (repo string, d store.Dir, p *plan.Plan) {
 	t.Helper()
 	repo, p = testkit.Repo(t), testkit.Plan()
@@ -54,5 +53,13 @@ func TestPrepareChecksTheQueue(t *testing.T) {
 				t.Fatalf(`Prepare = %+v, %v, want T1, "T1: work", gang/demo/T1`, got, err)
 			}
 		})
+	}
+}
+
+func TestPrepareReturnsAStrayError(t *testing.T) {
+	repo, d, p := queueFixture(t)
+	testkit.CommitOn(t, repo, p.Repo.Integration, "chore: no task", nil)
+	if _, err := Prepare(repo, d, p, "T1"); err == nil || !strings.Contains(err.Error(), "chore: no task") {
+		t.Fatalf("Prepare error = %v, want one that names the stray", err)
 	}
 }
