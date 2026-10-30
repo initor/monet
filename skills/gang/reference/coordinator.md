@@ -84,8 +84,7 @@ A run that 0.4.0 started keeps its trunk. The queue reads its `merge <id>: <titl
 6. Set `repo.checks` in `plan/plan.json`: `gate` when `git -C <repo> ls-tree origin/<base> .github/workflows` prints nothing, else `github`. Run `<gang> lint`, then `<gang> plan commit --message "plan: ship through the pr queue"`.
 7. If `git -C <repo> ls-remote --heads origin gang/<slug>` prints a line, ask the user to delete that merged integration branch on GitHub. Git cannot push a PR branch `gang/<slug>/<id>` beside it, and refuses with `refname conflict`.
 8. Arm the event loop. The next pass of `<gang> watch` prints `PR_NEXT <id>` for the oldest trunk task that is not on `<base>`.
-9. If `<gang> pr open` refuses that task as already on `<base>`, an earlier wave PR was likely squashed, and its `Task:` lines did not reach `<base>`. Tell the user, and stop the queue.
-10. Do the relaunch checklist, then relaunch. Its `gen` step puts the `gang size` step into `engine.js`.
+9. Do the relaunch checklist, then relaunch. Its `gen` step puts the `gang size` step into `engine.js`.
 
 ## Event loop
 
@@ -111,7 +110,7 @@ A run that 0.4.0 started keeps its trunk. The queue reads its `merge <id>: <titl
 At most one gang PR is open at a time. It holds one task, on the branch `gang/<slug>/<id>`.
 
 1. Run `<gang> pr open <id> --holder <session>`. It prints the PR URL.
-2. If it exits 2, read the reason, except as the paragraph below says. Another PR is open, `<id>` is not the next task, its change is already on `<base>`, its tip is not ledger CLEAN, or the secret scan found a secret. Never bypass the secret scan, and never force a push. Tell the user, and put the block on the tracker.
+2. If it exits 2, read the reason, except as the paragraph below says. Another PR is open, `<id>` is not the next task, its tip is not ledger CLEAN, or the secret scan found a secret. Never bypass the secret scan, and never force a push. Tell the user, and put the block on the tracker.
 3. If it exits 3, the task does not replay onto `<base>`, because `<base>` changed or a fix overlaps it. The queue stops. Tell the user, and put the block on the tracker.
 4. With `repo.checks` set to `gate`, run `<gang> gate run --pr <id>`. It prints a job id. Run `<gang> gate wait <job> --timeout 540s`, and again while it exits 75. If it exits 1, the gate failed. Still run `pr gate`, which posts the failure. If it exits 2, the gate could not run, so run the gate one more time. If it still exits 2, tell the user. Then run `<gang> pr gate <id> <job> --holder <session>`. It posts the result as the commit status `gang/gate`, and `PR_GREEN` or `PR_RED` follows.
 5. With `repo.checks` set to `github`, the CI of the repo gives the checks. Wait for the next event.
@@ -193,7 +192,7 @@ Before each relaunch, confirm each item:
 ## Close
 
 1. Run `git -C <repo> fetch origin`.
-2. Run `jq -r '.tasks[].id' <dir>/plan/plan.json | LC_ALL=C sort | LC_ALL=C comm -23 - <(git -C <repo> log --format=%B origin/<base> | sed -n 's/^Task: \([A-Z][A-Z]*[0-9][0-9]*\)$/\1/p' | LC_ALL=C sort -u)`. It must print nothing: each task has its `Task:` line on `origin/<base>`. Squash merges never make the trunk commits ancestors of `origin/<base>`, so this step checks the `Task:` lines.
+2. Run `jq -r '.tasks[].id' <dir>/plan/plan.json | LC_ALL=C sort | LC_ALL=C comm -23 - <(git -C <repo> log --format=%B origin/<base> | sed -n 's/^Task: \([A-Z][A-Z]*[0-9][0-9]*\)$/\1/p' | LC_ALL=C sort -u)`. It must print nothing: each task has its `Task:` line on `origin/<base>`. Squash merges never make the trunk commits ancestors of `origin/<base>`, so this step checks the `Task:` lines. A listed task whose change is already on `origin/<base>` was likely squashed by hand without its `Task:` line: tell the user.
 3. Read `<dir>/run/prs.tsv`. No row may be `open`.
 4. Run `jq -r '.tasks[].id' <dir>/plan/plan.json | LC_ALL=C sort | LC_ALL=C comm -23 - <(<gang> done)`. It must print nothing.
 5. With an empty `repo.gh_account`, skip steps 2 and 3. PRs ran as dry runs, so nothing reaches `main`.
