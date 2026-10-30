@@ -96,9 +96,9 @@ Use this when the session that drove the run is gone, for example after a crash 
 At most one gang PR is open at a time. It holds one task, on the branch `gang/<slug>/<id>`.
 
 1. Run `<gang> pr open <id> --holder <session>`. It prints the PR URL.
-2. If it exits 2, read the reason. Another PR is open, `<id>` is not the next task, its change is already on `<base>`, its tip is not ledger CLEAN, or the secret scan found a secret. Never bypass the secret scan, and never force a push. Tell the user, and put the block on the tracker.
+2. If it exits 2, read the reason, except as the paragraph below says. Another PR is open, `<id>` is not the next task, its change is already on `<base>`, its tip is not ledger CLEAN, or the secret scan found a secret. Never bypass the secret scan, and never force a push. Tell the user, and put the block on the tracker.
 3. If it exits 3, the task does not replay onto `<base>`, because `<base>` changed or a fix overlaps it. The queue stops. Tell the user, and put the block on the tracker.
-4. With `repo.checks` set to `gate`, run `<gang> gate run --pr <id>`. It prints a job id. Run `<gang> gate wait <job> --timeout 540s`, and again while it exits 75. If it exits 2, the gate could not run, so run the gate one more time. Then run `<gang> pr gate <id> <job> --holder <session>`. It posts the result as the commit status `gang/gate`, and `PR_GREEN` or `PR_RED` follows.
+4. With `repo.checks` set to `gate`, run `<gang> gate run --pr <id>`. It prints a job id. Run `<gang> gate wait <job> --timeout 540s`, and again while it exits 75. If it exits 2, the gate could not run, so run the gate one more time. If it still exits 2, tell the user. Then run `<gang> pr gate <id> <job> --holder <session>`. It posts the result as the commit status `gang/gate`, and `PR_GREEN` or `PR_RED` follows.
 5. With `repo.checks` set to `github`, the CI of the repo gives the checks. Wait for the next event.
 6. If auto mode blocks a push, do not try again. Ask the user to switch to accept-edits mode.
 
@@ -106,7 +106,7 @@ If `pr open` fails after its push, and `<base>` moved before the retry, it refus
 
 A stray commit on the trunk, or an origin ref with no trunk yet, is a blocking finding. Resolve it at once. `watch` counts each pass that reports it as failed and backs off up to 8 times the interval, so every event, `STALL` included, can wait up to 8 minutes.
 
-An empty `repo.gh_account` means a local origin with no GitHub. Then run `<gang> pr open <id> --holder <session> --dry-run` instead. It prints the push and the PR, and no PR event follows. A dry run records and ships nothing, so `PR_NEXT` names the same task until `origin/<base>` gains its `Task:` line. In this mode the user lands the task, and `PR_NEXT` for the next task follows.
+An empty `repo.gh_account` means a local origin with no GitHub. Then run `<gang> pr open <id> --holder <session> --dry-run` instead. It prints the push and the PR, and no PR event follows. A dry run records and ships nothing, so `PR_NEXT` names the same task until `origin/<base>` gains its `Task:` line. In this mode the user lands the task, and `PR_NEXT` for the next task follows after a fetch of `origin/<base>`.
 
 ### Red PR
 
@@ -118,9 +118,10 @@ An empty `repo.gh_account` means a local origin with no GitHub. Then run `<gang>
 6. When `CI<n>` merges into the trunk, run `<gang> pr fix <id> CI<n> --holder <session>`. It pushes the fix onto the PR as a new commit. With `repo.checks` set to `gate`, gate the new head as "PR queue" step 4 says.
 7. If it exits 2 with `above limits.task_lines`, decide whether the PR can stay that big. If it can, run it again with `--reason "<why>"`, and record the reason as a ruling.
 8. If it exits 2 with `2 fix commits` or `above limits.split_lines`, the queue stops. Put the block on the tracker, and ask the user how to go on. A command to close the PR and publish the task again comes after 0.5.0.
+   Any other nonzero exit stops the queue too: exit 3 means that the fix does not replay onto the PR, and another exit 2 is a refusal. Tell the user the reason, and put the block on the tracker, as "PR queue" steps 2 and 3 do.
 9. Then relaunch with no `--only`.
 
-`PR_RED` comes once per head and failed-check set, so one CI run can print `PR_RED T1 8 lint` and then `PR_RED T1 8 lint,unit`. A PR takes at most 2 fix commits.
+`PR_RED` comes once per head and failed-check set, so one CI run can print `PR_RED T1 8 lint` and then `PR_RED T1 8 lint,unit`. If the fix task of the PR is still open, update it and add no second one. A PR takes at most 2 fix commits.
 
 `events.tsv` keeps each `PR_NEXT` key, so that line does not print twice. The `PR_GREEN` and `PR_RED` keys hold the PR head SHA, so a fix push can raise them again.
 
@@ -130,7 +131,7 @@ An empty `repo.gh_account` means a local origin with no GitHub. Then run `<gang>
 2. Run `git -C <repo> log -1 --format='%h %cr' <integration>`.
 3. If a gate job runs, wait. A gate can run for `limits.gate_timeout_min` minutes.
 4. Read `<dir>/run/prs.tsv`. A `closed` row means that its PR closed without a merge. Ask the user why. To open it again, run `<gang> pr open <id> --holder <session>`.
-5. If a PR is open, run `gh pr view <pr> --json mergeable`. `CONFLICTING` means that `<base>` moved under it. Tell the user, and merge nothing. If the PR shows no checks and its head differs from the head in `prs.tsv`, the head moved outside gang, for example by a hand push. No `PR_RED` follows, and every outward step refuses with "head moved". Ask the user.
+5. If a PR is open, run `gh pr view <pr> --json mergeable,headRefOid,statusCheckRollup`. `CONFLICTING` means that `<base>` moved under it. Tell the user, and merge nothing. If the PR shows no checks and its `headRefOid` differs from the `head_sha` column of `prs.tsv`, the head moved outside gang, for example by a hand push. No `PR_RED` follows, and every outward step refuses with "head moved". Ask the user.
 6. If a second `STALL` comes and nothing moved, write a stop line: `<gang> standing stop "stall: <what you found>"`.
 7. Wait for the engine to stop. Then handle the checkpoint.
 
