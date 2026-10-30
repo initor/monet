@@ -131,8 +131,8 @@ func TestMergeSquashesWithTheTaskLines(t *testing.T) {
 		t.Fatalf("Merge = %q, %v, want %q", subject, err, "T1: work (#7)")
 	}
 	calls := testkit.Calls(t, ghDir)
-	if want := "pr merge 7 --repo github.com/acme/widget --squash --match-head-commit " + head + " --subject T1: work (#7) --body-file "; !strings.HasPrefix(calls[len(calls)-1], want) {
-		t.Errorf("last gh call = %q, want prefix %q", calls[len(calls)-1], want)
+	if want := "pr merge 7 --repo github.com/acme/widget --squash --match-head-commit " + head + " --subject T1: work (#7) --body-file " + d.Run("merge-body-T1.md"); calls[len(calls)-1] != want {
+		t.Errorf("last gh call = %q, want %q", calls[len(calls)-1], want)
 	}
 	if body, err := os.ReadFile(ghDir + "/body.md"); err != nil || string(body) != "Task: T1\nTask: F01\n" {
 		t.Errorf("body = %q, %v, want the first Task line of each commit", body, err)
@@ -157,6 +157,53 @@ func TestMergeRefusesUntilGreen(t *testing.T) {
 		rows, _ := Read(d)
 		if calls := testkit.Calls(t, ghDir); err.Error() != c.refusal || len(calls) != 1 || rows[0].State != StateOpen {
 			t.Fatalf("err = %q, gh calls = %q, rows = %+v, want %q, only the pr view, an open row", err, calls, rows, c.refusal)
+		}
+	}
+}
+
+func TestMergeKeepsTheRowOpenWhenGHFails(t *testing.T) {
+	repo, d, p, ghDir, _ := openPR(t)
+	if err := os.Remove(ghDir + "/pr-merge"); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Merge(repo, d, p, "T1")
+	rows, _ := Read(d)
+	if err == nil || errors.As(err, new(*exit.Error)) || !strings.HasPrefix(err.Error(), "gh pr merge 7 ") || !strings.HasSuffix(err.Error(), "/pr-merge: No such file or directory") || rows[0].State != StateOpen {
+		t.Fatalf("err = %v, rows = %+v, want the plain gh error and an open row", err, rows)
+	}
+}
+
+func TestMergeFailsOnAPRWithNoCommitAboveTheBase(t *testing.T) {
+	repo, d, p, ghDir, _ := openPR(t)
+	base := testkit.Git(t, repo, "rev-parse", "refs/remotes/origin/main")
+	if err := Put(d, Row{Task: "T1", PR: 7, HeadSHA: base, State: StateOpen}); err != nil {
+		t.Fatal(err)
+	}
+	testkit.Answer(t, ghDir, "pr-view.json", prView("OPEN", base, checkOK))
+	if _, err := Merge(repo, d, p, "T1"); err == nil || errors.As(err, new(*exit.Error)) || err.Error() != "PR #7 has no commit above origin/main" {
+		t.Fatalf("Merge error = %v, want the plain error: no commit above origin/main", err)
+	}
+}
+
+func TestMergeRefusesUnlessTheOldestCommitIsTheTask(t *testing.T) {
+	const refusal = "PR #7: the oldest commit above origin/main is not the T1 task commit"
+	// The last case is a local origin/main older than the PR base: another task's squash sits below T1.
+	for _, msgs := range [][]string{{"T1: work\n\nTask: T9\nTask: T1"}, {"T1: work"}, {"T2: ship (#6)\n\nTask: T2", "T1: work\n\nTask: T1"}} {
+		repo, d, p, ghDir, _ := openPR(t)
+		testkit.Git(t, repo, "branch", "stale", "refs/remotes/origin/main")
+		head := ""
+		for _, msg := range msgs {
+			head = testkit.CommitOn(t, repo, "stale", msg, map[string]string{"stale.txt": msg})
+		}
+		if err := Put(d, Row{Task: "T1", PR: 7, HeadSHA: head, State: StateOpen}); err != nil {
+			t.Fatal(err)
+		}
+		testkit.Answer(t, ghDir, "pr-view.json", prView("OPEN", head, checkOK))
+		_, err := Merge(repo, d, p, "T1")
+		wantExit(t, err, exit.Refused, refusal)
+		rows, _ := Read(d)
+		if calls := testkit.Calls(t, ghDir); err.Error() != refusal || len(calls) != 1 || rows[0].State != StateOpen {
+			t.Fatalf("commit messages %q: err = %q, gh calls = %q, rows = %+v, want %q, only the pr view, an open row", msgs, err, calls, rows, refusal)
 		}
 	}
 }
