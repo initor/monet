@@ -413,3 +413,68 @@ func TestMergeLostCompareAndSwap(t *testing.T) {
 		t.Fatal("the merge overwrote a trunk that moved")
 	}
 }
+
+// mergeLines merges A1 with a new file of n lines. It checks the status,
+// the start of the reason, and that only a merged task moves the trunk.
+func (f *fixture) mergeLines(t *testing.T, file string, n int, want Status, reason string) {
+	t.Helper()
+	before := git(t, f.repo, "rev-parse", integ)
+	a1 := f.commit(t, "gang/A1", file, strings.Repeat("a\n", n), "A1")
+	f.clean(t, "A1", a1, ledger.LensReview)
+	r := f.merge(t, "A1", a1)
+	if r.Status != want || !strings.HasPrefix(r.Reason, reason) {
+		t.Fatalf("%d lines: got %+v, want %s with reason starting %q", n, r, want, reason)
+	}
+	if moved := git(t, f.repo, "rev-parse", integ) != before; moved != (want == Merged) {
+		t.Fatalf("%d lines: integration moved is %v after %s", n, moved, want)
+	}
+}
+
+func TestMergeRefusesAChangeOverBudget(t *testing.T) {
+	newFixture(t).mergeLines(t, "a.txt", 101, Refused, "size 101 is above limits.task_lines 100")
+}
+
+func TestMergeAllowsAReasonUpToSplitLines(t *testing.T) {
+	f := newFixture(t)
+	f.p.Tasks[0].Size.Reason = "generated table"
+	f.mergeLines(t, "a.txt", 150, Merged, "")
+}
+
+func TestMergeRefusesAboveSplitLines(t *testing.T) {
+	f := newFixture(t)
+	f.p.Tasks[0].Size.Reason = "generated table"
+	f.mergeLines(t, "a.txt", 301, Refused, "size 301 is above limits.split_lines 300")
+}
+
+func TestMergeHonorsALoweredLimit(t *testing.T) {
+	f := newFixture(t)
+	f.p.Limits.TaskLines = 60
+	f.mergeLines(t, "a.txt", 70, Refused, "size 70 is above limits.task_lines 60")
+}
+
+func TestMergeLeavesLockFilesOutOfTheCount(t *testing.T) {
+	newFixture(t).mergeLines(t, "go.sum", 400, Merged, "")
+}
+
+// The repair task has no plan entry, so repair.TaskFor gives it a size
+// reason, and it may change up to limits.split_lines lines.
+func TestMergeRepairTaskMayUseTheCeiling(t *testing.T) {
+	f := newFixture(t)
+	f01 := f.commit(t, "gang/F01", "file.txt", strings.Repeat("r\n", 150), "F01")
+	f.clean(t, "F01", f01, ledger.LensReview)
+	if r := f.merge(t, "F01", f01); r.Status != Merged {
+		t.Fatalf("%+v", r)
+	}
+}
+
+// The size is the change the merge makes on the trunk, so lines that the
+// trunk gained after the task branched do not count against the task.
+func TestMergeSizeCountsTheTaskNotTheTrunk(t *testing.T) {
+	f := newFixture(t)
+	a1 := f.commit(t, "gang/A1", "a.txt", "a\n", "A1")
+	f.commit(t, "integration", "big.txt", strings.Repeat("b\n", 200), "")
+	f.clean(t, "A1", a1, ledger.LensReview)
+	if r := f.merge(t, "A1", a1); r.Status != Merged {
+		t.Fatalf("%+v", r)
+	}
+}
