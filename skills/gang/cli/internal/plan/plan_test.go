@@ -42,7 +42,7 @@ func TestLoadNormalizes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := Limits{TaskLines: 800, SplitLines: 1600, FixRounds: 3, RepairTries: 2, BlockedStop: 3,
+	want := Limits{TaskLines: 800, SplitLines: 300, FixRounds: 3, RepairTries: 2, BlockedStop: 3,
 		NullStop: 6, Retries: 2, GateSlots: 3, GateTimeoutMin: 60, StallMin: 60, MaxWorktrees: 400}
 	if p.Limits != want {
 		t.Errorf("limits %+v, want %+v", p.Limits, want)

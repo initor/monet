@@ -72,7 +72,7 @@ const golden = "# Plan: demo\n" +
 	"| Wave gate | `make smoke \\| tee smoke.log` |\n" +
 	"| Env | `KUBECONFIG=./.kube/config` |\n" +
 	"| Locks | `db` |\n" +
-	"| Limits | task_lines 1200, split_lines 1600, fix_rounds 3, repair_tries 2, blocked_stop 3, null_stop 6, retries 2, gate_slots 3, gate_timeout_min 60, stall_min 60, max_worktrees 400 |\n" +
+	"| Limits | task_lines 100, split_lines 300, fix_rounds 3, repair_tries 2, blocked_stop 3, null_stop 6, retries 2, gate_slots 3, gate_timeout_min 60, stall_min 60, max_worktrees 400 |\n" +
 	"| Models | review=sonnet/- |\n" +
 	"| Forbidden | `git stash`, `force-push` |\n" +
 	"| Done | every task is on main |\n" +

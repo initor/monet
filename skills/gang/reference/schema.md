@@ -12,7 +12,7 @@ This file is the schema of `plan.json`. A task in the plan is its brief. Lint ru
   "commands": {"gate": ["make check"], "health": ["make check", "make test-e2e"], "wave_gate": ["make smoke"]},
   "env": {"KUBECONFIG": "./.kube/config"},
   "locks": ["gpu", "kind"],
-  "limits": {"task_lines": 1200, "split_lines": 1600, "fix_rounds": 3, "repair_tries": 2, "blocked_stop": 3, "null_stop": 6, "retries": 2},
+  "limits": {"task_lines": 100, "split_lines": 300, "fix_rounds": 3, "repair_tries": 2, "blocked_stop": 3, "null_stop": 6, "retries": 2},
   "models": {},
   "forbidden": ["git stash", "git rebase", "force-push", "push to main"],
   "done": "every task is reachable from origin/main and no wave PR is open",
@@ -21,7 +21,7 @@ This file is the schema of `plan.json`. A task in the plan is its brief. Lint ru
 }
 ```
 
-- A limit that is missing or `0` takes its default: `task_lines` 1200, `split_lines` 1600, `fix_rounds` 3, `repair_tries` 2, `blocked_stop` 3, `null_stop` 6, `retries` 2, `gate_slots` 3, `gate_timeout_min` 60, `stall_min` 60, and `max_worktrees` 400.
+- A limit that is missing or `0` takes its default. The size limits are `task_lines` 100 and `split_lines` 300. The other limits are `fix_rounds` 3, `repair_tries` 2, `blocked_stop` 3, `null_stop` 6, `retries` 2, `gate_slots` 3, `gate_timeout_min` 60, `stall_min` 60, and `max_worktrees` 400.
 - An empty `repo.wave_title` takes `chore(gang): land wave {k} of {slug}`.
 - `models` maps a role to `{"model": "<alias>", "effort": "<effort>"}`, over the defaults in the skill's `roles.json`. The roles are `implement`, `implement_hard`, `review`, `review_adversarial`, `fix`, `sync`, `merge`, `health`, `repair`, `plan_draft`, and `plan_review`. The efforts are `low`, `medium`, `high`, `xhigh`, and `max`.
 

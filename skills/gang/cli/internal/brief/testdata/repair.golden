@@ -29,7 +29,7 @@ gate:
 - make e2e
 
 TIMEBOX
-lines: 1200
+lines: 100
 minutes: 60
 
 FORBIDDEN

@@ -34,7 +34,7 @@ func validPlan() *plan.Plan {
 				Interfaces:   plan.Interfaces{Produces: []string{"py:alpha.run"}},
 				Acceptance:   []string{"alpha.run returns 0"},
 				Verify:       plan.Verify{TestsFirst: []string{"test:test_alpha"}},
-				Size:         plan.Size{Lines: 200}, TimeboxMin: 30,
+				Size:         plan.Size{Lines: 80}, TimeboxMin: 30,
 			},
 			{
 				ID: "B1", Title: "beta", Goal: "Add package beta.",
@@ -44,7 +44,7 @@ func validPlan() *plan.Plan {
 				Interfaces:   plan.Interfaces{Consumes: []string{"py:alpha.run"}},
 				Acceptance:   []string{"beta calls alpha.run"},
 				Verify:       plan.Verify{TestsFirst: []string{"test:test_beta"}},
-				Size:         plan.Size{Lines: 300}, TimeboxMin: 45, Locks: []string{"db"}, Risk: "high",
+				Size:         plan.Size{Lines: 90}, TimeboxMin: 45, Locks: []string{"db"}, Risk: "high",
 			},
 		},
 	}
