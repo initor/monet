@@ -79,10 +79,12 @@ A run that 0.4.0 started keeps its trunk. The queue reads its `merge <id>: <titl
 1. If a wave PR is open, finish it first, as 0.4.0 does: run `<gang> wave merge <k>` with merge-on-green, else the user merges it with a merge commit. While it is open, `PR_GREEN` and `PR_RED` can name a wave number, not a task id.
 2. From then on, never run `<gang> push`, `<gang> wave open`, or `<gang> wave merge`, and ignore `WAVE_READY`.
 3. Stop the armed Monitor with the description `gang <slug> events`, because an old `<gang> watch` fails on the new `repo.checks` field. If an engine runs, run `<gang> standing stop "switching to the pr queue"`, wait for the engine to stop, and run `<gang> standing clear-stop`.
-4. Build `<gang>` again, as "Build first" says, so that it has the `pr` commands.
-5. Set `repo.checks` in `plan/plan.json`: `gate` when `origin/<base>` has no `.github/workflows` folder, else `github`. Run `<gang> lint`, then `<gang> plan commit --message "plan: ship through the pr queue"`.
-6. Run `git -C <repo> fetch origin`, because `<gang> watch` never fetches. Arm the event loop. The next pass of `<gang> watch` prints `PR_NEXT <id>` for the oldest trunk task that is not on `<base>`.
-7. If `<gang> pr open` refuses that task as already on `<base>`, an earlier wave PR was likely squashed, and its `Task:` lines did not reach `<base>`. Tell the user, and stop the queue.
+4. Build `<gang>` again, as "Build first" says, so that it has the `pr` commands. Then run `cp <skill>/reference/relay.md <dir>/run/relay.md`, as "Launch" step 10 does, so that the relay procedure matches the queue.
+5. Set `repo.checks` in `plan/plan.json`: `gate` when `git -C <repo> ls-tree origin/<base> .github/workflows` prints nothing, else `github`. Run `<gang> lint`, then `<gang> plan commit --message "plan: ship through the pr queue"`.
+6. If `git -C <repo> ls-remote --heads origin gang/<slug>` prints a line, ask the user to delete that merged integration branch on GitHub. Git cannot push a PR branch `gang/<slug>/<id>` beside it, and refuses with `refname conflict`.
+7. Run `git -C <repo> fetch origin`, because `<gang> watch` never fetches. Arm the event loop. The next pass of `<gang> watch` prints `PR_NEXT <id>` for the oldest trunk task that is not on `<base>`.
+8. If `<gang> pr open` refuses that task as already on `<base>`, an earlier wave PR was likely squashed, and its `Task:` lines did not reach `<base>`. Tell the user, and stop the queue.
+9. Do the relaunch checklist, then relaunch. Its `gen` step puts the `gang size` step into `engine.js`.
 
 ## Event loop
 
@@ -97,7 +99,7 @@ A run that 0.4.0 started keeps its trunk. The queue reads its `merge <id>: <titl
 | Event | Action |
 |---|---|
 | `PR_NEXT <id>` | Open the PR of task `<id>`. See "PR queue". |
-| `PR_GREEN <id> <pr>` | With merge-on-green, run `<gang> pr merge <id> --holder <session>`. If it exits 2, tell the user the reason. Without merge-on-green, tell the user that PR `<pr>` is ready to merge, with its URL. Ask for a squash merge that keeps each `Task:` line of its commits. |
+| `PR_GREEN <id> <pr>` | With merge-on-green, run `<gang> pr merge <id> --holder <session>`. With `repo.checks` set to `gate`, it needs a `gang/gate` success and refuses with exit 2 and `PR #<n> has no gang/gate success` otherwise. If it exits 2, tell the user the reason. Any other nonzero exit: tell the user, and merge nothing. Without merge-on-green, tell the user that PR `<pr>` is ready to merge, with its URL. Ask for a squash merge that keeps each `Task:` line of its commits. |
 | `PR_RED <id> <pr> <checks>` | Add a CI fix task, and replay it onto the PR when it merges. If the fix task of this PR is still open, update that task and add no second one. `no-checks` means that the CI of the repo gave no check in `limits.checks_grace_min` minutes. See "Red PR". |
 | `WAVE_READY <k>` | Ignore it. The PR queue ships each task as its own PR. |
 | `STALL <minutes>` | Probe read-only. Never resume an agent. See "Stall". |
@@ -110,22 +112,22 @@ At most one gang PR is open at a time. It holds one task, on the branch `gang/<s
 1. Run `<gang> pr open <id> --holder <session>`. It prints the PR URL.
 2. If it exits 2, read the reason, except as the paragraph below says. Another PR is open, `<id>` is not the next task, its change is already on `<base>`, its tip is not ledger CLEAN, or the secret scan found a secret. Never bypass the secret scan, and never force a push. Tell the user, and put the block on the tracker.
 3. If it exits 3, the task does not replay onto `<base>`, because `<base>` changed or a fix overlaps it. The queue stops. Tell the user, and put the block on the tracker.
-4. With `repo.checks` set to `gate`, run `<gang> gate run --pr <id>`. It prints a job id. Run `<gang> gate wait <job> --timeout 540s`, and again while it exits 75. If it exits 2, the gate could not run, so run the gate one more time. If it still exits 2, tell the user. Then run `<gang> pr gate <id> <job> --holder <session>`. It posts the result as the commit status `gang/gate`, and `PR_GREEN` or `PR_RED` follows.
+4. With `repo.checks` set to `gate`, run `<gang> gate run --pr <id>`. It prints a job id. Run `<gang> gate wait <job> --timeout 540s`, and again while it exits 75. If it exits 1, the gate failed. Still run `pr gate`, which posts the failure. If it exits 2, the gate could not run, so run the gate one more time. If it still exits 2, tell the user. Then run `<gang> pr gate <id> <job> --holder <session>`. It posts the result as the commit status `gang/gate`, and `PR_GREEN` or `PR_RED` follows.
 5. With `repo.checks` set to `github`, the CI of the repo gives the checks. Wait for the next event.
 6. If auto mode blocks a push, do not try again. Ask the user to switch to accept-edits mode.
 
-If `pr open` fails after its push, and `<base>` moved before the retry, it refuses the pushed branch with `exists at ... with another change or base`. Ask the user to delete that branch on GitHub, then run it again. If every retry says `push rejected`, the clone has a narrowed `remote.origin.fetch`, as a single-branch or shallow clone has. Ask the user to fetch the default refspec.
+If `pr open` fails after its push, and `<base>` moved before the retry, it refuses the pushed branch with `exists at ... with another change or base`. Ask the user to delete that branch on GitHub, then run it again. If every retry says `push rejected`, there are two likely causes. A pushed integration branch `gang/<slug>` on origin blocks every `gang/<slug>/<id>` with `refname conflict`, so ask the user to delete that merged branch on GitHub. Or the clone has a narrowed `remote.origin.fetch`, as a single-branch or shallow clone has, so ask the user to fetch the default refspec.
 
 A stray commit on the trunk, or an origin ref with no trunk yet, is a blocking finding. Resolve it at once. `watch` counts each pass that reports it as failed and backs off up to 8 times the interval, so every event, `STALL` included, can wait up to 8 minutes.
 
-An empty `repo.gh_account` means a local origin with no GitHub. Then run `<gang> pr open <id> --holder <session> --dry-run` instead. It prints the push and the PR, and no PR event follows. A dry run records and ships nothing, so `PR_NEXT` names the same task until `origin/<base>` gains its `Task:` line. In this mode the user lands the task, and `PR_NEXT` for the next task follows after a fetch of `origin/<base>`.
+An empty `repo.gh_account` means a local origin with no GitHub. Then run `<gang> pr open <id> --holder <session> --dry-run` instead. It prints the push and the PR, and no PR event follows. A dry run records and ships nothing, and `PR_NEXT` prints once. Run the dry run once for the printed task. Skip "PR queue" step 4, because no PR is open. Close as "Close" step 5 says.
 
 ### Red PR
 
 1. Send one read-only Agent subagent to read the failure: `gh pr checks <pr>` and its logs, or the gate log `<dir>/run/jobs/<job>/out.log`. It returns the cause and the files to change, in 10 lines or fewer. For `no-checks`, it finds out why the CI of the repo did not run.
 2. Add a requirement `CI-<n>` to `plan/plan.json`. Its `source` is the PR URL.
 3. Add a fix task `CI<n>` with every brief field, and `requirements` set to `CI-<n>`. One `acceptance` line says that its commit message holds the line `Fixes: <id>` beside its `Task: CI<n>` line. The fields are in `<skill>/reference/schema.md`.
-4. Run `<gang> lint`, then `<gang> plan commit --message "plan: add CI<n> for <id>"`.
+4. Run `<gang> lint`, then `<gang> plan commit --message "plan: add CI<n> for <id>"`. If `no-checks` came because the workflows never run on PRs, add no fix task. Set `repo.checks` to `gate` instead, run `<gang> lint`, commit the plan, and gate the head as "PR queue" step 4 says.
 5. If an engine runs, run `<gang> standing stop "PR <pr> is red. CI<n> runs next."`. Wait for the engine to stop. Run `<gang> standing clear-stop`, and relaunch with `--only CI<n>`.
 6. When `CI<n>` merges into the trunk, run `<gang> pr fix <id> CI<n> --holder <session>`. It pushes the fix onto the PR as a new commit. With `repo.checks` set to `gate`, gate the new head as "PR queue" step 4 says.
 7. If it exits 2 with `above limits.task_lines`, decide whether the PR can stay that big. If it can, run it again with `--reason "<why>"`, and record the reason as a ruling.
@@ -142,7 +144,7 @@ An empty `repo.gh_account` means a local origin with no GitHub. Then run `<gang>
 1. Run `<gang> status` and `<gang> gates list`.
 2. Run `git -C <repo> log -1 --format='%h %cr' <integration>`.
 3. If a gate job runs, wait. A gate can run for `limits.gate_timeout_min` minutes.
-4. Read `<dir>/run/prs.tsv`. A `closed` row means that its PR closed without a merge. Ask the user why. To open it again, run `<gang> pr open <id> --holder <session>`.
+4. Read `<dir>/run/prs.tsv`. A `closed` row means that its PR closed without a merge. Ask the user why. To open it again, run `<gang> pr open <id> --holder <session>`. If it refuses, see the `push rejected` paragraph under "PR queue".
 5. If a PR is open, run `gh pr view <pr> --json mergeable,headRefOid,statusCheckRollup`. `CONFLICTING` means that `<base>` moved under it. Tell the user, and merge nothing. If the PR shows no checks and its `headRefOid` differs from the `head_sha` column of `prs.tsv`, the head moved outside gang, for example by a hand push. No `PR_RED` follows, and every outward step refuses with "head moved". Ask the user.
 6. If a second `STALL` comes and nothing moved, write a stop line: `<gang> standing stop "stall: <what you found>"`.
 7. Wait for the engine to stop. Then handle the checkpoint.
@@ -157,7 +159,7 @@ If the list is empty, or its last `sha` is not the start of `result.trunkTip`, r
 |---|---|
 | `DONE` | Every task in scope merged. After the pilot, launch `r1`. After a full segment, keep the event loop on until the done predicate holds, then close. |
 | `BLOCKED` | Send a read-only subagent to read the task's `report.md` and its newest review. Then split the task, write a ruling, or edit the plan. A reason that starts with `merge REFUSED: size` means that the task is too big. Split it into parts that each fit the budget. Lint, commit the plan, and relaunch. |
-| `TRUNK_RED` | Send read-only investigators for the failing health checks. Add a repair task `R<n>`, with requirement `R-<n>` and a ruling in its `owner.md`. Relaunch with `--only R<n>`. |
+| `TRUNK_RED` | Send read-only investigators for the failing health checks. Add a repair task `R<n>`, with requirement `R-<n>` and a ruling in its `owner.md`. Relaunch with `--only R<n>`. An `R<n>` task above `limits.task_lines` needs `size.reason`, or `<gang> lint` refuses the plan. |
 | `INTERRUPTED` | A usage limit or an outage ended the segment. Archive the result. Call ScheduleWakeup until the usage reset, 1 hour at most per call. Then relaunch. Resume comes from git. |
 | `STOPPED` | Act on the reason in the stop line. Run `<gang> standing clear-stop`, then relaunch. |
 
