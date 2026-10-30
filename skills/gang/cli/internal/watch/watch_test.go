@@ -341,8 +341,8 @@ func TestTaskPRGHErrorComesBesideTheEvents(t *testing.T) {
 
 func TestPRNextNamesTheNextTaskOnce(t *testing.T) {
 	f := newWatchFixture(t)
-	f.p.Repo.GHAccount = "" // PR_NEXT reads only git and prs.tsv
-	testkit.Origin(t, f.repo)
+	f.p.Repo.GHAccount, f.p.Repo.Base = "", "dev" // PR_NEXT reads only git and prs.tsv
+	testkit.Git(t, f.repo, "update-ref", "refs/remotes/origin/dev", "refs/heads/main")
 	f.merge(t, "T1")
 	want(t, poll(t, f, t0), "WAVE_READY 1", "PR_NEXT T1")
 	want(t, poll(t, f, t0.Add(time.Minute)))
@@ -353,7 +353,7 @@ func TestPRNextNamesTheNextTaskOnce(t *testing.T) {
 	want(t, poll(t, f, t0.Add(2*time.Minute)), "WAVE_READY 2")
 	f.pr(t, "MERGED", "UNKNOWN", "h1")
 	want(t, poll(t, f, t0.Add(3*time.Minute)), "PR_NEXT T2")
-	testkit.CommitRef(t, f.repo, "refs/remotes/origin/main", "feat: ship T2\n\nTask: T2", map[string]string{"t2": "x\n"})
+	testkit.CommitRef(t, f.repo, "refs/remotes/origin/dev", "feat: ship T2\n\nTask: T2", map[string]string{"t2": "x\n"})
 	want(t, poll(t, f, t0.Add(4*time.Minute)))
 }
 
@@ -369,7 +369,7 @@ func TestPRNextWaitsOnAStrayAndAGHError(t *testing.T) {
 		t.Fatalf("lines %q, err %v", lines, err)
 	}
 	testkit.Answer(t, f.gh, "pr-view.json", "") // gh fails: PR_NEXT must not ask for the stray again
-	if lines, err = Poll(f.repo, f.d, f.p, t0.Add(time.Minute)); err == nil || len(lines) != 0 || strings.Contains(err.Error(), "stray") {
+	if lines, err = Poll(f.repo, f.d, f.p, t0.Add(time.Minute)); err == nil || len(lines) != 0 || strings.Contains(err.Error(), "not task landings") {
 		t.Fatalf("lines %q, err %v", lines, err)
 	}
 }
@@ -382,9 +382,6 @@ func TestPRRedAfterTheGraceWithNoChecks(t *testing.T) {
 	f.openPR(t, head)
 	f.pr(t, "OPEN", "MERGEABLE", head)
 	want(t, poll(t, f, t0.Add(2*time.Minute)))
-	f.openPR(t, "h1") // git cannot read this head
-	want(t, poll(t, f, t0.Add(3*time.Minute)))
-	f.openPR(t, head)
 	f.pr(t, "OPEN", "MERGEABLE", head, check("build", "IN_PROGRESS"))
 	want(t, poll(t, f, t0.Add(3*time.Minute)))
 	f.pr(t, "OPEN", "MERGEABLE", head)
@@ -392,5 +389,9 @@ func TestPRRedAfterTheGraceWithNoChecks(t *testing.T) {
 	want(t, poll(t, f, t0.Add(3*time.Minute)))
 	f.p.Repo.Checks = plan.ChecksGitHub
 	want(t, poll(t, f, t0.Add(3*time.Minute)), "PR_RED T1 8 no-checks")
+	want(t, poll(t, f, t0.Add(4*time.Minute)))
+	f.pr(t, "OPEN", "MERGEABLE", "h1") // the PR head moved: its checks may not have started
+	want(t, poll(t, f, t0.Add(4*time.Minute)))
+	f.openPR(t, "h1") // git cannot read this head
 	want(t, poll(t, f, t0.Add(4*time.Minute)))
 }

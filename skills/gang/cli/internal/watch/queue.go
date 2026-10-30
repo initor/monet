@@ -17,9 +17,9 @@ var ghStates = map[string]string{"OPEN": prq.StateOpen, "MERGED": prq.StateMerge
 
 // queue is the PR queue part of one watch pass. With repo.gh_account set, it
 // sets each prs.tsv row that is not merged to the state GitHub reports, with
-// prq.SetState, and emits PR_GREEN or PR_RED for an open PR. With no gh error
-// and no open row, it then emits PR_NEXT, if origin/<base> exists. It returns
-// the gh and prq.Next errors as soft, and the errors that end the pass as hard.
+// prq.SetState, and emits PR_GREEN or PR_RED for an open PR, red too for no
+// checks past the grace. With no gh error or open row, it emits PR_NEXT if
+// origin/<base> exists. It returns gh and prq.Next errors as soft, the rest hard.
 func queue(repo string, d store.Dir, p *plan.Plan, now time.Time, emit func(line, key string, since time.Time)) (soft, hard error) {
 	rows, err := prq.Read(d)
 	if err != nil {
@@ -40,8 +40,8 @@ func queue(repo string, d store.Dir, p *plan.Plan, now time.Time, emit func(line
 			}
 		}
 		green, red, failed := gh.Classify(ps)
-		if len(ps.Checks) == 0 && p.Repo.Checks == plan.ChecksGitHub {
-			ct, _ := gitx.Run(repo, "show", "-s", "--format=%cI", "--end-of-options", r.HeadSHA) // gang's own head, so its commit time is when CI could start. A head git cannot read gives no time
+		if len(ps.Checks) == 0 && p.Repo.Checks == plan.ChecksGitHub && ps.HeadSHA == r.HeadSHA {
+			ct, _ := gitx.Run(repo, "show", "-s", "--format=%cI", "--end-of-options", r.HeadSHA) // gang's own head: CI could start at its commit time. No time if unreadable.
 			if at, err := time.Parse(time.RFC3339, ct); err == nil && now.Sub(at) >= time.Duration(p.Limits.ChecksGraceMin)*time.Minute {
 				red, failed = true, []string{"no-checks"}
 			}
