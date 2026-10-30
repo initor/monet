@@ -6,10 +6,10 @@ This file lists the notable changes to monet in each release. The format follows
 
 ### Added
 
-- `/monet:gang run` ships each trunk task as its own small PR, one at a time, in trunk order. A PR holds at most 100 changed lines by default. A plan may lower that limit with `limits.task_lines`, and may lower the limit for a task that cannot be split with `limits.split_lines` (300 by default).
+- `/monet:gang run` ships each trunk task as its own small PR, one at a time, in trunk order. A PR holds at most 100 changed lines by default. A plan may lower that limit with `limits.task_lines`. A task that cannot be split may go above it, up to `limits.split_lines` (300 by default), when its `size.reason` says why.
 - `gang pr open <id>` pushes the branch `gang/<slug>/<id>` and opens the PR of that task. `gang pr gate <id> <job>` posts the result of a gate job as the commit status `gang/gate`, for a repo with no CI (`repo.checks: gate`). `gang pr fix <id> <fix id>` pushes a CI fix onto the PR as a new commit, and a PR takes at most 2 fix commits. `gang pr merge <id>` squash-merges the PR and keeps each `Task:` line of its commits. Each of these commands takes the driver lease with `--holder <session>`.
 - `gang watch` prints `PR_NEXT <id>` for the next task to open, and `PR_GREEN` and `PR_RED` for the open PR. `PR_RED` names `no-checks` when the CI of the repo gives no check within `limits.checks_grace_min` minutes (10 by default). In gate mode, a PR is green only when `gang/gate` has passed.
-- `gang size <id>` prints how many lines a task would change on the base. The engine runs it before a task is done.
+- `gang size <id>` prints how many lines a task would change on the base. Each implementer runs it on its commit, and reports a split when the commit is over the budget.
 
 ### Changed
 
