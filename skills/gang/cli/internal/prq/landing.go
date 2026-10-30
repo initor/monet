@@ -31,7 +31,7 @@ func commits(repo string, rng ...string) ([]commit, error) {
 	var cs []commit
 	for _, rec := range strings.Split(out, "\x00") {
 		if f := strings.SplitN(rec, "\x01", 4); len(f) == 4 {
-			cs = append(cs, commit{f[0], f[1], f[2], strings.TrimRight(f[3], "\n")})
+			cs = append(cs, commit{sha: f[0], parents: f[1], subject: f[2], msg: strings.TrimRight(f[3], "\n")})
 		}
 	}
 	return cs, nil
@@ -52,7 +52,7 @@ func Landings(repo, base, trunk string) (landings []Landing, stray []string, err
 			stray = append(stray, c.sha[:7]+" "+c.subject)
 			continue
 		}
-		landings = append(landings, Landing{m[1], c.sha, parents[0], c.sha, c.subject, c.msg})
+		landings = append(landings, Landing{ID: m[1], Commit: c.sha, Parent: parents[0], Tip: c.sha, Subject: c.subject, Message: c.msg})
 	}
 	return landings, stray, nil
 }

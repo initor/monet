@@ -19,8 +19,8 @@ func TestLandingsReadsOneParentTaskCommits(t *testing.T) {
 	repo := testkit.Repo(t)
 	testkit.Git(t, repo, "branch", "gang-demo", "main")
 	base := testkit.Git(t, repo, "rev-parse", "main")
-	c := testkit.CommitOn(t, repo, "gang-demo", "feat: add c\n\nTask: T3\nTask: T4", map[string]string{"c.txt": "c\n"})
-	wantLandings(t, repo, []Landing{{"T3", c, base, c, "feat: add c", "feat: add c\n\nTask: T3\nTask: T4"}})
+	c := testkit.CommitOn(t, repo, "gang-demo", "feat: add c\n\nTask: DOC12\r\nTask: T4", map[string]string{"c.txt": "c\n"})
+	wantLandings(t, repo, []Landing{{"DOC12", c, base, c, "feat: add c", "feat: add c\n\nTask: DOC12\r\nTask: T4"}})
 }
 
 func TestLandingsFailsOnAMissingBase(t *testing.T) {
