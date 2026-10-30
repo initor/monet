@@ -7,6 +7,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"gang/internal/testkit"
 )
 
 func mustRun(t *testing.T, dir string, args ...string) string {
@@ -201,6 +203,69 @@ func TestMergeTreeConflictWithoutAPath(t *testing.T) {
 	}
 	if len(conflicts) != 1 || !strings.HasPrefix(conflicts[0], "CONFLICT (directory rename split): ") {
 		t.Errorf("conflicts %q, want the one directory rename split message", conflicts)
+	}
+}
+
+func TestReplayOneParentCommit(t *testing.T) {
+	repo := testkit.Repo(t)
+	parent := testkit.CommitOn(t, repo, "main", "a", map[string]string{"a.txt": "1\n"})
+	commit := testkit.CommitOn(t, repo, "x", "x", map[string]string{"a.txt": "1\n2\n"})
+	onto := testkit.CommitOn(t, repo, "base", "b", map[string]string{"b.txt": "b\n"})
+
+	sha, conflicts, err := Replay(repo, commit, parent, onto, "msg")
+	if err != nil || conflicts != nil {
+		t.Fatalf("Replay: conflicts %v, err %v", conflicts, err)
+	}
+	if got := testkit.Git(t, repo, "rev-list", "--parents", "-n", "1", sha); got != sha+" "+onto {
+		t.Errorf("commit and parents %q, want %s and its one parent %s", got, sha, onto)
+	}
+	if files := testkit.Git(t, repo, "ls-tree", "--name-only", sha); files != "README.md\na.txt\nb.txt" {
+		t.Errorf("tree holds %q", files)
+	}
+	if got, err := Show(repo, sha, "a.txt"); err != nil || string(got) != "1\n2\n" {
+		t.Errorf("a.txt is %q, %v; want the change from x", got, err)
+	}
+	if msg := testkit.Git(t, repo, "log", "-1", "--format=%B", sha); msg != "msg" {
+		t.Errorf("message %q, want msg", msg)
+	}
+}
+
+// A 0.4.0 trunk lands each task as a two-parent merge. Replayed with its
+// first parent as parent, the merge of T2 carries d.txt but not T1's c.txt.
+func TestReplayGangMergeTakesOnlyTheTask(t *testing.T) {
+	repo := testkit.Repo(t)
+	testkit.Git(t, repo, "branch", "trunk")
+	testkit.MergeTask(t, repo, "trunk", "T1", map[string]string{"c.txt": "c\n"})
+	testkit.MergeTask(t, repo, "trunk", "T2", map[string]string{"d.txt": "d\n"})
+	merge := testkit.Git(t, repo, "rev-parse", "trunk")
+
+	sha, conflicts, err := Replay(repo, merge, merge+"^1", "main", "msg")
+	if err != nil || conflicts != nil {
+		t.Fatalf("Replay: conflicts %v, err %v", conflicts, err)
+	}
+	if files := testkit.Git(t, repo, "ls-tree", "--name-only", sha); files != "README.md\nd.txt" {
+		t.Errorf("tree holds %q, want README.md and d.txt without T1's c.txt", files)
+	}
+}
+
+func TestReplayConflictReturnsPaths(t *testing.T) {
+	repo := testkit.Repo(t)
+	parent := testkit.CommitOn(t, repo, "main", "p", map[string]string{"a.txt": "1\n"})
+	commit := testkit.CommitOn(t, repo, "c", "c", map[string]string{"a.txt": "2\n"})
+	onto := testkit.CommitOn(t, repo, "o", "o", map[string]string{"a.txt": "3\n"})
+
+	sha, conflicts, err := Replay(repo, commit, parent, onto, "msg")
+	if err != nil || sha != "" || !reflect.DeepEqual(conflicts, []string{"a.txt"}) {
+		t.Errorf("Replay = %q, %v, %v; want no SHA, [a.txt] and no error", sha, conflicts, err)
+	}
+}
+
+func TestReplayUnknownRevisionIsAnError(t *testing.T) {
+	repo := testkit.Repo(t)
+	head := testkit.Git(t, repo, "rev-parse", "HEAD")
+	sha, conflicts, err := Replay(repo, head, "no-such-rev", head, "msg")
+	if err == nil || sha != "" || conflicts != nil {
+		t.Errorf("Replay = %q, %v, %v; want an error and nothing else", sha, conflicts, err)
 	}
 }
 
