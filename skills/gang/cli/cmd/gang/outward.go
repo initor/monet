@@ -23,7 +23,8 @@ func owArgs(fs *flag.FlagSet, args []string, n int) ([]string, error) {
 	return pos, nil
 }
 
-// requireDriver renews the driver lease for holder, before any outward step.
+// requireDriver renews the driver lease for holder for 12 hours, before any outward step.
+// An empty holder is exit 64, another holder or no lease is exit 4, and any other lease error stops the command.
 func requireDriver(c *Ctx, holder string) error {
 	if holder == "" {
 		return exit.New(exit.Usage, "--holder <session> is required: the driver lease holder")
