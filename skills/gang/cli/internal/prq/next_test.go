@@ -62,6 +62,16 @@ func TestNextSkipsALandingAlreadyOnTheBase(t *testing.T) {
 	}
 }
 
+// T2 shipped after the hand squash and reverts F01's line, so F01's replay would re-apply it.
+func TestNextSkipsLandingsBeforeTheLastShippedOne(t *testing.T) {
+	repo := nextTrunk(t, "T1")
+	testkit.CommitOn(t, repo, "gang-demo", "fix: F01\n\nTask: F01", map[string]string{"T1.txt": "T1 fixed\n"})
+	testkit.CommitOn(t, repo, "gang-demo", "feat: add T2\n\nTask: T2", map[string]string{"T1.txt": "T1\n"})
+	testkit.CommitRef(t, repo, "refs/remotes/origin/main", "feat: squash t1 and f01", map[string]string{"T1.txt": "T1 fixed\n"})
+	testkit.CommitRef(t, repo, "refs/remotes/origin/main", "feat: t2 (#2)\n\nTask: T2", map[string]string{"T1.txt": "T1\n"})
+	wantNext(t, repo, "", Row{Task: "T1", State: StateMerged})
+}
+
 func TestNextFailsWhenAReplayFails(t *testing.T) {
 	repo := nextTrunk(t, "T1")
 	tree := testkit.Git(t, repo, "rev-parse", "gang-demo^{tree}")
