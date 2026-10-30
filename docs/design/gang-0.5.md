@@ -17,8 +17,8 @@ Goals:
 1. One task lands as one PR. Its branch starts at the fresh base and carries only that task's change.
 2. A PR holds at most 3 commits.
 3. A task changes at most 100 lines. A bigger task needs a written reason and stays under a hard ceiling.
-4. After one kickoff with the owner present, the run needs no one until it ends.
-5. The automatic handoff works from the first step of `/monet:gang plan` to the close.
+4. From 0.6.0, after one kickoff with the owner present, the run needs no one until it ends.
+5. From 0.6.0, the automatic handoff works from the first step of `/monet:gang plan` to the close.
 6. Every outward command refuses to act unless its caller holds the driver lease.
 7. A repo with no CI gets a green signal from a real gate run on the PR head.
 
@@ -75,7 +75,7 @@ Other constraints:
 |---|---|
 | O1 | Many small PRs. Each one has a few commits at most, about 3, and as few lines as possible. |
 | O2 | 100 changed lines per PR. More only when truly necessary. |
-| O3 | A run drives itself with no one in the loop, with the automatic handoff. |
+| O3 | From 0.6.0, a run drives itself with no one in the loop, with the automatic handoff. |
 | O4 | 0.5.0 also carries the lease checks. |
 | O5 | From 0.5.x, with the cleanup grant at kickoff, gang removes the worktree of each shipped task at each checkpoint. It removes only a worktree whose task is on main and that has no uncommitted changes. |
 | O6 | Claude squash-merges its own 0.5.0 PRs in monet, after CI is green and its own review is clean. |
@@ -89,7 +89,8 @@ Other constraints:
 - `gang worktrees prune`.
 - Plan version 2 with the 0.4.0 refusal.
 - The removal of the wave commands.
-- `--holder` on `plan commit`.
+
+Self-drive comes in 0.6.0: `gang plan init`, `--holder` on `plan commit`, the planning relay, the kickoff batch with self-approval, and no questions after kickoff. In 0.5.0 the 0.4.0 kickoff and approval question stay.
 
 ### 5.1 One task, one PR
 
@@ -142,6 +143,8 @@ The budget holds for the whole PR: its diff against the base, fixes included. `g
 
 ### 5.3 Self-drive
 
+This section is 0.6.0 behavior, except the worktree cleanup.
+
 The kickoff of `/monet:gang plan <spec-dir>` asks once, while the owner is present. It uses one batch of questions, at most two AskUserQuestion calls.
 
 1. The run settings that `planner.md` asks for today: the commands, the locks, and the trunk name.
@@ -170,6 +173,8 @@ The plan gets `repo.checks`, with the value `github` or `gate`. Kickoff sets `ga
 
 ### 5.5 Relay from the first step
 
+This section is 0.6.0 behavior.
+
 - A new command, `gang plan init --holder <session>`, makes the run folder, takes the driver lease, and writes the relay config. Kickoff runs it before the first drafter starts.
 - `reference/relay.md` gains a planning branch. `relay.mjs prompt --phase plan` writes a kickoff that resumes the planner, not a run.
 - `reference/planner.md` gains "Resume planning in a new session". The new session reads the handoff and the drafts on disk, then goes on from the recorded step.
@@ -177,7 +182,7 @@ The plan gets `repo.checks`, with the value `github` or `gate`. Kickoff sets `ga
 
 ### 5.6 Lease checks
 
-- Every outward command takes `--holder <session>`: `gang pr open`, `pr fix`, `pr merge`, and the `gang/gate` status post. From 0.5.x, `pr close` and `plan commit` take it too.
+- Every outward command takes `--holder <session>`: `gang pr open`, `pr fix`, `pr merge`, and the `gang/gate` status post. `pr close` takes it from 0.5.x, and `plan commit` from 0.6.0.
 - Each one renews the driver lease for that holder first, with `lock.Renew`. It exits 4 when another session holds the lease. The renew runs under the lease mutex.
 - `reference/coordinator.md` and `reference/relay.md` pass `--holder <session>` on every such call.
 
@@ -191,7 +196,7 @@ The plan gets `repo.checks`, with the value `github` or `gate`. Kickoff sets `ga
 |---|---|
 | One open PR at a time makes the queue slow when CI is slow. | The engine keeps working on the trunk meanwhile. Parallel PRs are a later step. |
 | A fix commit on the trunk does not replay cleanly onto the open PR. | The queue stops, a sync task rebuilds the PR, and the checkpoint decides. |
-| The classifier in a relayed session does not honor a grant that the relay carried. | The pilot forces one relay. A block goes to the tracker. |
+| From 0.6.0, the classifier in a relayed session does not honor a grant that the relay carried. | The pilot forces one relay. A block goes to the tracker. |
 | Tasks of 100 lines multiply the agent count and the token cost. | The owner accepted this cost for small PRs. Review stays per task. |
 | The base moves outside the run. | The replay conflict path in 5.1. |
 | Small tasks multiply the worktrees, about 7 per task in an earlier run. | From 0.5.x, `gang worktrees prune` at each checkpoint, under the cleanup grant. |
@@ -216,6 +221,6 @@ These are Claude's calls, not the owner's. The owner checks them in review.
 5. Squash merges, because the owner's repos use them, with the `Task:` lines in the squash body.
 6. A `gang/gate` commit status for a repo with no CI.
 7. The trunk stays local, and only the CLI moves it. From 0.5.x it is rebuilt on the base after each merged PR. PR branches are `gang/<slug>/<id>`.
-8. The kickoff asks everything in one batch, and the planner approves a clean plan on the owner's grant.
+8. From 0.6.0, the kickoff asks everything in one batch, and the planner approves a clean plan on the owner's grant.
 9. A red PR gets 2 fix commits, then the checkpoint. From 0.5.x, 2 republishes as one commit come between.
 10. `plan --adopt` splits a big source task into parts that keep the source id.
