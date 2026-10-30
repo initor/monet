@@ -4,9 +4,14 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
+	"os"
+	"regexp"
+	"strconv"
 	"strings"
+	"time"
 
 	"gang/internal/exit"
+	"gang/internal/gh"
 	"gang/internal/gitx"
 	"gang/internal/ledger"
 	"gang/internal/plan"
@@ -131,4 +136,49 @@ func Body(repo string, p *plan.Plan, c Prepared) (string, error) {
 	reqs := cmp.Or(strings.Join(c.Task.Requirements, ", "), "-")
 	return fmt.Sprintf("Task %s of gang run `%s`: %s\n\n- Requirements: %s\n- Review: CLEAN %v at %s\n- Changed lines: %d\n\nOpened by `gang pr open`.\n",
 		c.ID, p.Slug, c.Task.Goal, reqs, ledger.RequiredLenses(c.Task), c.Tip[:7], n), nil
+}
+
+var prURLRe = regexp.MustCompile(`https?://\S+/pull/(\d+)`)
+
+// Publish pushes the next task as gang/<slug>/<id>, opens its PR into base, and
+// records the open row. A dry run returns the push command and the PR text and
+// changes nothing. Without repo.gh_account only a dry run is allowed (Contract 0.9).
+func Publish(repo string, d store.Dir, p *plan.Plan, id string, now time.Time, dryRun bool) (string, error) {
+	if p.Repo.GHAccount == "" && !dryRun {
+		return "", exit.New(exit.Refused, "repo.gh_account is empty: pr open works only with --dry-run")
+	}
+	c, err := Prepare(repo, d, p, id)
+	if err != nil {
+		return "", err
+	}
+	body, err := Body(repo, p, c)
+	if err != nil {
+		return "", err
+	}
+	push := c.SHA + ":refs/heads/" + c.Branch
+	if dryRun {
+		return fmt.Sprintf("git -C %s push origin %s\n\n%s\n\n%s", repo, push, c.Subject, body), nil
+	}
+	if _, err := gitx.Run(repo, "push", "--quiet", "origin", push); err != nil {
+		return "", exit.New(exit.Refused, "push rejected: %v", err)
+	}
+	file := d.Run("pr-body-" + id + ".md")
+	if err := os.WriteFile(file, []byte(body), 0o644); err != nil {
+		return "", err
+	}
+	defer os.Remove(file)
+	args := append([]string{"pr", "create"}, gh.RepoArgs(p.Repo.Remote)...)
+	out, err := gh.Run(append(args, "--base", p.Repo.Base, "--head", c.Branch, "--title", c.Subject, "--body-file", file)...)
+	if err != nil {
+		return "", err
+	}
+	m := prURLRe.FindStringSubmatch(string(out))
+	if m == nil {
+		return "", fmt.Errorf("gh pr create printed no PR URL: %q", strings.TrimSpace(string(out)))
+	}
+	n, _ := strconv.Atoi(m[1])
+	if err := Put(d, Row{Task: id, PR: n, Branch: c.Branch, HeadSHA: c.SHA, State: StateOpen, OpenedAt: now.UTC().Format(time.RFC3339)}); err != nil {
+		return "", err
+	}
+	return m[0], nil
 }
