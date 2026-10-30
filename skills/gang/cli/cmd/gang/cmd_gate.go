@@ -12,6 +12,7 @@ import (
 	"gang/internal/gate"
 	"gang/internal/gitx"
 	"gang/internal/plan"
+	"gang/internal/prq"
 	"gang/internal/repair"
 	"gang/internal/store"
 )
@@ -24,7 +25,7 @@ func init() {
 	})
 }
 
-const gateUsage = "usage: gang gate run <id> | run --health | run --wave | wait <job> [--timeout 540s]"
+const gateUsage = "usage: gang gate run <id> | run --health | run --wave | run --pr <id> | wait <job> [--timeout 540s]"
 
 // gateExec is the detached runner that gate.Start spawns as
 // `gang --dir <dir> gate _exec <id>`.
@@ -39,12 +40,13 @@ func gateRun(c *Ctx, args []string) error {
 	fs := newFlagSet("gate run")
 	health := fs.Bool("health", false, "run the health commands on the integration tip in this worktree")
 	wave := fs.Bool("wave", false, "run the wave gate and health commands in run/wt/wave")
+	pr := fs.String("pr", "", "run the gate commands at the head of this task's open PR, in run/wt/pr")
 	pos, err := parseFlags(fs, args)
 	if err != nil {
 		return err
 	}
 	modes := len(pos)
-	for _, on := range []bool{*health, *wave} {
+	for _, on := range []bool{*health, *wave, *pr != ""} {
 		if on {
 			modes++
 		}
@@ -56,7 +58,7 @@ func gateRun(c *Ctx, args []string) error {
 	// when it is one, else the gang-owned run/wt/health. A wave gate always
 	// uses run/wt/wave.
 	var top string
-	if !*wave {
+	if !*wave && *pr == "" { // a PR gate uses run/wt/pr
 		if top, err = worktreeTop(c); err != nil && !(*health && isNoWorktree(err)) {
 			return err
 		}
@@ -90,6 +92,35 @@ func gateRun(c *Ctx, args []string) error {
 			return err
 		}
 		j.Kind, j.Cwd, j.Commands = gate.KindHealth, top, p.Commands.Health
+	case *pr != "":
+		rows, err := prq.Read(d)
+		if err != nil {
+			return err
+		}
+		row, ok := prq.Current(rows)
+		if !ok || row.Task != *pr {
+			return exit.New(exit.Refused, "%s has no open PR", *pr)
+		}
+		// All PR jobs share run/wt/pr, so a start must not move it under a live job.
+		jobs, err := os.ReadDir(d.Run("jobs"))
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		for _, e := range jobs {
+			if strings.HasPrefix(e.Name(), "pr-") {
+				st, err := gate.Wait(d, e.Name(), 0)
+				if err != nil && !errors.Is(err, os.ErrNotExist) {
+					return err
+				}
+				if st.State == gate.StateQueued || st.State == gate.StateRunning {
+					return exit.New(exit.Refused, "gate job %s is still %s: wait for it first", e.Name(), st.State)
+				}
+			}
+		}
+		if j.Cwd, err = gangWorktree(c, d, "pr", row.HeadSHA); err != nil {
+			return err
+		}
+		j.Kind, j.Task, j.Head, j.Commands = gate.KindPR, row.Task, row.HeadSHA, p.Commands.Gate
 	default:
 		t, ok := repair.TaskFor(p, pos[0])
 		if !ok {

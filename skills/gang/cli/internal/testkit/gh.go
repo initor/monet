@@ -25,6 +25,7 @@ case "$*" in
   "pr view"*) /bin/cat "$GH_FAKE_DIR/pr-view.json" ;;
   "pr create"*) /bin/cat "$GH_FAKE_DIR/pr-create" ;;
   "pr merge"*) /bin/cat "$GH_FAKE_DIR/pr-merge" ;;
+  "api --hostname"*"/statuses/"*) /bin/cat "$GH_FAKE_DIR/status" ;;
   *) echo "fake gh: unexpected call: $*" >&2; exit 1 ;;
 esac
 `
@@ -43,7 +44,7 @@ func FakeGH(t *testing.T) (state, bin string) {
 }
 
 // Answer sets the fake gh output for one answer file (login, pr-view.json,
-// merge-commit, pr-create, pr-merge).
+// merge-commit, pr-create, pr-merge, status).
 func Answer(t *testing.T, state, name, body string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(state, name), []byte(body), 0o644); err != nil {
