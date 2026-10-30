@@ -21,7 +21,7 @@ func fixFixture(t *testing.T) (repo string, d store.Dir, p *plan.Plan, ghDir str
 	if err := Put(d, Row{Task: "T1", PR: 7, Branch: "gang/demo/T1", HeadSHA: head, State: StateOpen}); err != nil {
 		t.Fatal(err)
 	}
-	testkit.LedgerRow(t, d, "F01", testkit.CommitOn(t, repo, p.Repo.Integration, "fix: tidy a\n\nTask: F01\nFixes: T1", map[string]string{"a/T1.go": "package a // tidy\n"}), "review", "CLEAN")
+	testkit.LedgerRow(t, d, "F01", testkit.CommitOn(t, repo, p.Repo.Integration, "fix: tidy a\n\nTask: F01\nFixes: T1\r", map[string]string{"a/T1.go": "package a // tidy\n"}), "review", "CLEAN")
 	ghDir, _ = testkit.FakeGH(t)
 	testkit.Answer(t, ghDir, "pr-view.json", prView("OPEN", head, checkOK))
 	return repo, d, p, ghDir
@@ -165,5 +165,30 @@ func TestFixRefusesWhenThePushLeavesNoRow(t *testing.T) {
 	}
 	if rows, _ := Read(d); len(rows) != 0 {
 		t.Errorf("prs.tsv = %+v, want no row written back", rows)
+	}
+}
+
+func TestFixGoesOnWhenAPushLandsAndFails(t *testing.T) {
+	repo, d, p, _ := fixFixture(t)
+	hook := "#!/bin/sh\nread l s r o\ngit push -q --no-verify \"$1\" $s:$r\nexit 1\n"
+	if err := os.WriteFile(repo+"/.git/hooks/pre-push", []byte(hook), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Fix(repo, d, p, "T1", "F01", "")
+	head, _, _ := strings.Cut(testkit.Git(t, repo, "ls-remote", "origin", "refs/heads/gang/demo/T1"), "\t")
+	if rows, _ := Read(d); err != nil || got.HeadSHA != head || got.Fixes != 1 || len(rows) != 1 || rows[0] != got {
+		t.Fatalf("Fix = %+v, %v, prs.tsv = %+v, want a row at the landed head %s with 1 fix", got, err, rows, head)
+	}
+}
+
+func TestFixReturnsThePushedHeadWhenPrsTsvIsUnreadable(t *testing.T) {
+	repo, d, p, _ := fixFixture(t)
+	if err := os.WriteFile(repo+"/.git/hooks/pre-push", []byte("#!/bin/sh\necho bad > "+d.Run("prs.tsv")+"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Fix(repo, d, p, "T1", "F01", "")
+	head, _, _ := strings.Cut(testkit.Git(t, repo, "ls-remote", "origin", "refs/heads/gang/demo/T1"), "\t")
+	if err == nil || got != (Row{Branch: "gang/demo/T1", HeadSHA: head}) {
+		t.Fatalf("Fix = %+v, %v, want the pushed head %s on gang/demo/T1 with the read error", got, err, head)
 	}
 }

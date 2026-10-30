@@ -33,7 +33,7 @@ func FixLanding(repo string, d store.Dir, p *plan.Plan, id, fixID string) (Row, 
 	switch {
 	case i < 0:
 		return Row{}, Landing{}, exit.New(exit.Refused, "%s is not a task commit on %s above origin/%s", fixID, p.Repo.Integration, p.Repo.Base)
-	case !regexp.MustCompile(`(?m)^Fixes: ` + regexp.QuoteMeta(id) + `$`).MatchString(landings[i].Message):
+	case !regexp.MustCompile(`(?m)^Fixes: ` + regexp.QuoteMeta(id) + `\r?$`).MatchString(landings[i].Message):
 		return Row{}, Landing{}, exit.New(exit.Refused, "%s does not fix %s: its task commit has no line \"Fixes: %s\"", fixID, id, id)
 	}
 	if _, err := reviewed(d, p, fixID, landings[i].Tip); err != nil {
@@ -87,11 +87,13 @@ func Fix(repo string, d store.Dir, p *plan.Plan, id, fixID, reason string) (Row,
 		return Row{}, exit.New(exit.Refused, "PR #%d would have %d changed lines after %s, above limits.task_lines %d: pass --reason <why>, and record it as a ruling", r.PR, n, fixID, p.Limits.TaskLines)
 	}
 	if _, err := gitx.Run(repo, "push", "--quiet", "origin", sha+":refs/heads/"+r.Branch); err != nil {
-		return Row{}, exit.New(exit.Refused, "push rejected: %v", err)
+		if out, lsErr := gitx.Run(repo, "ls-remote", "origin", "refs/heads/"+r.Branch); lsErr != nil || !strings.HasPrefix(out, sha+"\t") { // a push that errors may still have landed
+			return Row{}, exit.New(exit.Refused, "push rejected: %v", err)
+		}
 	}
 	rows, err := Read(d) // again: the push took a while, and the file may have changed
 	if err != nil {
-		return Row{}, err
+		return Row{Branch: r.Branch, HeadSHA: sha}, err
 	}
 	i := slices.IndexFunc(rows, func(x Row) bool { return x.Task == id })
 	if i < 0 {

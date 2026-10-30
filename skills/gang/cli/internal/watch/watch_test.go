@@ -407,3 +407,32 @@ func TestPRRedAfterTheGraceWithNoChecks(t *testing.T) {
 	f.openPR(t, "h1") // git cannot read this head
 	want(t, poll(t, f, t0.Add(4*time.Minute)))
 }
+
+func TestPRNextRepeatsAfterTheTasksPRCloses(t *testing.T) {
+	f := newWatchFixture(t)
+	f.p.Repo.GHAccount, f.p.Repo.Base = "", "dev"
+	testkit.Git(t, f.repo, "update-ref", "refs/remotes/origin/dev", "refs/heads/main")
+	f.merge(t, "T1")
+	want(t, poll(t, f, t0), "WAVE_READY 1", "PR_NEXT T1")
+	if err := prq.Put(f.d, prq.Row{Task: "T1", PR: 8, Branch: "gang/demo/T1", HeadSHA: "h1", State: prq.StateClosed}); err != nil {
+		t.Fatal(err)
+	}
+	want(t, poll(t, f, t0.Add(time.Minute)), "PR_NEXT T1")
+}
+
+func TestNoChecksGraceStartsAtOpenedAt(t *testing.T) {
+	f := newWatchFixture(t)
+	f.p.Limits.ChecksGraceMin = 3
+	t.Setenv("GIT_COMMITTER_DATE", t0.Format(time.RFC3339))
+	head := testkit.CommitOn(t, f.repo, "pr", "T1: work\n\nTask: T1", map[string]string{"a.txt": "a\n"})
+	if err := prq.Put(f.d, prq.Row{Task: "T1", PR: 8, Branch: "gang/demo/T1", HeadSHA: head, State: prq.StateOpen, OpenedAt: t0.Add(-time.Hour).Format(time.RFC3339)}); err != nil {
+		t.Fatal(err)
+	}
+	f.pr(t, "OPEN", "MERGEABLE", head)
+	want(t, poll(t, f, t0.Add(2*time.Minute)))
+	if err := prq.Put(f.d, prq.Row{Task: "T1", PR: 8, Branch: "gang/demo/T1", HeadSHA: head, State: prq.StateOpen, OpenedAt: t0.Add(10 * time.Minute).Format(time.RFC3339)}); err != nil {
+		t.Fatal(err)
+	}
+	want(t, poll(t, f, t0.Add(12*time.Minute)))
+	want(t, poll(t, f, t0.Add(13*time.Minute)), "PR_RED T1 8 no-checks")
+}

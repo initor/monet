@@ -3,6 +3,7 @@ package watch
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -42,7 +43,11 @@ func queue(repo string, d store.Dir, p *plan.Plan, now time.Time, emit func(line
 		green, red, failed := prq.Green(p, ps)
 		if len(ps.Checks) == 0 && p.Repo.Checks == plan.ChecksGitHub && ps.HeadSHA == r.HeadSHA {
 			ct, _ := gitx.Run(repo, "show", "-s", "--format=%cI", "--end-of-options", r.HeadSHA) // gang's own head: CI could start at its commit time. No time if unreadable.
-			if at, err := time.Parse(time.RFC3339, ct); err == nil && now.Sub(at) >= time.Duration(p.Limits.ChecksGraceMin)*time.Minute {
+			at, err := time.Parse(time.RFC3339, ct)
+			if opened, oerr := time.Parse(time.RFC3339, r.OpenedAt); oerr == nil && opened.After(at) { // a reused old branch: CI starts with the PR
+				at = opened
+			}
+			if err == nil && now.Sub(at) >= time.Duration(p.Limits.ChecksGraceMin)*time.Minute {
 				red, failed = true, []string{"no-checks"}
 			}
 		}
@@ -63,7 +68,8 @@ func queue(repo string, d store.Dir, p *plan.Plan, now time.Time, emit func(line
 	}
 	l, ok, err := prq.Next(repo, d, p)
 	if ok {
-		emit("PR_NEXT "+l.ID, "PR_NEXT "+l.ID, time.Time{})
+		closed := len(slices.DeleteFunc(slices.Clone(rows), func(r prq.Row) bool { return r.Task != l.ID || r.State != prq.StateClosed }))
+		emit("PR_NEXT "+l.ID, fmt.Sprintf("PR_NEXT %s closed %d", l.ID, closed), time.Time{}) // a closed PR earns a new event
 	}
 	return err, nil
 }
