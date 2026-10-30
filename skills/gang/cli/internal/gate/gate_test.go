@@ -330,7 +330,7 @@ func TestStartRejectsBadJobs(t *testing.T) {
 	}
 }
 
-// Every job here is task T1 at head h1, and T1-1 is a task job.
+// The jobs of the loop are task T1 at head h1, and T1-1 is a task job.
 func TestPRStatusOnlyForAFinishedJobAtTheHead(t *testing.T) {
 	t.Parallel()
 	d := store.Dir{Root: t.TempDir()}
@@ -344,7 +344,7 @@ func TestPRStatusOnlyForAFinishedJobAtTheHead(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	// pr-T1-7: not JSON. pr-T1-8: no status.json. pr-T1-10: status.json unreadable. pr-T1-11: passed, no head.
+	// pr-T1-7: not JSON. pr-T1-8: no status.json. pr-T1-10: status.json unreadable. pr-T1-11: passed, no head. pr-T1-12: passed, a long head.
 	if err := errors.Join(
 		store.WriteFileAtomic(d.Run("jobs", "pr-T1-7", "job.json"), []byte("{"), 0o644),
 		writeJSON(d.Run("jobs", "pr-T1-8", "job.json"), Job{ID: "pr-T1-8", Task: "T1", Kind: KindPR, Head: "h1"}),
@@ -352,6 +352,8 @@ func TestPRStatusOnlyForAFinishedJobAtTheHead(t *testing.T) {
 		os.MkdirAll(d.Run("jobs", "pr-T1-10", "status.json"), 0o755),
 		writeJSON(d.Run("jobs", "pr-T1-11", "job.json"), Job{ID: "pr-T1-11", Task: "T1", Kind: KindPR}),
 		writeStatus(d, JobStatus{ID: "pr-T1-11", State: StatePassed}),
+		writeJSON(d.Run("jobs", "pr-T1-12", "job.json"), Job{ID: "pr-T1-12", Task: "T1", Kind: KindPR, Head: "0123456789"}),
+		writeStatus(d, JobStatus{ID: "pr-T1-12", State: StatePassed}),
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -370,6 +372,8 @@ func TestPRStatusOnlyForAFinishedJobAtTheHead(t *testing.T) {
 		{"pr-T1-1", "T1", "h2", "", exit.New(exit.Refused, "job pr-T1-1 did not gate head h2 of T1")},
 		{"pr-T1-1", "T1", "0123456789", "", exit.New(exit.Refused, "job pr-T1-1 did not gate head 0123456 of T1")},
 		{"pr-T1-11", "T1", "", "", exit.New(exit.Refused, "job pr-T1-11 did not gate head  of T1")},
+		{"pr-T1-11", "T1", "h1", "", exit.New(exit.Refused, "job pr-T1-11 did not gate head h1 of T1")},
+		{"pr-T1-12", "T1", "0123456", "", exit.New(exit.Refused, "job pr-T1-12 did not gate head 0123456 of T1")},
 		{"pr-T1-1", "T2", "h1", "", exit.New(exit.Refused, "job pr-T1-1 did not gate head h1 of T2")},
 		{"T1-1", "T1", "h1", "", exit.New(exit.Refused, "job T1-1 did not gate head h1 of T1")},
 		{"pr-T1-9", "T1", "h1", "", exit.New(exit.Refused, "unknown job pr-T1-9")},

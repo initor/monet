@@ -455,7 +455,7 @@ func PRStatus(d store.Dir, id, task, head string) (string, error) {
 		return "", exit.New(exit.Refused, "job %s did not gate head %s of %s", id, head[:min(len(head), 7)], task)
 	}
 	st, err := Wait(d, id, 0)
-	// A job with no status.json never ran: Start stops between its two writes.
+	// A job with no status.json never ran: Start stopped after it wrote job.json.
 	if errors.Is(err, os.ErrNotExist) {
 		st, err = JobStatus{State: StateError}, nil
 	}
