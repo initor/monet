@@ -7,6 +7,9 @@ import (
 	"strconv"
 	"strings"
 
+	"gang/internal/exit"
+	"gang/internal/gh"
+	"gang/internal/plan"
 	"gang/internal/store"
 )
 
@@ -79,4 +82,47 @@ func Current(rows []Row) (Row, bool) {
 		}
 	}
 	return Row{}, false
+}
+
+// SetState sets the state of task's row. It reads prs.tsv right before it
+// writes, so every other field stays as the file holds it now, never as a
+// caller read it before a slow step such as a gh call.
+func SetState(d store.Dir, task, state string) error {
+	rows, err := Read(d)
+	if err != nil {
+		return err
+	}
+	for i := range rows {
+		if rows[i].Task == task {
+			rows[i].State = state
+			return write(d, rows)
+		}
+	}
+	return fmt.Errorf("prs.tsv has no row for %s", task)
+}
+
+// Live returns the open row of task id and the state of its PR on GitHub.
+// Every outward step on an open PR starts here.
+func Live(d store.Dir, p *plan.Plan, id string) (Row, gh.State, error) {
+	if p.Repo.GHAccount == "" {
+		return Row{}, gh.State{}, exit.New(exit.Refused, "repo.gh_account is empty: gang makes no GitHub call for %s", id)
+	}
+	rows, err := Read(d)
+	if err != nil {
+		return Row{}, gh.State{}, err
+	}
+	r, ok := Current(rows)
+	if !ok || r.Task != id {
+		return Row{}, gh.State{}, exit.New(exit.Refused, "%s has no open PR", id)
+	}
+	st, err := gh.PRState(p.Repo.Remote, r.PR)
+	switch {
+	case err != nil:
+		return Row{}, gh.State{}, err
+	case st.State != "OPEN":
+		return Row{}, gh.State{}, exit.New(exit.Refused, "PR #%d of %s is %s on GitHub", r.PR, id, st.State)
+	case st.HeadSHA != r.HeadSHA:
+		return Row{}, gh.State{}, exit.New(exit.Refused, "PR #%d head moved: %.7s, recorded %.7s", r.PR, st.HeadSHA, r.HeadSHA)
+	}
+	return r, st, nil
 }
