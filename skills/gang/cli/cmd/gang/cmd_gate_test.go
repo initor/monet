@@ -12,6 +12,7 @@ import (
 
 	"gang/internal/gate"
 	"gang/internal/plan"
+	"gang/internal/prq"
 	"gang/internal/store"
 )
 
@@ -274,6 +275,34 @@ func TestGateRunWaveRefusesAPlainDirectory(t *testing.T) {
 	}
 	if gitT(t, repo, "branch", "--show-current") != "main" || gitT(t, repo, "rev-parse", "HEAD") != head {
 		t.Fatal("gate run --wave moved the main checkout")
+	}
+}
+
+func TestGateRunPRAtTheRecordedHead(t *testing.T) {
+	useBuiltGang(t)
+	p := gatePlan()
+	p.Commands.Gate = []string{"echo gate-at $(git rev-parse HEAD)", "sleep 2"}
+	repo, dir := rsSetup(t, p)
+	c := rsCtx(dir, repo)
+	head := rsEmptyCommit(t, repo, "refs/heads/integration", "A1 as published")
+	if err := prq.Put(store.Dir{Root: dir}, prq.Row{Task: "A1", PR: 7, Branch: "gang/toy/A1", HeadSHA: head, State: prq.StateOpen}); err != nil {
+		t.Fatal(err)
+	}
+	rsEmptyCommit(t, repo, "refs/heads/integration", "moved on") // the PR head is no longer the tip
+	if _, stderr, code := runGang(t, c, "gate", "run", "--pr", "B2"); code != 2 || !strings.Contains(stderr, "B2 has no open PR") {
+		t.Fatalf("B2: code=%d stderr=%q", code, stderr)
+	}
+	if out, stderr, code := runGang(t, c, "gate", "run", "--pr", "A1"); code != 0 || out != "pr-A1-1\n" {
+		t.Fatalf("A1: code=%d out=%q stderr=%q", code, out, stderr)
+	}
+	for _, pause := range []time.Duration{0, 500 * time.Millisecond} { // the job is first queued, then running
+		time.Sleep(pause)
+		if _, stderr, code := runGang(t, c, "gate", "run", "--pr", "A1"); code != 2 || !strings.Contains(stderr, "gate job pr-A1-1 is still") {
+			t.Fatalf("second start after %v: code=%d stderr=%q", pause, code, stderr)
+		}
+	}
+	if out, _, code := runGang(t, c, "gate", "wait", "pr-A1-1", "--timeout", "60s"); code != 0 || !strings.Contains(out, "gate-at "+head) {
+		t.Fatalf("wait: code=%d out=%q, want gate-at %s", code, out, head)
 	}
 }
 

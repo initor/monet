@@ -33,6 +33,7 @@ type Job struct {
 	Env        map[string]string `json:"env"`
 	TimeoutMin int               `json:"timeout_min"`
 	Slots      int               `json:"slots"`
+	Head       string            `json:"head,omitempty"` // a PR job: the PR head that its worktree holds
 }
 
 // JobStatus is run/jobs/<id>/status.json (Contract 4, plus the runner pid
@@ -51,6 +52,7 @@ const (
 	KindTask   = "task"
 	KindHealth = "health"
 	KindWave   = "wave"
+	KindPR     = "pr"
 
 	StateQueued  = "queued"
 	StateRunning = "running"
@@ -80,6 +82,9 @@ func prefix(j Job) (string, error) {
 			return "", fmt.Errorf("gate: bad task id %q", j.Task)
 		}
 		return j.Task, nil
+	case KindPR: // the task's prefix, so a PR job never shares a number with a task job
+		pre, err := prefix(Job{Kind: KindTask, Task: j.Task})
+		return "pr-" + pre, err
 	case KindHealth, KindWave:
 		return j.Kind, nil
 	}

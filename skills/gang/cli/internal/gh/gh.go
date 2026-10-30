@@ -80,6 +80,17 @@ func PRState(remote string, n int) (State, error) {
 	return s, nil
 }
 
+// PostStatus posts the commit status context on sha in remote ([HOST/]OWNER/REPO), with gh api.
+func PostStatus(remote, sha, state, context, description string) error {
+	host, repo := "github.com", remote
+	if parts := strings.Split(remote, "/"); len(parts) == 3 {
+		host, repo = parts[0], parts[1]+"/"+parts[2]
+	}
+	_, err := Run("api", "--hostname", host, "--method", "POST", "repos/"+repo+"/statuses/"+sha,
+		"-f", "state="+state, "-f", "context="+context, "-f", "description="+description)
+	return err
+}
+
 var (
 	passing = []string{"SUCCESS", "NEUTRAL", "SKIPPED"}
 	failing = []string{"FAILURE", "ERROR", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED", "STARTUP_FAILURE"}

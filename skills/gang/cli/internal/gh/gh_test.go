@@ -42,6 +42,21 @@ func TestPRStateReportsGHErrors(t *testing.T) {
 	}
 }
 
+func TestPostStatusNamesTheHostAndTheRepo(t *testing.T) {
+	state, _ := testkit.FakeGH(t)
+	if PostStatus("acme/widget", "abc", "failure", "gang/gate", "red") == nil { // no status answer yet: the fake exits 1
+		t.Fatal("want an error without a status answer")
+	}
+	testkit.Answer(t, state, "status", "{}")
+	for remote, host := range map[string]string{"github.com/acme/widget": "github.com", "acme/widget": "github.com", "ghe.example.com/acme/widget": "ghe.example.com"} {
+		err := PostStatus(remote, "abc", "success", "gang/gate", "gang gate pr-T1-1 passed")
+		want := "api --hostname " + host + " --method POST repos/acme/widget/statuses/abc -f state=success -f context=gang/gate -f description=gang gate pr-T1-1 passed"
+		if calls := testkit.Calls(t, state); err != nil || calls[len(calls)-1] != want {
+			t.Errorf("%s: err = %v, calls = %q, want last %q", remote, err, calls, want)
+		}
+	}
+}
+
 func TestClassify(t *testing.T) {
 	ok := Check{"build", "COMPLETED", "SUCCESS"}
 	cases := []struct {
