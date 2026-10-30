@@ -172,3 +172,58 @@ func TestPrepareStopsWhenTheFetchFails(t *testing.T) {
 		t.Fatalf("Prepare error = %v, want one that starts with %q", err, "fetch origin: ")
 	}
 }
+
+// Each row pushes a head onto origin/gang/demo/T1. shipOnOrigin moves the base to "ship", and the local origin/main stays at the old base.
+func TestPrepareReusesOnlyAnEqualBranch(t *testing.T) {
+	const another = "origin/gang/demo/T1 exists at %s with another change or base: gang never moves it"
+	for _, c := range []struct{ name, tree, parents, msg, want string }{
+		{"equal", "gang-demo", "-p ship", "pushed", ""},
+		{"another tree", "origin/main", "-p ship", "pushed", another},
+		{"another base", "gang-demo", "-p origin/main", "pushed", another},
+		{"two parents", "gang-demo", "-p ship -p gang-demo", "pushed", another},
+		{"secret on the pushed head", "gang-demo", "-p ship", "-----BEGIN " + "EC PRIVATE KEY-----", "private-key"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			repo, d, p := queueFixture(t)
+			shipOnOrigin(t, repo, "chore: empty", nil)
+			head := testkit.Git(t, repo, append([]string{"commit-tree", c.tree + "^{tree}", "-m", c.msg}, strings.Fields(c.parents)...)...)
+			testkit.Git(t, repo, "push", "-q", "origin", head+":refs/heads/gang/demo/T1")
+			got, err := Prepare(repo, d, p, "T1")
+			if c.want != "" {
+				wantExit(t, err, exit.Refused, strings.Replace(c.want, "%s", head[:7], 1))
+			} else if err != nil || got.SHA != head {
+				t.Fatalf("Prepare = %q, %v, want the pushed head %s", got.SHA, err, head)
+			}
+		})
+	}
+}
+
+func TestReuseReturnsAGitError(t *testing.T) {
+	if err := (&Prepared{Branch: "gang/demo/T1"}).reuse(t.TempDir(), ""); err == nil || errors.As(err, new(*exit.Error)) {
+		t.Fatalf("reuse outside a repo = %v, want a plain git error", err)
+	}
+}
+
+func TestBodyNamesGoalRequirementsReviewAndSize(t *testing.T) {
+	for _, c := range []struct{ risk, ids, reqs, lenses string }{
+		{"", "R1 R2", "R1, R2", "[review]"},
+		{"high", "", "-", "[review adversarial]"},
+	} {
+		repo, d, p := queueFixture(t)
+		land(t, repo, d, "T2", map[string]string{"b/T2.go": "package b\n", "go.sum": "x\n"})
+		shipOnOrigin(t, repo, "feat: ship t1\n\nTask: T1", map[string]string{"a/T1.go": "package a\n", "x.txt": "base\n"})
+		prep, err := Prepare(repo, d, p, "T2")
+		if err != nil {
+			t.Fatal(err)
+		}
+		prep.Task.Risk, prep.Task.Requirements = c.risk, strings.Fields(c.ids)
+		got, err := Body(repo, p, prep)
+		want := "Task T2 of gang run `demo`: Make T2 pass its test.\n\n- Requirements: " + c.reqs + "\n- Review: CLEAN " + c.lenses + " at " + prep.Tip[:7] + "\n- Changed lines: 1\n\nOpened by `gang pr open`.\n"
+		if err != nil || got != want {
+			t.Errorf("Body = %q, %v, want %q", got, err, want)
+		}
+		if _, err := Body(t.TempDir(), p, prep); err == nil {
+			t.Error("Body outside a repo returned no error")
+		}
+	}
+}
