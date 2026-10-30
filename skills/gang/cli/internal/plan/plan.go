@@ -72,6 +72,7 @@ type Task struct {
 	Title        string          `json:"title"`
 	Goal         string          `json:"goal"`
 	Branch       string          `json:"branch,omitempty"`
+	Source       string          `json:"source,omitempty"` // the adopted source task this task is a part of
 	Scope        Scope           `json:"scope"`
 	Peers        []string        `json:"peers"`
 	DependsOn    []string        `json:"depends_on"`
