@@ -155,6 +155,16 @@ func TestReviewedNeedsEveryRequiredLens(t *testing.T) {
 	}
 }
 
+func TestReviewedReturnsALedgerReadError(t *testing.T) {
+	_, d, p := queueFixture(t)
+	if err := store.WriteFileAtomic(d.Run("ledger.tsv"), []byte("task\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reviewed(d, p, "T1", strings.Repeat("a", 40)); err == nil || errors.As(err, new(*exit.Error)) {
+		t.Fatalf("reviewed on an unreadable ledger = %v, want a plain read error", err)
+	}
+}
+
 func TestPrepareStopsWhenTheFetchFails(t *testing.T) {
 	repo, d, p := queueFixture(t)
 	testkit.Git(t, repo, "remote", "set-url", "origin", t.TempDir()+"/gone.git")

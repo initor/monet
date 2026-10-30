@@ -23,10 +23,10 @@ type Prepared struct {
 	Task *plan.Task // the plan task, or the synthetic repair task of an F<nn> id
 }
 
-// Prepare checks that task id is the one to ship now: no PR is open, and Next
-// returns id once origin is fetched. The task must be in the plan, and its tip
-// ledger CLEAN. It replays that task alone onto the fetched origin/<base> and
-// scans the replay for secrets. It pushes nothing and records nothing.
+// Prepare checks that task id is the one to ship now: no PR is open, Next
+// returns id once origin is fetched, id is in the plan or an F<nn> repair id,
+// and its tip is ledger CLEAN. It replays that task alone onto the fetched
+// origin/<base>, scans the replay for secrets, and pushes and records nothing.
 func Prepare(repo string, d store.Dir, p *plan.Plan, id string) (Prepared, error) {
 	rows, err := Read(d)
 	if err != nil {
@@ -75,8 +75,8 @@ func Prepare(repo string, d store.Dir, p *plan.Plan, id string) (Prepared, error
 	return c, nil
 }
 
-// reviewed returns the task of id, and refuses one outside the plan or a tip
-// that is not ledger CLEAN.
+// reviewed returns the task of id, and refuses an id that is neither in the
+// plan nor an F<nn> repair id, and a tip that is not ledger CLEAN.
 func reviewed(d store.Dir, p *plan.Plan, id, tip string) (*plan.Task, error) {
 	t, ok := repair.TaskFor(p, id)
 	if !ok {
