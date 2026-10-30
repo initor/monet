@@ -109,7 +109,7 @@ func gateRun(c *Ctx, args []string) error {
 		for _, e := range jobs {
 			if strings.HasPrefix(e.Name(), "pr-") {
 				st, err := gate.Wait(d, e.Name(), 0)
-				if err != nil {
+				if err != nil && !errors.Is(err, os.ErrNotExist) {
 					return err
 				}
 				if st.State == gate.StateQueued || st.State == gate.StateRunning {
