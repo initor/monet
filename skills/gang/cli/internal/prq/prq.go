@@ -71,8 +71,8 @@ func Put(d store.Dir, r Row) error {
 	return write(d, append(rows, r))
 }
 
-// Open returns the open row, if there is one.
-func Open(rows []Row) (Row, bool) {
+// Current returns the first open row, if there is one.
+func Current(rows []Row) (Row, bool) {
 	for _, r := range rows {
 		if r.State == StateOpen {
 			return r, true
