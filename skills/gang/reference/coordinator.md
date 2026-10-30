@@ -78,13 +78,14 @@ A run that 0.4.0 started keeps its trunk. The queue reads its `merge <id>: <titl
 
 1. If a wave PR is open, finish it first, as 0.4.0 does: run `<gang> wave merge <k>` with merge-on-green, else the user merges it with a merge commit. While it is open, `PR_GREEN` and `PR_RED` can name a wave number, not a task id.
 2. From then on, never run `<gang> push`, `<gang> wave open`, or `<gang> wave merge`, and ignore `WAVE_READY`.
-3. Stop the armed Monitor with the description `gang <slug> events`, because an old `<gang> watch` fails on the new `repo.checks` field. If an engine runs, run `<gang> standing stop "switching to the pr queue"`, wait for the engine to stop, and run `<gang> standing clear-stop`.
+3. Stop the armed Monitor with the description `gang <slug> events`, because an old `<gang> watch` fails on the new `repo.checks` field. If an engine runs, run `<gang> standing stop "switching to the pr queue"`, wait for the engine to stop, and run `<gang> standing clear-stop`. If the engine left no `result.json`, skip item 1 of the relaunch checklist, as "Resume in a new session" step 8 says.
 4. Build `<gang>` again, as "Build first" says, so that it has the `pr` commands. Then run `cp <skill>/reference/relay.md <dir>/run/relay.md`, as "Launch" step 10 does, so that the relay procedure matches the queue.
-5. Set `repo.checks` in `plan/plan.json`: `gate` when `git -C <repo> ls-tree origin/<base> .github/workflows` prints nothing, else `github`. Run `<gang> lint`, then `<gang> plan commit --message "plan: ship through the pr queue"`.
-6. If `git -C <repo> ls-remote --heads origin gang/<slug>` prints a line, ask the user to delete that merged integration branch on GitHub. Git cannot push a PR branch `gang/<slug>/<id>` beside it, and refuses with `refname conflict`.
-7. Run `git -C <repo> fetch origin`, because `<gang> watch` never fetches. Arm the event loop. The next pass of `<gang> watch` prints `PR_NEXT <id>` for the oldest trunk task that is not on `<base>`.
-8. If `<gang> pr open` refuses that task as already on `<base>`, an earlier wave PR was likely squashed, and its `Task:` lines did not reach `<base>`. Tell the user, and stop the queue.
-9. Do the relaunch checklist, then relaunch. Its `gen` step puts the `gang size` step into `engine.js`.
+5. Run `git -C <repo> fetch origin`, because `<gang> watch` never fetches.
+6. Set `repo.checks` in `plan/plan.json`: `gate` when `git -C <repo> ls-tree origin/<base> .github/workflows` prints nothing, else `github`. Run `<gang> lint`, then `<gang> plan commit --message "plan: ship through the pr queue"`.
+7. If `git -C <repo> ls-remote --heads origin gang/<slug>` prints a line, ask the user to delete that merged integration branch on GitHub. Git cannot push a PR branch `gang/<slug>/<id>` beside it, and refuses with `refname conflict`.
+8. Arm the event loop. The next pass of `<gang> watch` prints `PR_NEXT <id>` for the oldest trunk task that is not on `<base>`.
+9. If `<gang> pr open` refuses that task as already on `<base>`, an earlier wave PR was likely squashed, and its `Task:` lines did not reach `<base>`. Tell the user, and stop the queue.
+10. Do the relaunch checklist, then relaunch. Its `gen` step puts the `gang size` step into `engine.js`.
 
 ## Event loop
 
@@ -124,10 +125,10 @@ An empty `repo.gh_account` means a local origin with no GitHub. Then run `<gang>
 
 ### Red PR
 
-1. Send one read-only Agent subagent to read the failure: `gh pr checks <pr>` and its logs, or the gate log `<dir>/run/jobs/<job>/out.log`. It returns the cause and the files to change, in 10 lines or fewer. For `no-checks`, it finds out why the CI of the repo did not run.
+1. Send one read-only Agent subagent to read the failure: `gh pr checks <pr>` and its logs, or the gate log `<dir>/run/jobs/<job>/out.log`. It returns the cause and the files to change, in 10 lines or fewer. For `no-checks`, it finds out why the CI of the repo did not run. If the workflows never run on PRs, skip steps 2 to 9. Set `repo.checks` to `gate`, run `<gang> lint`, commit the plan, and gate the head as "PR queue" step 4 says.
 2. Add a requirement `CI-<n>` to `plan/plan.json`. Its `source` is the PR URL.
 3. Add a fix task `CI<n>` with every brief field, and `requirements` set to `CI-<n>`. One `acceptance` line says that its commit message holds the line `Fixes: <id>` beside its `Task: CI<n>` line. The fields are in `<skill>/reference/schema.md`.
-4. Run `<gang> lint`, then `<gang> plan commit --message "plan: add CI<n> for <id>"`. If `no-checks` came because the workflows never run on PRs, add no fix task. Set `repo.checks` to `gate` instead, run `<gang> lint`, commit the plan, and gate the head as "PR queue" step 4 says.
+4. Run `<gang> lint`, then `<gang> plan commit --message "plan: add CI<n> for <id>"`.
 5. If an engine runs, run `<gang> standing stop "PR <pr> is red. CI<n> runs next."`. Wait for the engine to stop. Run `<gang> standing clear-stop`, and relaunch with `--only CI<n>`.
 6. When `CI<n>` merges into the trunk, run `<gang> pr fix <id> CI<n> --holder <session>`. It pushes the fix onto the PR as a new commit. With `repo.checks` set to `gate`, gate the new head as "PR queue" step 4 says.
 7. If it exits 2 with `above limits.task_lines`, decide whether the PR can stay that big. If it can, run it again with `--reason "<why>"`, and record the reason as a ruling.
