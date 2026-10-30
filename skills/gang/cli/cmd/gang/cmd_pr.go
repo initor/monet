@@ -11,6 +11,7 @@ var prSubs = map[string]func(c *Ctx, args []string) error{"open": cmdPROpen}
 
 func init() { commands["pr"] = subcommands("pr", prSubs) }
 
+// cmdPROpen is gang pr open <task> --holder <session> [--dry-run].
 func cmdPROpen(c *Ctx, args []string) error {
 	fs := newFlagSet("pr open")
 	holder := fs.String("holder", "", "the driver lease holder")
