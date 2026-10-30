@@ -81,7 +81,7 @@ Send one drafter per area, with the `plan_draft` role. Each prompt holds:
 
 Tell each drafter these rules:
 
-- One task is one commit of at most `limits.task_lines` changed lines, 100 by default, tests included. A task that cannot be split further carries `size.reason`, and no task goes above `limits.split_lines`, 300 by default.
+- One task is one commit of at most `limits.task_lines` changed lines, 100 by default, tests included. Lock files and binary files do not count, and a renamed file counts only its edited lines. A task that cannot be split further carries `size.reason`, and no task goes above `limits.split_lines`, 300 by default.
 - `goal` is one sentence that a stranger can run.
 - Each `acceptance` line is one check that passes or fails.
 - `verify.tests_first` names tests that fail before the change and pass after it.
@@ -155,10 +155,12 @@ The transcribers read the Markdown plan. That is `<file>`, or the path in the to
 
 Tell each transcriber these rules:
 
-- Copy the plan. Do not redesign it.
+- Copy the plan. Do not redesign it, except to split a task as below.
 - Keep each `id`, `branch`, `wave`, size, requirement id, and lock as the source has it.
 - A source task above `limits.task_lines` becomes parts. A merged source task is the exception, because `gang done` reads merged tasks by id, and parts get new ids. It stays whole and carries `size.reason` "merged before adopt". If its size is above `limits.split_lines`, write `limits.split_lines` as `size.lines`, and put the real size in `notes`.
 - Each part sets `source` to the source task id. The first part takes the source task's dependencies, and each next part depends on the one before. A task that depends on, or merges after, the source task names its last part.
 - A part takes its own `id`, `branch`, size, and requirement ids, and keeps the source task's `wave` and locks. A requirement that several parts cover needs a reason in the `notes` of each. The notes name the requirement id with the reason, as rule 4 checks.
+- The parts of one source task list each other in `peers` when their `scope.write` globs overlap. They run in a chain, so this costs no parallel work.
+- A task whose `peers` names the source task names every part instead, and each part names that task back.
 - Write the source's deps as `depends_on`, and its merge-after list as `merge_after`.
 - Where the source lacks a field, use its closest text, and name the gap in `notes`.

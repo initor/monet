@@ -21,7 +21,7 @@ This file is the schema of `plan.json`. A task in the plan is its brief. Lint ru
 }
 ```
 
-- A limit that is missing or `0` takes its default. The size limits are `task_lines` 100 and `split_lines` 300. The other limits are `fix_rounds` 3, `repair_tries` 2, `blocked_stop` 3, `null_stop` 6, `retries` 2, `gate_slots` 3, `gate_timeout_min` 60, `stall_min` 60, and `max_worktrees` 400.
+- A limit that is missing or `0` takes its default. The size limits are `task_lines` 100 and `split_lines` 300. Lock files and binary files do not count toward a size, and a renamed file counts only its edited lines. The other limits are `fix_rounds` 3, `repair_tries` 2, `blocked_stop` 3, `null_stop` 6, `retries` 2, `gate_slots` 3, `gate_timeout_min` 60, `stall_min` 60, and `max_worktrees` 400.
 - An empty `repo.wave_title` takes `chore(gang): land wave {k} of {slug}`.
 - `models` maps a role to `{"model": "<alias>", "effort": "<effort>"}`, over the defaults in the skill's `roles.json`. The roles are `implement`, `implement_hard`, `review`, `review_adversarial`, `fix`, `sync`, `merge`, `health`, `repair`, `plan_draft`, and `plan_review`. The efforts are `low`, `medium`, `high`, `xhigh`, and `max`.
 
@@ -40,7 +40,7 @@ This file is the schema of `plan.json`. A task in the plan is its brief. Lint ru
 | `acceptance` | strings, 1 or more | ACCEPTANCE | one checkable line each |
 | `verify.tests_first` | test ids, 1 or more | VERIFY | these fail before the change and pass after |
 | `verify.commands` | strings | VERIFY | extra commands beyond the run gate |
-| `size.lines`, `timebox_min` | ints | TIMEBOX | `size.lines` is at most `limits.task_lines`, or `limits.split_lines` with a `size.reason` |
+| `size.lines`, `timebox_min` | ints | TIMEBOX | `size.lines` is at most `limits.task_lines`, or `limits.split_lines` with a `size.reason`. The `budget:` line of TIMEBOX reads `limits.task_lines`, or `limits.split_lines` and the text of `size.reason` when one is set |
 | `size.reason` | string | (lint) | optional. Says why a task above `limits.task_lines` cannot be split. Lint fails such a task when this field is blank |
 | `forbidden` | strings | FORBIDDEN | added to the run-wide list |
 | `locks` | names | (scheduling) | each name is in the run-wide `locks` |
