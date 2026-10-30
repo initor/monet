@@ -205,12 +205,12 @@ func TestReuseReturnsAGitError(t *testing.T) {
 }
 
 func TestBodyNamesGoalRequirementsReviewAndSize(t *testing.T) {
-	for _, c := range []struct{ risk, ids, reqs, lenses string }{
-		{"", "R1 R2", "R1, R2", "[review]"},
-		{"high", "", "-", "[review adversarial]"},
+	for _, c := range []struct{ risk, ids, reqs, lenses, src, lines string }{
+		{"", "R1 R2", "R1, R2", "[review]", "package b\n", "1"},
+		{"high", "", "-", "[review adversarial]", "package b\n\nvar B = 1\n", "3"},
 	} {
 		repo, d, p := queueFixture(t)
-		land(t, repo, d, "T2", map[string]string{"b/T2.go": "package b\n", "go.sum": "x\n"})
+		land(t, repo, d, "T2", map[string]string{"b/T2.go": c.src, "go.sum": "x\n"})
 		shipOnOrigin(t, repo, "feat: ship t1\n\nTask: T1", map[string]string{"a/T1.go": "package a\n", "x.txt": "base\n"})
 		prep, err := Prepare(repo, d, p, "T2")
 		if err != nil {
@@ -218,7 +218,7 @@ func TestBodyNamesGoalRequirementsReviewAndSize(t *testing.T) {
 		}
 		prep.Task.Risk, prep.Task.Requirements = c.risk, strings.Fields(c.ids)
 		got, err := Body(repo, p, prep)
-		want := "Task T2 of gang run `demo`: Make T2 pass its test.\n\n- Requirements: " + c.reqs + "\n- Review: CLEAN " + c.lenses + " at " + prep.Tip[:7] + "\n- Changed lines: 1\n\nOpened by `gang pr open`.\n"
+		want := "Task T2 of gang run `demo`: Make T2 pass its test.\n\n- Requirements: " + c.reqs + "\n- Review: CLEAN " + c.lenses + " at " + prep.Tip[:7] + "\n- Changed lines: " + c.lines + "\n\nOpened by `gang pr open`.\n"
 		if err != nil || got != want {
 			t.Errorf("Body = %q, %v, want %q", got, err, want)
 		}
