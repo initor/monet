@@ -1,6 +1,8 @@
 package prq
 
 import (
+	"cmp"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -9,6 +11,7 @@ import (
 	"gang/internal/ledger"
 	"gang/internal/plan"
 	"gang/internal/repair"
+	"gang/internal/size"
 	"gang/internal/store"
 	"gang/internal/wave"
 )
@@ -18,7 +21,7 @@ type Prepared struct {
 	Landing
 	Branch string // gang/<slug>/<id>
 	Base   string // the origin/<base> commit that the replay starts from
-	SHA    string // the replayed commit: one parent, Base
+	SHA    string // the PR head: the replay, or the equal branch that pr open pushed
 
 	Task *plan.Task // the plan task, or the synthetic repair task of an F<nn> id
 }
@@ -26,7 +29,7 @@ type Prepared struct {
 // Prepare checks that task id is the one to ship now: no PR is open, Next
 // returns id once origin is fetched, id is in the plan or an F<nn> repair id,
 // and its tip is ledger CLEAN. It replays that task alone onto the fetched
-// origin/<base>, scans the replay for secrets, and pushes and records nothing.
+// origin/<base>, scans the PR head for secrets, and pushes and records nothing.
 func Prepare(repo string, d store.Dir, p *plan.Plan, id string) (Prepared, error) {
 	rows, err := Read(d)
 	if err != nil {
@@ -65,14 +68,38 @@ func Prepare(repo string, d store.Dir, p *plan.Plan, id string) (Prepared, error
 	if err != nil {
 		return Prepared{}, err
 	}
-	if replay, base, _ := strings.Cut(trees, "\n"); replay == base {
+	replay, base, _ := strings.Cut(trees, "\n")
+	if replay == base {
 		return Prepared{}, exit.New(exit.Refused, "%s is already on origin/%s: its replay changes nothing", id, p.Repo.Base)
 	}
 	c.SHA = sha
+	if err := c.reuse(repo, replay); err != nil {
+		return Prepared{}, err
+	}
 	if err := wave.Scan(repo, c.Base, c.SHA); err != nil {
 		return Prepared{}, err
 	}
 	return c, nil
+}
+
+// reuse sets c.SHA to origin/<c.Branch> when that branch exists and holds the replay's tree on c.Base, and refuses any other tip.
+func (c *Prepared) reuse(repo, tree string) error {
+	tip, err := gitx.RevParse(repo, "refs/remotes/origin/"+c.Branch)
+	if errors.Is(err, gitx.ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	got, err := gitx.Run(repo, "rev-parse", tip+"^{tree}", tip+"^@")
+	switch {
+	case err != nil:
+		return err
+	case got != tree+"\n"+c.Base:
+		return exit.New(exit.Refused, "origin/%s exists at %s with another change or base: gang never moves it", c.Branch, tip[:7])
+	}
+	c.SHA = tip
+	return nil
 }
 
 // reviewed returns the task of id, and refuses an id that is neither in the
@@ -90,4 +117,16 @@ func reviewed(d store.Dir, p *plan.Plan, id, tip string) (*plan.Task, error) {
 		return nil, exit.New(exit.Refused, "%s tip %s is not ledger CLEAN: missing %v", id, tip[:7], missing)
 	}
 	return t, nil
+}
+
+// Body is the PR text of c: the task and its goal, its requirement ids, the
+// lenses that reviewed its tip CLEAN, and the changed lines of the replay.
+func Body(repo string, p *plan.Plan, c Prepared) (string, error) {
+	n, err := size.Count(repo, c.Base, c.SHA, size.DefaultExclude)
+	if err != nil {
+		return "", err
+	}
+	reqs := cmp.Or(strings.Join(c.Task.Requirements, ", "), "-")
+	return fmt.Sprintf("Task %s of gang run `%s`: %s\n\n- Requirements: %s\n- Review: CLEAN %v at %s\n- Changed lines: %d\n\nOpened by `gang pr open`.\n",
+		c.ID, p.Slug, c.Task.Goal, reqs, ledger.RequiredLenses(c.Task), c.Tip[:7], n), nil
 }
