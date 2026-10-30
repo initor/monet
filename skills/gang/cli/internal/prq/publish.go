@@ -141,8 +141,10 @@ func Body(repo string, p *plan.Plan, c Prepared) (string, error) {
 var prURLRe = regexp.MustCompile(`https?://\S+/pull/(\d+)`)
 
 // Publish pushes the next task as gang/<slug>/<id>, opens its PR into base, and
-// records the open row. A dry run returns the push command and the PR text and
-// changes nothing. Without repo.gh_account only a dry run is allowed (Contract 0.9).
+// records the open row, then returns the PR URL. A dry run returns the push
+// command and the PR text, and pushes and records nothing (it still fetches
+// origin and writes the replay object). Without repo.gh_account only a dry run
+// is allowed (Contract 0.9).
 func Publish(repo string, d store.Dir, p *plan.Plan, id string, now time.Time, dryRun bool) (string, error) {
 	if p.Repo.GHAccount == "" && !dryRun {
 		return "", exit.New(exit.Refused, "repo.gh_account is empty: pr open works only with --dry-run")
@@ -163,10 +165,10 @@ func Publish(repo string, d store.Dir, p *plan.Plan, id string, now time.Time, d
 		return "", exit.New(exit.Refused, "push rejected: %v", err)
 	}
 	file := d.Run("pr-body-" + id + ".md")
+	defer os.Remove(file) // before the write: a failed write leaves no partial body
 	if err := os.WriteFile(file, []byte(body), 0o644); err != nil {
 		return "", err
 	}
-	defer os.Remove(file)
 	args := append([]string{"pr", "create"}, gh.RepoArgs(p.Repo.Remote)...)
 	out, err := gh.Run(append(args, "--base", p.Repo.Base, "--head", c.Branch, "--title", c.Subject, "--body-file", file)...)
 	if err != nil {

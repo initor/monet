@@ -253,6 +253,9 @@ func TestPublishOpensTheNextTask(t *testing.T) {
 		t.Fatalf("Publish = %q, %v", url, err)
 	}
 	tip := testkit.Git(t, testkit.Git(t, repo, "remote", "get-url", "origin"), "rev-parse", "refs/heads/gang/demo/T1")
+	if got, want := testkit.Git(t, repo, "rev-list", "--parents", "-n", "1", tip), tip+" "+testkit.Git(t, repo, "rev-parse", "ship"); got != want {
+		t.Fatalf("pushed head = %q, want the replay on the moved base: %q", got, want)
+	}
 	rows, err := Read(d)
 	if want := (Row{Task: "T1", PR: 17, Branch: "gang/demo/T1", HeadSHA: tip, State: StateOpen, OpenedAt: "2026-10-29T12:00:00Z"}); err != nil || len(rows) != 1 || rows[0] != want {
 		t.Fatalf("rows = %+v, %v, want %+v", rows, err, want)
@@ -267,6 +270,71 @@ func TestPublishOpensTheNextTask(t *testing.T) {
 	}
 	if _, err := os.Stat(d.Run("pr-body-T1.md")); !os.IsNotExist(err) {
 		t.Fatalf("the body file is left behind: %v", err)
+	}
+}
+
+// origin holds another gang/demo/T1 that the fetch refspec hides from Prepare, so the plain push is a non-fast-forward.
+func TestPublishRefusesARejectedPush(t *testing.T) {
+	repo, d, p := queueFixture(t)
+	testkit.FakeGH(t)
+	testkit.Git(t, repo, "config", "remote.origin.fetch", "+refs/heads/main:refs/remotes/origin/main")
+	testkit.Git(t, repo, "push", "-q", "origin", testkit.CommitOn(t, repo, "other", "other", nil)+":refs/heads/gang/demo/T1")
+	_, err := Publish(repo, d, p, "T1", time.Time{}, false)
+	wantExit(t, err, exit.Refused, "push rejected: ")
+}
+
+func TestPublishNeedsAPRURL(t *testing.T) {
+	repo, d, p := queueFixture(t)
+	state, _ := testkit.FakeGH(t)
+	testkit.Answer(t, state, "pr-create", "created\n")
+	_, err := Publish(repo, d, p, "T1", time.Time{}, false)
+	_, statErr := os.Stat(d.Run("pr-body-T1.md"))
+	if err == nil || errors.As(err, new(*exit.Error)) || !strings.Contains(err.Error(), `printed no PR URL: "created"`) || !os.IsNotExist(statErr) {
+		t.Fatalf("Publish error = %v, body file %v, want a plain error that quotes the output and no body file", err, statErr)
+	}
+}
+
+// The retry replays at another committer date: Prepare reuses the branch that the failed run pushed, so the origin tip stays.
+func TestPublishRetriesAfterAGHFailure(t *testing.T) {
+	repo, d, p := queueFixture(t)
+	bare := testkit.Git(t, repo, "remote", "get-url", "origin")
+	state, _ := testkit.FakeGH(t)
+	if _, err := Publish(repo, d, p, "T1", time.Time{}, false); err == nil {
+		t.Fatal("Publish with a failing gh returned no error")
+	}
+	first := testkit.Git(t, bare, "rev-parse", "refs/heads/gang/demo/T1")
+	t.Setenv("GIT_COMMITTER_DATE", "1893456000 +0000")
+	testkit.Answer(t, state, "pr-create", "https://github.com/acme/widget/pull/17")
+	if url, err := Publish(repo, d, p, "T1", time.Time{}, false); err != nil || !strings.HasSuffix(url, "/pull/17") {
+		t.Fatalf("retry = %q, %v", url, err)
+	}
+	after := testkit.Git(t, bare, "rev-parse", "refs/heads/gang/demo/T1")
+	rows, err := Read(d)
+	if err != nil || len(rows) != 1 || rows[0].HeadSHA != first || after != first {
+		t.Fatalf("rows = %+v, %v, origin tip %s, first push %s", rows, err, after, first)
+	}
+}
+
+// A directory at the body path makes the write fail: the error comes back before gh runs, and the path is cleared.
+func TestPublishReturnsABodyFileError(t *testing.T) {
+	repo, d, p := queueFixture(t)
+	testkit.FakeGH(t)
+	if err := os.MkdirAll(d.Run("pr-body-T1.md"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Publish(repo, d, p, "T1", time.Time{}, false)
+	_, statErr := os.Stat(d.Run("pr-body-T1.md"))
+	if err == nil || errors.As(err, new(*exit.Error)) || !strings.HasPrefix(err.Error(), "open ") || !os.IsNotExist(statErr) {
+		t.Fatalf("Publish error = %v, body path %v, want the write error and no path left", err, statErr)
+	}
+}
+
+func TestPublishReturnsAGHError(t *testing.T) {
+	repo, d, p := queueFixture(t)
+	testkit.FakeGH(t) // no answer for pr create: the fake exits 1
+	_, err := Publish(repo, d, p, "T1", time.Time{}, false)
+	if err == nil || errors.As(err, new(*exit.Error)) || strings.Contains(err.Error(), "no PR URL") {
+		t.Fatalf("Publish error = %v, want gh's own error", err)
 	}
 }
 
