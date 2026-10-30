@@ -116,6 +116,12 @@ func Poll(repo string, d store.Dir, p *plan.Plan, now time.Time) ([]string, erro
 		}
 	}
 
+	soft, err := queue(repo, d, p, now, emit)
+	if err != nil {
+		return nil, err
+	}
+	ghErr = errors.Join(ghErr, soft)
+
 	tip := ""
 	if s, err := gitx.RevParse(repo, "refs/heads/"+p.Repo.Integration); err == nil {
 		tip = strings.TrimSpace(s)
