@@ -129,11 +129,11 @@ func Merge(repo string, d store.Dir, p *plan.Plan, id, sha string) (Result, erro
 	if len(conflicts) > 0 {
 		return Result{Status: Conflict, TrunkSHA: trunk, Files: conflicts, Reason: "merge conflict"}, nil
 	}
-	n, err := size.Count(repo, trunk, strings.TrimSpace(tree), size.DefaultExclude)
+	_, why, err := size.Measure(repo, trunk, strings.TrimSpace(tree), p.Limits, t.Size.Reason)
 	if err != nil {
 		return Result{}, err
 	}
-	if why := size.Check(p.Limits, t.Size.Reason, n); why != "" {
+	if why != "" {
 		return refuse("%s", why)
 	}
 	commit, err := gitx.CommitTree(repo, strings.TrimSpace(tree), []string{trunk, sha}, fmt.Sprintf("merge %s: %s", id, t.Title))

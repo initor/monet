@@ -79,6 +79,49 @@ func TestCountIgnoresTheDiffAlgorithmSetting(t *testing.T) {
 	}
 }
 
+func TestCountIgnoresTheRenameLimit(t *testing.T) {
+	repo := testkit.Repo(t)
+	testkit.Git(t, repo, "config", "diff.renameLimit", "1")
+	base := testkit.CommitOn(t, repo, "main", "base", map[string]string{"x.txt": strings.Repeat("x\n", 30), "y.txt": strings.Repeat("y\n", 30)})
+	testkit.Git(t, repo, "reset", "-q", "--hard", base)
+	for _, c := range []string{"x", "y"} {
+		testkit.Git(t, repo, "mv", c+".txt", c+"2.txt")
+		edited := strings.Repeat(c+"\n", 29) + "edit\n"
+		if err := os.WriteFile(filepath.Join(repo, c+"2.txt"), []byte(edited), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	testkit.Git(t, repo, "commit", "-q", "-a", "-m", "rename and edit")
+	tip := testkit.Git(t, repo, "rev-parse", "HEAD")
+	// A rename limit of 1 would make git count each file as deleted and added (about 120).
+	if n, err := Count(repo, base, tip, nil); err != nil || n != 4 {
+		t.Errorf("Count = %d, %v; want 4, the two edits", n, err)
+	}
+}
+
+func TestCountIgnoresWorkingTreeAttributes(t *testing.T) {
+	repo := testkit.Repo(t)
+	base := testkit.Git(t, repo, "rev-parse", "HEAD")
+	tip := testkit.CommitOn(t, repo, "task", "notes", map[string]string{"notes.txt": strings.Repeat("n\n", 150)})
+	// A -diff attribute in the checkout would make git skip notes.txt as binary.
+	if err := os.WriteFile(filepath.Join(repo, ".gitattributes"), []byte("*.txt -diff\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := Count(repo, base, tip, nil); err != nil || n != 150 {
+		t.Errorf("Count = %d, %v; want 150, with attributes read from the base commit", n, err)
+	}
+}
+
+func TestCountIgnoresTheTasksOwnAttributes(t *testing.T) {
+	repo := testkit.Repo(t)
+	base := testkit.Git(t, repo, "rev-parse", "HEAD")
+	// The task commits the -diff attribute for its own lines. Its one line counts too.
+	tip := testkit.CommitOn(t, repo, "task", "notes", map[string]string{"notes.txt": strings.Repeat("n\n", 150), ".gitattributes": "*.txt -diff\n"})
+	if n, err := Count(repo, base, tip, nil); err != nil || n != 151 {
+		t.Errorf("Count = %d, %v; want 151, with attributes read from the base commit", n, err)
+	}
+}
+
 func TestCountNumstat(t *testing.T) {
 	for _, c := range []struct {
 		name, out string

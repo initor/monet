@@ -47,12 +47,12 @@ func cmdSize(c *Ctx, args []string) error {
 	if len(conflicts) > 0 {
 		return exit.New(exit.Conflict, "size %s: the tip conflicts with %s in %v", t.ID, p.Repo.Integration, conflicts)
 	}
-	n, err := size.Count(c.Repo, trunk, tree, size.DefaultExclude)
+	n, msg, err := size.Measure(c.Repo, trunk, tree, p.Limits, t.Size.Reason)
 	if err != nil {
 		return err
 	}
 	fmt.Fprintf(c.Stdout, "%s: %d changed lines (limit %d, ceiling %d)\n", t.ID, n, p.Limits.TaskLines, p.Limits.SplitLines)
-	if msg := size.Check(p.Limits, t.Size.Reason, n); msg != "" {
+	if msg != "" {
 		return exit.New(exit.Refused, "%s", msg)
 	}
 	return nil
