@@ -19,14 +19,14 @@ Two working systems exist today:
 - **[pstack](https://github.com/cursor/plugins/tree/main/pstack)**, in Cursor's plugins repo, is the method gang is built on, and it's proven: briefs as the product, a ledger keyed by SHA, fresh agents, and independent verification.
 - **The earlier engine**, hand-built on Claude Code for an earlier project, is proven: a compiled Workflow, resume from git, compare-and-swap merges, and a simulator.
 
-`/monet:gang` makes the two into one reusable skill. It turns specs into a task graph, then runs the graph with a fleet of agents until every task reaches `main` through wave PRs.
+`/monet:gang` makes the two into one reusable skill. It turns specs into a task graph, then runs the graph with a fleet of agents until every task reaches `main` through wave PRs. From 0.5.0, each trunk task ships as its own small PR (`gang pr open`, gate, fix, merge). See [gang-0.5.md](gang-0.5.md) for the rest.
 
 ## 2. Decisions
 
 | # | Decision |
 |---|---|
 | 1 | The acceptance test for version 1 is the toy spec run (section 11.4). Adopting the rest of the earlier engine's plan is an optional later run (section 11.5). |
-| 2 | Units merge into an integration branch. Waves reach `main` through wave PRs. A PR from the integration branch is a standing exception to the global PR rule for gang runs. |
+| 2 | Units merge into an integration branch. In 0.4.0, waves reach `main` through wave PRs. A PR from the integration branch is a standing exception to the global PR rule for gang runs. |
 | 3 | Scope is coordinator plus planner. |
 | 4 | Correctness wins over human touches, wall clock, and token cost. |
 | 5 | Agents may open PRs without approval. The user will revisit the global "nothing remote" rule. |

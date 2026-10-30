@@ -77,16 +77,25 @@ Other constraints:
 | O2 | 100 changed lines per PR. More only when truly necessary. |
 | O3 | A run drives itself with no one in the loop, with the automatic handoff. |
 | O4 | 0.5.0 also carries the lease checks. |
-| O5 | With the cleanup grant at kickoff, gang removes the worktree of each shipped task at each checkpoint. It removes only a worktree whose task is on main and that has no uncommitted changes. |
+| O5 | From 0.5.x, with the cleanup grant at kickoff, gang removes the worktree of each shipped task at each checkpoint. It removes only a worktree whose task is on main and that has no uncommitted changes. |
 | O6 | Claude squash-merges its own 0.5.0 PRs in monet, after CI is green and its own review is clean. |
 
 ## 5. Design
+
+0.5.0 ships the PR queue only: each task becomes one small PR through `gang pr open`, `pr gate`, `pr fix`, and `pr merge`. The trunk keeps its 0.4.0 shape, and the wave commands stay. These wait for 0.5.x:
+
+- One-parent trunk merges and `gang trunk rebuild`.
+- `gang pr close` with a republish.
+- `gang worktrees prune`.
+- Plan version 2 with the 0.4.0 refusal.
+- The removal of the wave commands.
+- `--holder` on `plan commit`.
 
 ### 5.1 One task, one PR
 
 The trunk (`repo.integration`) stays a local branch. Gang never pushes it.
 
-`gang merge` writes one commit per task on the trunk, with one parent. Its tree is the merge result, as today. Its message is the task title, then the lines `Task: <id>` and `Reviewed: <sha>`. So the trunk is a straight line with one commit per task.
+From 0.5.x, `gang merge` writes one commit per task on the trunk, with one parent. Its tree is the merge result, as today. Its message is the task title, then the lines `Task: <id>` and `Reviewed: <sha>`. So the trunk is a straight line with one commit per task.
 
 A PR queue publishes the trunk commits in trunk order. At most one gang PR is open at a time.
 
@@ -103,19 +112,19 @@ The task title becomes the PR title and the squash subject. So lint checks that 
 
 The trunk is the private staging ref of the run. Only the gang CLI moves it, always with a compare-and-swap. Each move keeps the old tip under `refs/gang/<slug>/trunk-backup/<n>`.
 
-After each merged PR, `gang trunk rebuild` resets the trunk to the new `origin/<base>`. Then it replays the unshipped trunk commits onto it, in order. It leaves out each commit whose change already shipped, such as a fix that went out in a PR. So the trunk is always the base plus the commits still to ship.
+From 0.5.x, `gang trunk rebuild` runs after each merged PR. It resets the trunk to the new `origin/<base>`. Then it replays the unshipped trunk commits onto it, in order. It leaves out each commit whose change already shipped, such as a fix that went out in a PR. So the trunk is always the base plus the commits still to ship.
 
-A replay can still conflict, when the base changed outside the run or when a fix overlaps a later task. Then the queue stops, and a sync task resolves the conflict on the trunk. Agents still never rebase: the rebuild is a CLI step, like `gang merge`.
+From 0.5.x, a replay can still conflict, when the base changed outside the run or when a fix overlaps a later task. Then the queue stops, and a sync task resolves the conflict on the trunk. Agents still never rebase: the rebuild is a CLI step, like `gang merge`.
 
 A red PR gets a fix. The fix task merges into the trunk first, as its own commit with `Task: <fix id>` and `Fixes: <id>`. Then `gang pr fix <id> <fix id>` replays that commit onto the open PR branch as a new commit. This push is a fast-forward.
 
-A PR takes at most 2 fix commits. When it is still red, `gang pr close <id>` closes it. Gang then publishes the task and its fixes as one commit in a new PR, at most twice.
+A PR takes at most 2 fix commits. In 0.5.0 a PR that is still red stops the queue. From 0.5.x, `gang pr close <id>` closes it, and gang publishes the task and its fixes as one commit in a new PR, at most twice.
 
-After that, the queue stops, and the checkpoint decides on a repair task or a split. For a split, the rebuild drops the task commit and the commits of the tasks that depend on it. Those tasks run again after the split. A drop happens only at a checkpoint, so the next `gang gen` sees the new done set.
+After that, the queue stops, and the checkpoint decides on a repair task or a split. From 0.5.x, for a split, the rebuild drops the task commit and the commits of the tasks that depend on it. Those tasks run again after the split. A drop happens only at a checkpoint, so the next `gang gen` sees the new done set.
 
 A task is done when a commit on `origin/<base>` holds its `Task: <id>` line. The run is done when every task is done and no gang PR is open. The engine still starts a task when its dependencies are on the trunk, so the engine does not wait for the PR queue. A task branch that started from an older trunk tip still merges, because `gang merge` uses `merge-tree` against the current trunk.
 
-`wave` stays in the schema for the schedule estimate and for `gen --max-wave`. No command opens a PR per wave. `gang push`, `gang wave open`, `gang wave merge`, and WAVE_READY go away.
+`wave` stays in the schema for the schedule estimate and for `gen --max-wave`. No command opens a PR per wave. `gang push`, `gang wave open`, `gang wave merge`, and WAVE_READY go away in 0.5.x. A queue run does not call them.
 
 ### 5.2 Size budget
 
@@ -138,7 +147,7 @@ The kickoff of `/monet:gang plan <spec-dir>` asks once, while the owner is prese
 1. The run settings that `planner.md` asks for today: the commands, the locks, and the trunk name.
 2. The tracker page, a private Notion link or none.
 3. The self-drive grant: approve a clean plan, open and merge each green PR, and relay at the threshold.
-4. The cleanup grant: remove the worktree of each task that has shipped.
+4. The cleanup grant (from 0.5.x): remove the worktree of each task that has shipped.
 5. The permission setup: the allow rules for the gang binary, `claude --bg`, `claude agents`, and the Notion tools.
 6. A check list: Docker running when the gate needs it, and the Mac on AC power with the lid open.
 
@@ -148,7 +157,7 @@ With the grant, the planner approves its own plan and logs the approval in `stat
 
 After kickoff, gang asks nothing that a standing order or a default can answer. Some blocks need the owner, such as an expired login or a stopped Docker. Gang writes each one to the tracker and goes on with the work that does not need it. At each heartbeat, the coordinator checks the power source and the lid, and it writes a warning to the tracker when the Mac can sleep.
 
-Worktrees pile up: an earlier run left 116 of them for 17 tasks, and preflight fails at 400 (`limits.max_worktrees`). With the cleanup grant, `gang worktrees prune` removes the worktree of each task whose `Task:` line is on `origin/<base>`. It skips a worktree with uncommitted changes. The coordinator runs it at each checkpoint. Without the grant, the coordinator stops for the owner before the run reaches the cap.
+Worktrees pile up: an earlier run left 116 of them for 17 tasks, and preflight fails at 400 (`limits.max_worktrees`). From 0.5.x, with the cleanup grant, `gang worktrees prune` removes the worktree of each task whose `Task:` line is on `origin/<base>`. It skips a worktree with uncommitted changes. The coordinator runs it at each checkpoint. Without the grant, the coordinator stops for the owner before the run reaches the cap.
 
 ### 5.4 Green signal
 
@@ -168,13 +177,13 @@ The plan gets `repo.checks`, with the value `github` or `gate`. Kickoff sets `ga
 
 ### 5.6 Lease checks
 
-- Every outward command takes `--holder <session>`: `gang pr open`, `pr fix`, `pr merge`, `pr close`, `plan commit`, and the `gang/gate` status post.
+- Every outward command takes `--holder <session>`: `gang pr open`, `pr fix`, `pr merge`, and the `gang/gate` status post. From 0.5.x, `pr close` and `plan commit` take it too.
 - Each one renews the driver lease for that holder first, with `lock.Renew`. It exits 4 when another session holds the lease. The renew runs under the lease mutex.
 - `reference/coordinator.md` and `reference/relay.md` pass `--holder <session>` on every such call.
 
 ### 5.7 Compatibility
 
-The plan version becomes 2. 0.5.0 refuses a run folder from 0.4.0, and it tells the user to finish that run with 0.4.0 first.
+0.5.0 keeps plan version 1 and the trunk shape of 0.4.0. A run that 0.4.0 started can switch to the PR queue, because the queue reads its two-parent gang merges as landings. The steps are in `reference/coordinator.md`, under "Switch a 0.4.0 run to the queue". The plan version becomes 2 in a later release, when gang rebuilds the trunk on the base after each merged PR. From that release on, gang refuses a run folder from 0.4.0 and tells the user to finish that run with 0.4.0 first.
 
 ## 6. Risks
 
@@ -185,7 +194,7 @@ The plan version becomes 2. 0.5.0 refuses a run folder from 0.4.0, and it tells 
 | The classifier in a relayed session does not honor a grant that the relay carried. | The pilot forces one relay. A block goes to the tracker. |
 | Tasks of 100 lines multiply the agent count and the token cost. | The owner accepted this cost for small PRs. Review stays per task. |
 | The base moves outside the run. | The replay conflict path in 5.1. |
-| Small tasks multiply the worktrees, about 7 per task in an earlier run. | `gang worktrees prune` at each checkpoint, under the cleanup grant. |
+| Small tasks multiply the worktrees, about 7 per task in an earlier run. | From 0.5.x, `gang worktrees prune` at each checkpoint, under the cleanup grant. |
 
 ## 7. Left to the builder
 
@@ -193,7 +202,7 @@ The plan version becomes 2. 0.5.0 refuses a run folder from 0.4.0, and it tells 
 - The exact PR body. It stays short, in the shape that `monet:ship` uses.
 - How the engine reports a size refusal, and how watch names the new events.
 - The test design. Each rule gets a case that fails without it.
-- The listing rule of `gang worktrees`. Today it checks ancestry of the trunk (`cli/cmd/gang/cmd_worktrees.go:48`), which one-parent trunk commits break.
+- The listing rule of `gang worktrees`. Today it checks ancestry of the trunk (`cli/cmd/gang/cmd_worktrees.go:48`), which the one-parent trunk commits of 0.5.x break.
 - The split of the 0.5.0 work into PRs of at most 100 lines where possible. This document is one PR above 100 lines, because a design split across PRs is hard to review.
 
 ## 8. Calls made for the owner
@@ -206,7 +215,7 @@ These are Claude's calls, not the owner's. The owner checks them in review.
 4. One open PR at a time.
 5. Squash merges, because the owner's repos use them, with the `Task:` lines in the squash body.
 6. A `gang/gate` commit status for a repo with no CI.
-7. The trunk stays local, and only the CLI moves it. It is rebuilt on the base after each merged PR. PR branches are `gang/<slug>/<id>`.
+7. The trunk stays local, and only the CLI moves it. From 0.5.x it is rebuilt on the base after each merged PR. PR branches are `gang/<slug>/<id>`.
 8. The kickoff asks everything in one batch, and the planner approves a clean plan on the owner's grant.
-9. A red PR gets 2 fix commits, then 2 republishes as one commit, then the checkpoint.
+9. A red PR gets 2 fix commits, then the checkpoint. From 0.5.x, 2 republishes as one commit come between.
 10. `plan --adopt` splits a big source task into parts that keep the source id.
