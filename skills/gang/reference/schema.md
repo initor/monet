@@ -40,8 +40,8 @@ This file is the schema of `plan.json`. A task in the plan is its brief. Lint ru
 | `acceptance` | strings, 1 or more | ACCEPTANCE | one checkable line each |
 | `verify.tests_first` | test ids, 1 or more | VERIFY | these fail before the change and pass after |
 | `verify.commands` | strings | VERIFY | extra commands beyond the run gate |
-| `size.lines`, `timebox_min` | ints | TIMEBOX | `size.lines` is at most `limits.task_lines`, or `limits.split_lines` with a `size.reason`. The `budget:` line of TIMEBOX reads `limits.task_lines`, or `limits.split_lines` and the text of `size.reason` when one is set |
-| `size.reason` | string | (lint) | optional. Says why a task above `limits.task_lines` cannot be split. Lint fails such a task when this field is blank |
+| `size.lines`, `timebox_min` | ints | TIMEBOX | `size.lines` is at most `limits.task_lines`, or `limits.split_lines` with a `size.reason`. The `budget:` line of TIMEBOX reads `limits.task_lines`, or `limits.split_lines` and the text of `size.reason` when it is not blank |
+| `size.reason` | string | TIMEBOX | optional. Says why a task above `limits.task_lines` cannot be split. Lint fails such a task when this field is blank |
 | `forbidden` | strings | FORBIDDEN | added to the run-wide list |
 | `locks` | names | (scheduling) | each name is in the run-wide `locks` |
 | `risk` | `low` or `high` | (review) | `high` adds an adversarial reviewer |
