@@ -4,26 +4,27 @@ package size
 
 import (
 	"fmt"
-	pathpkg "path" // Excluded names its parameter path
+	"path"
 	"strconv"
 	"strings"
 
 	"gang/internal/gitx"
+	"gang/internal/plan"
 )
 
 // DefaultExclude lists the lock files that a size count leaves out.
 var DefaultExclude = []string{"go.sum", "package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml", "*.lock"}
 
-// Excluded reports whether path matches one of globs. Each glob is matched
-// with path.Match against the whole slash-separated path and against its base
+// Excluded reports whether name matches one of globs. Each glob is matched
+// with path.Match against the whole slash-separated name and against its base
 // name, so "go.sum" matches "tools/go.sum". A malformed glob matches nothing.
-func Excluded(path string, globs []string) bool {
-	base := pathpkg.Base(path)
+func Excluded(name string, globs []string) bool {
+	base := path.Base(name)
 	for _, g := range globs {
-		if ok, _ := pathpkg.Match(g, path); ok {
+		if ok, _ := path.Match(g, name); ok {
 			return true
 		}
-		if ok, _ := pathpkg.Match(g, base); ok {
+		if ok, _ := path.Match(g, base); ok {
 			return true
 		}
 	}
@@ -35,9 +36,10 @@ func Excluded(path string, globs []string) bool {
 // It skips binary files and the paths that Excluded matches. For a rename it
 // matches the new path.
 func Count(repo, from, to string, exclude []string) (int, error) {
+	// --diff-algorithm=myers keeps a diff.algorithm setting from changing a count.
 	// --end-of-options and -- keep a revision from being read as an option or
 	// as a path.
-	out, err := gitx.Run(repo, "diff", "--numstat", "-z", "-M", "--end-of-options", from, to, "--")
+	out, err := gitx.Run(repo, "diff", "--numstat", "-z", "-M", "--diff-algorithm=myers", "--end-of-options", from, to, "--")
 	if err != nil {
 		return 0, err
 	}
@@ -80,4 +82,20 @@ func countNumstat(out string, exclude []string) (int, error) {
 		total += a + d
 	}
 	return total, nil
+}
+
+// Check returns "" when a task of n changed lines fits the budget l, and
+// otherwise the text that says what to do. A size above l.TaskLines needs a
+// non-blank reason (the task's size.reason), and no size may go above
+// l.SplitLines. Callers match the two texts by prefix.
+func Check(l plan.Limits, reason string, n int) string {
+	switch {
+	case n <= l.TaskLines:
+		return ""
+	case n > l.SplitLines:
+		return fmt.Sprintf("size %d is above limits.split_lines %d: split the task", n, l.SplitLines)
+	case strings.TrimSpace(reason) == "":
+		return fmt.Sprintf("size %d is above limits.task_lines %d: split the task, or give size.reason", n, l.TaskLines)
+	}
+	return ""
 }

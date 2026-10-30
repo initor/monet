@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"gang/internal/plan"
 	"gang/internal/testkit"
 )
 
@@ -67,6 +68,17 @@ func TestCountTakesRevisionsLiterally(t *testing.T) {
 	}
 }
 
+func TestCountIgnoresTheDiffAlgorithmSetting(t *testing.T) {
+	repo := testkit.Repo(t)
+	testkit.Git(t, repo, "config", "diff.algorithm", "histogram")
+	base := testkit.CommitOn(t, repo, "main", "base", map[string]string{"a.txt": "u\nb\nb\nb\n"})
+	tip := testkit.CommitOn(t, repo, "task", "change", map[string]string{"a.txt": "b\nb\nb\nu\n"})
+	// Histogram anchors on the unique line u and counts 6. Myers keeps the b lines and counts 2.
+	if n, err := Count(repo, base, tip, nil); err != nil || n != 2 {
+		t.Errorf("Count = %d, %v; want 2, the myers count", n, err)
+	}
+}
+
 func TestCountNumstat(t *testing.T) {
 	for _, c := range []struct {
 		name, out string
@@ -79,6 +91,7 @@ func TestCountNumstat(t *testing.T) {
 		{"a rename, then a record", "1\t1\t\x00old.txt\x00new.txt\x00" + "2\t0\tb.txt\x00", 4, false},
 		{"a binary rename, then a record", "-\t-\t\x00old.bin\x00new.bin\x00" + "2\t0\tb.txt\x00", 2, false},
 		{"a rename to an excluded name, then a record", "5\t5\t\x00a.txt\x00a.lock\x00" + "1\t0\tb.txt\x00", 1, false},
+		{"a rename from an excluded name", "2\t0\t\x00go.sum\x00sums.txt\x00", 2, false},
 		{"a rename that stops after the old path", "1\t1\t\x00old.txt\x00", 0, true},
 		{"a record with no counts", "a.txt\x00", 0, true},
 		{"counts that are not numbers", "x\ty\ta.txt\x00", 0, true},
@@ -108,6 +121,26 @@ func TestExcludedMatchesTheWholePath(t *testing.T) {
 		"gen/api.go": true, "src/gen/api.go": false, "gen/deep/api.go": false, "api.go": false} {
 		if got := Excluded(p, globs); got != want {
 			t.Errorf("Excluded(%q, %q) = %v, want %v", p, globs, got, want)
+		}
+	}
+}
+
+func TestCheck(t *testing.T) {
+	l := plan.DefaultLimits() // 100 and 300
+	for _, c := range []struct {
+		n      int
+		reason string
+		want   string // "" means within budget
+	}{
+		{100, "", ""},
+		{101, "", "size 101 is above limits.task_lines 100: split the task, or give size.reason"},
+		{150, "   ", "size 150 is above limits.task_lines 100: split the task, or give size.reason"},
+		{300, "generated parser", ""},
+		{301, "generated parser", "size 301 is above limits.split_lines 300: split the task"},
+		{301, "", "size 301 is above limits.split_lines 300: split the task"},
+	} {
+		if got := Check(l, c.reason, c.n); got != c.want {
+			t.Errorf("Check(%d, %q) = %q; want %q", c.n, c.reason, got, c.want)
 		}
 	}
 }
