@@ -134,9 +134,11 @@ func parseMergeTree(out []byte, code int) (tree string, conflicts []string) {
 // as one commit with onto as its only parent and msg as its message. It moves
 // no ref and uses no index or work tree. A merge commit's first parent as
 // parent replays only what that merge brought in. A conflict returns no SHA and
-// the conflicted paths, as MergeTree reports them. Pass onto as a SHA, because
-// git resolves it in two calls.
+// the conflicted paths, as MergeTree reports them. onto is resolved once.
 func Replay(dir, commit, parent, onto, msg string) (sha string, conflicts []string, err error) {
+	if onto, err = RevParse(dir, onto); err != nil {
+		return "", nil, err
+	}
 	out, code, err := git(dir, nil, []int{1}, "merge-tree", "--write-tree", "--name-only",
 		"--merge-base="+parent, onto, commit)
 	if err != nil {

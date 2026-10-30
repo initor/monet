@@ -265,7 +265,11 @@ func TestReplayUnknownRevisionIsAnError(t *testing.T) {
 	head := testkit.Git(t, repo, "rev-parse", "HEAD")
 	sha, conflicts, err := Replay(repo, head, "no-such-rev", head, "msg")
 	if err == nil || sha != "" || conflicts != nil {
-		t.Errorf("Replay = %q, %v, %v; want an error and nothing else", sha, conflicts, err)
+		t.Errorf("unknown parent: Replay = %q, %v, %v; want an error and nothing else", sha, conflicts, err)
+	}
+	sha, conflicts, err = Replay(repo, head, head, "no-such-rev", "msg")
+	if !errors.Is(err, ErrNotFound) || sha != "" || conflicts != nil {
+		t.Errorf("unknown onto: Replay = %q, %v, %v; want ErrNotFound (onto is resolved up front) and nothing else", sha, conflicts, err)
 	}
 }
 
