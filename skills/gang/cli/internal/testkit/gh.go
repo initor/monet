@@ -12,7 +12,7 @@ import (
 // cat and cp so it runs under a PATH that holds only the fake bin dir.
 const fakeGH = `#!/bin/sh
 printf '%s\n' "$*" >> "$GH_FAKE_DIR/calls.log"
-if [ "$1 $2" = "pr create" ]; then
+if [ "$1 $2" = "pr create" ] || [ "$1 $2" = "pr merge" ]; then
   prev=""
   for a in "$@"; do
     if [ "$prev" = "--body-file" ]; then /bin/cp "$a" "$GH_FAKE_DIR/body.md"; fi

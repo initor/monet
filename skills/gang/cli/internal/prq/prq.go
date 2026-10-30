@@ -4,6 +4,7 @@ package prq
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -125,4 +126,45 @@ func Live(d store.Dir, p *plan.Plan, id string) (Row, gh.State, error) {
 		return Row{}, gh.State{}, exit.New(exit.Refused, "PR #%d head moved: %.7s, recorded %.7s", r.PR, st.HeadSHA, r.HeadSHA)
 	}
 	return r, st, nil
+}
+
+// Merge squash-merges the open PR of task id with --match-head-commit, and
+// marks its row merged. It returns the squash subject.
+func Merge(repo string, d store.Dir, p *plan.Plan, id string) (string, error) {
+	r, st, err := Live(d, p, id)
+	if err != nil {
+		return "", err
+	}
+	if green, _, failed := gh.Classify(st); !green {
+		if len(failed) > 0 {
+			return "", exit.New(exit.Refused, "PR #%d is not green, failed: %s", r.PR, strings.Join(failed, ","))
+		}
+		return "", exit.New(exit.Refused, "PR #%d is not green", r.PR)
+	}
+	cs, err := commits(repo, "refs/remotes/origin/"+p.Repo.Base+".."+r.HeadSHA)
+	if err != nil {
+		return "", err
+	}
+	if len(cs) == 0 {
+		return "", fmt.Errorf("PR #%d has no commit above origin/%s", r.PR, p.Repo.Base)
+	}
+	subject, body := fmt.Sprintf("%s (#%d)", cs[0].subject, r.PR), ""
+	for _, c := range cs {
+		if m := taskLine.FindStringSubmatch(c.msg); m != nil {
+			body += "Task: " + m[1] + "\n"
+		}
+	}
+	file := d.Run("merge-body-" + id + ".md")
+	if err := store.WriteFileAtomic(file, []byte(body), 0o644); err != nil {
+		return "", err
+	}
+	defer os.Remove(file)
+	args := append([]string{"pr", "merge", strconv.Itoa(r.PR)}, gh.RepoArgs(p.Repo.Remote)...)
+	if _, err := gh.Run(append(args, "--squash", "--match-head-commit", r.HeadSHA, "--subject", subject, "--body-file", file)...); err != nil {
+		return "", err
+	}
+	if err := SetState(d, id, StateMerged); err != nil {
+		return "", err
+	}
+	return subject, nil
 }

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"gang/internal/exit"
+	"gang/internal/plan"
 	"gang/internal/store"
 	"gang/internal/testkit"
 )
@@ -102,5 +103,60 @@ func TestLiveRefusesUnlessTheRecordedPRIsOpen(t *testing.T) {
 	wantExit(t, err, exit.Refused, "repo.gh_account is empty: gang makes no GitHub call for T1")
 	if got := testkit.Calls(t, state); len(got) != 3 || !strings.HasPrefix(got[2], "pr view 7 --repo github.com/acme/widget ") {
 		t.Fatalf("gh calls = %q, want one for each Live that reached GitHub, the last for PR 7 of github.com/acme/widget", got)
+	}
+}
+
+const checkOK = `{"__typename":"CheckRun","name":"build","status":"COMPLETED","conclusion":"SUCCESS"}`
+
+// openPR leaves T1 with PR 7 open on a branch of two commits, and a fake gh that shows it green at its head.
+func openPR(t *testing.T) (repo string, d store.Dir, p *plan.Plan, ghDir, head string) {
+	t.Helper()
+	repo, d, p = queueFixture(t)
+	testkit.Git(t, repo, "branch", "pr", "refs/remotes/origin/main")
+	testkit.CommitOn(t, repo, "pr", "T1: work\n\nTask: T1", map[string]string{"a/T1.go": "package a\n"})
+	head = testkit.CommitOn(t, repo, "pr", "fix: tidy a\n\nTask: F01\nTask: T9\nFixes: T1", map[string]string{"a/T1.go": "package a // tidy\n"})
+	if err := Put(d, Row{Task: "T1", PR: 7, Branch: "gang/demo/T1", HeadSHA: head, State: StateOpen}); err != nil {
+		t.Fatal(err)
+	}
+	ghDir, _ = testkit.FakeGH(t)
+	testkit.Answer(t, ghDir, "pr-view.json", prView("OPEN", head, checkOK))
+	testkit.Answer(t, ghDir, "pr-merge", "")
+	return repo, d, p, ghDir, head
+}
+
+func TestMergeSquashesWithTheTaskLines(t *testing.T) {
+	repo, d, p, ghDir, head := openPR(t)
+	subject, err := Merge(repo, d, p, "T1")
+	if err != nil || subject != "T1: work (#7)" {
+		t.Fatalf("Merge = %q, %v, want %q", subject, err, "T1: work (#7)")
+	}
+	calls := testkit.Calls(t, ghDir)
+	if want := "pr merge 7 --repo github.com/acme/widget --squash --match-head-commit " + head + " --subject T1: work (#7) --body-file "; !strings.HasPrefix(calls[len(calls)-1], want) {
+		t.Errorf("last gh call = %q, want prefix %q", calls[len(calls)-1], want)
+	}
+	if body, err := os.ReadFile(ghDir + "/body.md"); err != nil || string(body) != "Task: T1\nTask: F01\n" {
+		t.Errorf("body = %q, %v, want the first Task line of each commit", body, err)
+	}
+	rows, readErr := Read(d)
+	_, statErr := os.Stat(d.Run("merge-body-T1.md"))
+	if want := []Row{{Task: "T1", PR: 7, Branch: "gang/demo/T1", HeadSHA: head, State: StateMerged}}; readErr != nil || !slices.Equal(rows, want) || !errors.Is(statErr, os.ErrNotExist) {
+		t.Errorf("rows = %+v, %v, merge-body-T1.md stat = %v, want %+v and no merge-body file", rows, readErr, statErr, want)
+	}
+}
+
+func TestMergeRefusesUntilGreen(t *testing.T) {
+	for _, c := range []struct{ check, refusal string }{
+		{`{"__typename":"CheckRun","name":"unit","status":"COMPLETED","conclusion":"FAILURE"},{"__typename":"CheckRun","name":"lint","status":"COMPLETED","conclusion":"FAILURE"}`, "PR #7 is not green, failed: lint,unit"},
+		{"", "PR #7 is not green"},
+		{`{"__typename":"CheckRun","name":"build","status":"IN_PROGRESS"}`, "PR #7 is not green"},
+	} {
+		repo, d, p, ghDir, head := openPR(t)
+		testkit.Answer(t, ghDir, "pr-view.json", prView("OPEN", head, c.check))
+		_, err := Merge(repo, d, p, "T1")
+		wantExit(t, err, exit.Refused, c.refusal)
+		rows, _ := Read(d)
+		if calls := testkit.Calls(t, ghDir); err.Error() != c.refusal || len(calls) != 1 || rows[0].State != StateOpen {
+			t.Fatalf("err = %q, gh calls = %q, rows = %+v, want %q, only the pr view, an open row", err, calls, rows, c.refusal)
+		}
 	}
 }
