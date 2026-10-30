@@ -156,7 +156,9 @@ The transcribers read the Markdown plan. That is `<file>`, or the path in the to
 Tell each transcriber these rules:
 
 - Copy the plan. Do not redesign it.
-- Keep each `id`, `branch`, `wave`, size, requirement id, and lock as the source has it, except in a task that becomes parts.
-- A source task above `limits.task_lines` becomes parts. Each part sets `source` to the source task id. The first part takes the source task's dependencies, and each next part depends on the one before.
+- Keep each `id`, `branch`, `wave`, size, requirement id, and lock as the source has it.
+- A source task above `limits.task_lines` becomes parts. A merged source task is the exception, because `gang done` reads merged tasks by id, and parts get new ids. It stays whole and carries `size.reason` "merged before adopt". If its size is above `limits.split_lines`, write `limits.split_lines` as `size.lines`, and put the real size in `notes`.
+- Each part sets `source` to the source task id. The first part takes the source task's dependencies, and each next part depends on the one before. A task that depends on, or merges after, the source task names its last part.
+- A part takes its own `id`, `branch`, size, and requirement ids, and keeps the source task's `wave` and locks. A requirement that several parts cover needs a reason in the `notes` of each, as rule 4 says.
 - Write the source's deps as `depends_on`, and its merge-after list as `merge_after`.
 - Where the source lacks a field, use its closest text, and name the gap in `notes`.
