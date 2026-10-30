@@ -432,6 +432,14 @@ func TestAdoptSplit(t *testing.T) {
 			[]string{"rule 8: T2 : edge T2 depends_on T1 is in the source but not in the plan"}},
 		{"first part takes the source dependencies", `{"tasks":[{"id":"T0"},{"id":"T1","depends_on":["T0"],"merge_after":["T0"]}]}`,
 			`{"tasks":[{"id":"T0"},{"id":"T10","source":"T1","depends_on":["T0"],"merge_after":["T0"]},{"id":"T11","source":"T1","depends_on":["T10"]}]}`, nil},
+		// The unknown source T9 is reported as a task of the plan, and T1 as depending on it.
+		{"a part whose source names no task", src,
+			`{"tasks":[{"id":"T10","source":"T9"},{"id":"T11","source":"T1","depends_on":["T10"]},{"id":"T2","depends_on":["T11"]}]}`,
+			[]string{
+				"rule 8: - : task count 3 differs from the source's 2",
+				"rule 8: T9 : task is in the plan but not in the source",
+				"rule 8: T1 : edge T1 depends_on T9 is in the plan but not in the source",
+			}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
