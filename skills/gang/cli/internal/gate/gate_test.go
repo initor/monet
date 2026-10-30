@@ -344,7 +344,15 @@ func TestPRStatusOnlyForAFinishedJobAtTheHead(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := store.WriteFileAtomic(d.Run("jobs", "pr-T1-7", "job.json"), []byte("{"), 0o644); err != nil {
+	// pr-T1-7: not JSON. pr-T1-8: no status.json. pr-T1-10: status.json unreadable. pr-T1-11: passed, no head.
+	if err := errors.Join(
+		store.WriteFileAtomic(d.Run("jobs", "pr-T1-7", "job.json"), []byte("{"), 0o644),
+		writeJSON(d.Run("jobs", "pr-T1-8", "job.json"), Job{ID: "pr-T1-8", Task: "T1", Kind: KindPR, Head: "h1"}),
+		writeJSON(d.Run("jobs", "pr-T1-10", "job.json"), Job{ID: "pr-T1-10", Task: "T1", Kind: KindPR, Head: "h1"}),
+		os.MkdirAll(d.Run("jobs", "pr-T1-10", "status.json"), 0o755),
+		writeJSON(d.Run("jobs", "pr-T1-11", "job.json"), Job{ID: "pr-T1-11", Task: "T1", Kind: KindPR}),
+		writeStatus(d, JobStatus{ID: "pr-T1-11", State: StatePassed}),
+	); err != nil {
 		t.Fatal(err)
 	}
 	for _, c := range []struct {
@@ -357,8 +365,11 @@ func TestPRStatusOnlyForAFinishedJobAtTheHead(t *testing.T) {
 		{"pr-T1-4", "T1", "h1", "", exit.New(exit.Pending, "gate job pr-T1-4 is still running: post after it ends")},
 		{"pr-T1-5", "T1", "h1", "", exit.New(exit.Refused, "gate job pr-T1-5 could not run: run the gate again")},
 		{"pr-T1-6", "T1", "h1", "", exit.New(exit.Pending, "gate job pr-T1-6 is still queued: post after it ends")},
+		{"pr-T1-8", "T1", "h1", "", exit.New(exit.Refused, "gate job pr-T1-8 could not run: run the gate again")},
+		{"pr-T1-10", "T1", "h1", "", &os.PathError{Op: "read", Path: d.Run("jobs", "pr-T1-10", "status.json"), Err: syscall.EISDIR}},
 		{"pr-T1-1", "T1", "h2", "", exit.New(exit.Refused, "job pr-T1-1 did not gate head h2 of T1")},
 		{"pr-T1-1", "T1", "0123456789", "", exit.New(exit.Refused, "job pr-T1-1 did not gate head 0123456 of T1")},
+		{"pr-T1-11", "T1", "", "", exit.New(exit.Refused, "job pr-T1-11 did not gate head  of T1")},
 		{"pr-T1-1", "T2", "h1", "", exit.New(exit.Refused, "job pr-T1-1 did not gate head h1 of T2")},
 		{"T1-1", "T1", "h1", "", exit.New(exit.Refused, "job T1-1 did not gate head h1 of T1")},
 		{"pr-T1-9", "T1", "h1", "", exit.New(exit.Refused, "unknown job pr-T1-9")},

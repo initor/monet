@@ -451,10 +451,14 @@ func PRStatus(d store.Dir, id, task, head string) (string, error) {
 	if b, err := os.ReadFile(d.Run("jobs", id, "job.json")); err != nil || json.Unmarshal(b, &j) != nil {
 		return "", unknown
 	}
-	if j.Kind != KindPR || j.Task != task || j.Head != head {
+	if head == "" || j.Kind != KindPR || j.Task != task || j.Head != head {
 		return "", exit.New(exit.Refused, "job %s did not gate head %s of %s", id, head[:min(len(head), 7)], task)
 	}
 	st, err := Wait(d, id, 0)
+	// A job with no status.json never ran: Start stops between its two writes.
+	if errors.Is(err, os.ErrNotExist) {
+		st, err = JobStatus{State: StateError}, nil
+	}
 	if err != nil {
 		return "", err
 	}
