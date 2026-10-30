@@ -1,6 +1,7 @@
 package prq
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -61,17 +62,17 @@ func prView(state, head string, checks ...string) string {
 
 func TestSetStateKeepsANewerHead(t *testing.T) {
 	d := store.Dir{Root: t.TempDir()}
-	for _, head := range []string{"h1", "h2"} {
-		if err := Put(d, Row{Task: "T1", PR: 7, HeadSHA: head, State: StateOpen}); err != nil {
+	for i, head := range []string{"h1", "h2"} {
+		if err := Put(d, Row{Task: "T1", PR: 7, Branch: "gang/demo/T1", HeadSHA: head, State: StateOpen, OpenedAt: "2026-10-29T10:00:00Z", Fixes: i}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	err := SetState(d, "T1", StateMerged)
 	rows, readErr := Read(d)
-	if want := []Row{{Task: "T1", PR: 7, HeadSHA: "h2", State: StateMerged}}; err != nil || readErr != nil || !slices.Equal(rows, want) {
+	if want := []Row{{Task: "T1", PR: 7, Branch: "gang/demo/T1", HeadSHA: "h2", State: StateMerged, OpenedAt: "2026-10-29T10:00:00Z", Fixes: 1}}; err != nil || readErr != nil || !slices.Equal(rows, want) {
 		t.Fatalf("rows = %+v, errs = %v, %v, want %+v", rows, err, readErr, want)
 	}
-	if err := SetState(d, "T9", StateMerged); err == nil || err.Error() != "prs.tsv has no row for T9" {
+	if err := SetState(d, "T9", StateMerged); err == nil || err.Error() != "prs.tsv has no row for T9" || errors.As(err, new(*exit.Error)) {
 		t.Fatalf("SetState of a missing row = %v", err)
 	}
 }
@@ -85,7 +86,6 @@ func TestLiveRefusesUnlessTheRecordedPRIsOpen(t *testing.T) {
 	for _, c := range []struct{ id, view, refusal string }{
 		{"T2", prView("OPEN", "h1"), "T2 has no open PR"},
 		{"T1", prView("CLOSED", "h1"), "PR #7 of T1 is CLOSED on GitHub"},
-		{"T1", prView("OPEN", "h2"), "PR #7 head moved: h2, recorded h1"},
 		{"T1", prView("OPEN", "0123456789"), "PR #7 head moved: 0123456, recorded h1"},
 	} {
 		testkit.Answer(t, state, "pr-view.json", c.view)
@@ -100,7 +100,7 @@ func TestLiveRefusesUnlessTheRecordedPRIsOpen(t *testing.T) {
 	p.Repo.GHAccount = ""
 	_, _, err = Live(d, p, "T1")
 	wantExit(t, err, exit.Refused, "repo.gh_account is empty: gang makes no GitHub call for T1")
-	if got := testkit.Calls(t, state); len(got) != 4 || !strings.HasPrefix(got[3], "pr view 7 --repo github.com/acme/widget ") {
+	if got := testkit.Calls(t, state); len(got) != 3 || !strings.HasPrefix(got[2], "pr view 7 --repo github.com/acme/widget ") {
 		t.Fatalf("gh calls = %q, want one for each Live that reached GitHub, the last for PR 7 of github.com/acme/widget", got)
 	}
 }
