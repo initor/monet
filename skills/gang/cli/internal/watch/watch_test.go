@@ -424,3 +424,24 @@ func TestNoChecksGraceStartsAtOpenedAt(t *testing.T) {
 	want(t, poll(t, f, t0.Add(12*time.Minute)))
 	want(t, poll(t, f, t0.Add(13*time.Minute)), "PR_RED T1 8 no-checks")
 }
+
+func TestPRNextRepeatsAfterEachClosedPR(t *testing.T) {
+	f := newWatchFixture(t)
+	f.p.Repo.GHAccount, f.p.Repo.Base = "", "dev"
+	testkit.Git(t, f.repo, "update-ref", "refs/remotes/origin/dev", "refs/heads/main")
+	f.merge(t, "T1")
+	want(t, poll(t, f, t0), "WAVE_READY 1", "PR_NEXT T1")
+	put := func(task string, pr int, state string) {
+		if err := prq.Put(f.d, prq.Row{Task: task, PR: pr, Branch: "gang/demo/" + task, HeadSHA: "h1", State: state}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	put("T2", 5, prq.StateClosed) // another task's closed PR is no news for T1
+	want(t, poll(t, f, t0.Add(time.Minute)))
+	put("T1", 8, prq.StateClosed)
+	want(t, poll(t, f, t0.Add(2*time.Minute)), "PR_NEXT T1")
+	put("T1", 9, prq.StateOpen) // republished as PR #9
+	want(t, poll(t, f, t0.Add(3*time.Minute)))
+	put("T1", 9, prq.StateClosed)
+	want(t, poll(t, f, t0.Add(4*time.Minute)), "PR_NEXT T1")
+}
