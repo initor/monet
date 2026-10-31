@@ -42,7 +42,11 @@ func queue(repo string, d store.Dir, p *plan.Plan, now time.Time, emit func(line
 		green, red, failed := prq.Green(p, ps)
 		if len(ps.Checks) == 0 && p.Repo.Checks == plan.ChecksGitHub && ps.HeadSHA == r.HeadSHA {
 			ct, _ := gitx.Run(repo, "show", "-s", "--format=%cI", "--end-of-options", r.HeadSHA) // gang's own head: CI could start at its commit time. No time if unreadable.
-			if at, err := time.Parse(time.RFC3339, ct); err == nil && now.Sub(at) >= time.Duration(p.Limits.ChecksGraceMin)*time.Minute {
+			at, err := time.Parse(time.RFC3339, ct)
+			if opened, oerr := time.Parse(time.RFC3339, r.OpenedAt); oerr == nil && opened.After(at) { // a reused old branch: CI starts with the PR
+				at = opened
+			}
+			if err == nil && now.Sub(at) >= time.Duration(p.Limits.ChecksGraceMin)*time.Minute {
 				red, failed = true, []string{"no-checks"}
 			}
 		}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -47,5 +48,27 @@ func TestPRMergeNeedsTheDriverLease(t *testing.T) {
 	testkit.Git(t, repo, "remote", "set-url", "origin", url)
 	if out, errOut, code := runGang(t, c, "pr", "merge", "T1", "--holder", "other"); code != 0 || out != "T1: work (#7)\n" || !strings.HasPrefix(testkit.Calls(t, ghDir)[1], "pr merge 7 ") {
 		t.Fatalf("holder: exit %d, stdout %q, stderr %q, gh calls %q", code, out, errOut, testkit.Calls(t, ghDir))
+	}
+}
+
+func TestPRMergeFetchesAgainAfterTheMerge(t *testing.T) {
+	for _, c := range []struct{ name, act, stderr string }{{"push", `push -q "$(git remote get-url origin)" LATER:refs/heads/main`, ""}, {"break", "remote set-url origin /missing.git", "warning: fetch origin after the merge: "}} {
+		cc, repo, ghDir := prRun(t, nil)
+		lease(t, cc, "other")
+		head := testkit.CommitOn(t, repo, "pr", "T1: work\n\nTask: T1", map[string]string{"a/T1.go": "package a\n"})
+		later := testkit.CommitOn(t, repo, "pr", "T9: next\n\nTask: T9", map[string]string{"z.go": "package z\n"})
+		if err := prq.Put(store.Dir{Root: cc.Dir}, prq.Row{Task: "T1", PR: 7, Branch: "gang/demo/T1", HeadSHA: head, State: prq.StateOpen}); err != nil {
+			t.Fatal(err)
+		}
+		testkit.Answer(t, ghDir, "pr-view.json", `{"state":"OPEN","mergeable":"MERGEABLE","headRefOid":"`+head+`","statusCheckRollup":[{"__typename":"CheckRun","name":"build","status":"COMPLETED","conclusion":"SUCCESS"}]}`)
+		gh := strings.SplitN(os.Getenv("PATH"), ":", 2)[0] + "/gh" // the fake gh bin dir comes first
+		shim := "#!/bin/sh\n[ \"$1 $2\" = \"pr merge\" ] && { cd " + repo + " && git " + strings.ReplaceAll(c.act, "LATER", later) + "; exit 0; }\nexec " + gh + ".real \"$@\"\n"
+		if err := os.Rename(gh, gh+".real"); err != nil || os.WriteFile(gh, []byte(shim), 0o755) != nil {
+			t.Fatal(err)
+		}
+		out, errOut, code := runGang(t, cc, "pr", "merge", "T1", "--holder", "other")
+		if got := testkit.Git(t, repo, "rev-parse", "refs/remotes/origin/main"); code != 0 || out != "T1: work (#7)\n" || !strings.Contains(errOut, c.stderr) || (c.name == "push") != (got == later) {
+			t.Fatalf("%s: exit %d, stdout %q, stderr %q, origin/main %s, want exit 0, the subject, %q, and origin/main at %s only after a push", c.name, code, out, errOut, got, c.stderr, later)
+		}
 	}
 }

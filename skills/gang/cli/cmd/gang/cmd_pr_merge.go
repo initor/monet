@@ -33,5 +33,8 @@ func cmdPRMerge(c *Ctx, args []string) error {
 		return err
 	}
 	fmt.Fprintln(c.Stdout, subject)
+	if _, err := gitx.Run(c.Repo, "fetch", "--quiet", "origin"); err != nil { // the merge is done: a failed fetch only warns
+		fmt.Fprintf(c.Stderr, "warning: fetch origin after the merge: %v\n", err)
+	}
 	return nil
 }
