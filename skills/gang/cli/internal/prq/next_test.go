@@ -72,6 +72,32 @@ func TestNextSkipsLandingsBeforeTheLastShippedOne(t *testing.T) {
 	wantNext(t, repo, "", Row{Task: "T1", State: StateMerged})
 }
 
+// CI2 fixes T1 and ships on its PR, ahead of T2 and T3, which land between them. Then T2 and T3
+// ship, and an edit of CI2's line on the base leaves only its Task line to show that CI2 shipped.
+func TestNextReturnsTheLandingsThatAFixShippedPast(t *testing.T) {
+	repo := nextTrunk(t, "T1", "T2", "T3")
+	testkit.CommitOn(t, repo, "gang-demo", "fix: ci2\n\nTask: CI2\nFixes: T1", map[string]string{"T1.txt": "T1 fixed\n"})
+	testkit.CommitOn(t, repo, "gang-demo", "feat: add T4\n\nTask: T4", map[string]string{"T4.txt": "T4\n"})
+	testkit.CommitRef(t, repo, "refs/remotes/origin/main", "feat: t1 (#1)\n\nTask: T1\nTask: CI2", map[string]string{"T1.txt": "T1 fixed\n"})
+	t1 := Row{Task: "T1", State: StateMerged}
+	wantNext(t, repo, "T2", t1)
+	for _, id := range []string{"T2", "T3"} {
+		testkit.CommitRef(t, repo, "refs/remotes/origin/main", "feat: "+id+"\n\nTask: "+id, map[string]string{id + ".txt": id + "\n"})
+	}
+	testkit.CommitRef(t, repo, "refs/remotes/origin/main", "chore: edit t1", map[string]string{"T1.txt": "T1 edited\n"})
+	wantNext(t, repo, "T4", t1)
+}
+
+// T2 only quotes a Fixes line, so it still counts for F01, which a hand squash ships and T2 reverts.
+func TestNextReadsOnlyWholeFixesLines(t *testing.T) {
+	repo := nextTrunk(t, "T1")
+	testkit.CommitOn(t, repo, "gang-demo", "fix: F01\n\nTask: F01", map[string]string{"T1.txt": "T1 fixed\n"})
+	testkit.CommitOn(t, repo, "gang-demo", "feat: add T2\n\nTask: T2\nSee: Fixes: T1\nFixes: T1 too", map[string]string{"T1.txt": "T1\n"})
+	testkit.CommitRef(t, repo, "refs/remotes/origin/main", "feat: squash t1 and f01", map[string]string{"T1.txt": "T1 fixed\n"})
+	testkit.CommitRef(t, repo, "refs/remotes/origin/main", "feat: t2 (#2)\n\nTask: T2", map[string]string{"T1.txt": "T1\n"})
+	wantNext(t, repo, "", Row{Task: "T1", State: StateMerged})
+}
+
 func TestNextFailsWhenAReplayFails(t *testing.T) {
 	repo := nextTrunk(t, "T1")
 	tree := testkit.Git(t, repo, "rev-parse", "gang-demo^{tree}")
