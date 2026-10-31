@@ -408,18 +408,6 @@ func TestPRRedAfterTheGraceWithNoChecks(t *testing.T) {
 	want(t, poll(t, f, t0.Add(4*time.Minute)))
 }
 
-func TestPRNextRepeatsAfterTheTasksPRCloses(t *testing.T) {
-	f := newWatchFixture(t)
-	f.p.Repo.GHAccount, f.p.Repo.Base = "", "dev"
-	testkit.Git(t, f.repo, "update-ref", "refs/remotes/origin/dev", "refs/heads/main")
-	f.merge(t, "T1")
-	want(t, poll(t, f, t0), "WAVE_READY 1", "PR_NEXT T1")
-	if err := prq.Put(f.d, prq.Row{Task: "T1", PR: 8, Branch: "gang/demo/T1", HeadSHA: "h1", State: prq.StateClosed}); err != nil {
-		t.Fatal(err)
-	}
-	want(t, poll(t, f, t0.Add(time.Minute)), "PR_NEXT T1")
-}
-
 func TestNoChecksGraceStartsAtOpenedAt(t *testing.T) {
 	f := newWatchFixture(t)
 	f.p.Limits.ChecksGraceMin = 3

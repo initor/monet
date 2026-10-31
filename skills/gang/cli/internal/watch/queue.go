@@ -3,7 +3,6 @@ package watch
 import (
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
@@ -68,8 +67,7 @@ func queue(repo string, d store.Dir, p *plan.Plan, now time.Time, emit func(line
 	}
 	l, ok, err := prq.Next(repo, d, p)
 	if ok {
-		closed := len(slices.DeleteFunc(slices.Clone(rows), func(r prq.Row) bool { return r.Task != l.ID || r.State != prq.StateClosed }))
-		emit("PR_NEXT "+l.ID, fmt.Sprintf("PR_NEXT %s closed %d", l.ID, closed), time.Time{}) // a closed PR earns a new event
+		emit("PR_NEXT "+l.ID, "PR_NEXT "+l.ID, time.Time{})
 	}
 	return err, nil
 }
