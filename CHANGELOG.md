@@ -4,6 +4,8 @@ This file lists the notable changes to monet in each release. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-31
+
 ### Added
 
 - `/monet:gang run` ships each trunk task as its own small PR, one at a time, in trunk order. A PR holds at most 100 changed lines by default. A plan may lower that limit with `limits.task_lines`. A task that cannot be split may go above it, up to `limits.split_lines` (300 by default), when its `size.reason` says why.
