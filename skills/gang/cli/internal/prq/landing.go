@@ -20,6 +20,7 @@ type Landing struct {
 var (
 	gangMerge = regexp.MustCompile(`^merge ([A-Z]+[0-9]+): `)
 	taskLine  = regexp.MustCompile(`(?m)^Task: ([A-Z]+[0-9]+)\r?$`) // a whole line, as in internal/merge
+	fixLine   = regexp.MustCompile(`(?m)^Fixes: [A-Z]+[0-9]+\r?$`)  // gang pr fix needs it in the task commit
 )
 
 type commit struct{ sha, parents, tree, subject, msg string }

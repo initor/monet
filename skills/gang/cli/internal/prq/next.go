@@ -13,7 +13,8 @@ import (
 
 // Next returns the first landing that the queue has yet to ship: its task has no
 // "Task: <id>" line on origin/<base>, no open or merged row, no shipped landing
-// after it, and a replay onto origin/<base> that changes something. A stray is an error.
+// after it without a "Fixes: <id>" line, and a replay onto origin/<base> that
+// changes something. A stray is an error.
 func Next(repo string, d store.Dir, p *plan.Plan) (Landing, bool, error) {
 	base := "refs/remotes/origin/" + p.Repo.Base
 	landings, stray, err := Landings(repo, base, "refs/heads/"+p.Repo.Integration)
@@ -32,14 +33,22 @@ func Next(repo string, d store.Dir, p *plan.Plan) (Landing, bool, error) {
 	if err != nil {
 		return Landing{}, false, err
 	}
-	last := -1 // the queue ships in trunk order, so each landing up to the last shipped one is shipped
-	for i, l := range landings {
+	recorded := func(l Landing) bool { // a Task line on the base, or an open or merged row
 		queued := func(r Row) bool { return r.Task == l.ID && (r.State == StateOpen || r.State == StateMerged) }
-		if slices.Contains(shipped, l.ID) || slices.ContainsFunc(rows, queued) {
+		return slices.Contains(shipped, l.ID) || slices.ContainsFunc(rows, queued)
+	}
+	// The queue ships in trunk order, so each landing up to the last shipped one is shipped. A fix
+	// task ships on the PR of the task it fixes, ahead of the landings between them, so it is left out.
+	last := -1
+	for i, l := range landings {
+		if recorded(l) && !fixLine.MatchString(l.Message) {
 			last = i
 		}
 	}
 	for _, l := range landings[last+1:] {
+		if recorded(l) {
+			continue // a fix task that shipped on the PR of the task it fixes
+		}
 		// A hand squash drops the Task lines, so a replay that changes nothing is shipped too.
 		_, _, same, _, err := replayOnto(repo, l, tip)
 		if err != nil {
