@@ -4,6 +4,14 @@ This file lists the notable changes to monet in each release. The format follows
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-01
+
+### Fixed
+
+- The PR queue no longer skips trunk landings after `gang pr fix` puts a fix task from the trunk tip on an earlier task's PR. The queue had counted every landing up to that fix task as shipped, so a later PR could fail on code from a skipped landing (#77).
+- A fix task that ships on its own PR counts again as the last shipped landing, so an earlier fix that a hand squash left without its `Task:` line does not come back (#78).
+- A run picks up both fixes after it builds `<gang>` again.
+
 ## [0.5.0] - 2026-10-31
 
 ### Added
