@@ -98,6 +98,37 @@ func TestNextReadsOnlyWholeFixesLines(t *testing.T) {
 	wantNext(t, repo, "", Row{Task: "T1", State: StateMerged})
 }
 
+// CI1 fixes T1 on its PR, and a hand squash keeps only "Task: T1". T1 merges before CI2 lands, so
+// CI2 ships on its own PR, in trunk order, and edits or reverts CI1's line. In "row only", the squash
+// of that PR drops "Task: CI2" too.
+func TestNextCountsAFixThatShippedOnItsOwnPR(t *testing.T) {
+	for _, c := range []struct{ name, t1, squash string }{
+		{"edit", "T1 fixed twice\n", "fix: ci2 (#3)\n\nTask: CI2"},
+		{"revert", "T1\n", "fix: ci2 (#3)\n\nTask: CI2"},
+		{"revert, row only", "T1\n", "fix: ci2 (#3)"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			repo := nextTrunk(t, "T1", "T2")
+			testkit.CommitOn(t, repo, "gang-demo", "fix: ci1\n\nTask: CI1\nFixes: T1", map[string]string{"T1.txt": "T1 fixed\n"})
+			testkit.CommitOn(t, repo, "gang-demo", "fix: ci2\n\nTask: CI2\nFixes: T1", map[string]string{"T1.txt": c.t1})
+			testkit.CommitRef(t, repo, "refs/remotes/origin/main", "feat: t1 (#1)\n\nTask: T1", map[string]string{"T1.txt": "T1 fixed\n"})
+			testkit.CommitRef(t, repo, "refs/remotes/origin/main", "feat: t2 (#2)\n\nTask: T2", map[string]string{"T2.txt": "T2\n"})
+			t1, t2 := Row{Task: "T1", State: StateMerged}, Row{Task: "T2", State: StateMerged}
+			wantNext(t, repo, "CI2", t1, t2)
+			testkit.CommitRef(t, repo, "refs/remotes/origin/main", c.squash, map[string]string{"T1.txt": c.t1})
+			wantNext(t, repo, "", t1, t2, Row{Task: "CI2", State: StateMerged})
+		})
+	}
+}
+
+// CI2 has a Fixes line that ends in a CR, as FixLanding accepts, and it shipped on the PR of T1.
+func TestNextReadsACRLFFixesLine(t *testing.T) {
+	repo := nextTrunk(t, "T1", "T2")
+	testkit.CommitOn(t, repo, "gang-demo", "fix: ci2\n\nTask: CI2\nFixes: T1\r", map[string]string{"T1.txt": "T1 fixed\n"})
+	testkit.CommitRef(t, repo, "refs/remotes/origin/main", "feat: t1 (#1)\n\nTask: T1\nTask: CI2", map[string]string{"T1.txt": "T1 fixed\n"})
+	wantNext(t, repo, "T2", Row{Task: "T1", State: StateMerged})
+}
+
 func TestNextFailsWhenAReplayFails(t *testing.T) {
 	repo := nextTrunk(t, "T1")
 	tree := testkit.Git(t, repo, "rev-parse", "gang-demo^{tree}")
