@@ -13,7 +13,7 @@ import (
 
 // Next returns the first landing that the queue has yet to ship: its task has no
 // "Task: <id>" line on origin/<base>, no open or merged row, no later landing with
-// such a row or with a Task line there and no "Fixes: <id>" line, and a replay onto
+// such a row, nor one with a Task line there and no "Fixes: <id>" line, and a replay onto
 // origin/<base> that changes something. A stray is an error.
 func Next(repo string, d store.Dir, p *plan.Plan) (Landing, bool, error) {
 	base := "refs/remotes/origin/" + p.Repo.Base
