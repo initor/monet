@@ -1,6 +1,6 @@
 # Design: `monet:source`, the Brain above gang
 
-Date: 2026-11-01. Status: draft. The builder check is done, its four questions became D29 to D32, and the owner reviews this document next. Section 3 cites monet at 73c7248. The decisions call the orchestrator role the Brain, and so does this document. The skill is `monet:source`, and its engine is the Go binary `monet-source` (D28).
+Date: 2026-11-01. Status: draft in review. The builder check gave D29 to D32, and the review questions gave D33 and D34. Section 3 cites monet at 73c7248. The decisions call the orchestrator role the Brain, and so does this document. The skill is `monet:source`, and its engine is the Go binary `monet-source` (D28).
 
 ## 1. Intent
 
@@ -95,6 +95,8 @@ The owner made these decisions on 2026-10-31 and 2026-11-01. This text writes "t
 | D30 | A kickoff grant in the words of the owner lets the developer derive the run settings of gang from the repo. It also lets the developer confirm a dead session with `claude agents`. Each such answer is a run decision on the run page. A setting that the developer cannot derive is a wall. | 5.2, 5.10 |
 | D31 | A kickoff grant in the words of the owner covers the entries that the Brain copies word for word into `<run>/owner-words.md`. These entries count as words of the owner in the gang run of the developer. This keeps the one channel of D19. | 5.6, 5.10 |
 | D32 | Each charter says if main deploys. By default, main does not deploy: a merge is reversible through a revert PR, so gang keeps shipping on a default. When main deploys, a merge is irreversible, and tasks that depend on an open decision item stay out of the PR queue. | 5.2, 5.5, 5.10 |
+| D33 | Step 1 ships in monet 0.6.0, with no demo runs. The self-drive of gang moves from 0.6.0 to 0.7.0, and step 2 ships in the minor release after the self-drive. | 5.2, 5.13 |
+| D34 | When main deploys, the panel checks the trunk of gang before the PR queue ships it. Each checkpoint then waits for one more round. | 5.3, 5.10 |
 
 ## 5. Design
 
@@ -122,7 +124,7 @@ The owner types `/monet:source kickoff [<file>] [--slug <slug>]`. The owner give
 3. **Preflight.** `preflight` checks each item below. The Brain asks the owner only about the items that fail, in one list (D18, call 3).
 4. **Pilot.** The Brain starts the developer while the owner is present. The developer makes one harmless call per tool that it needs.
 
-The run starts after the seal, a clean preflight, and a clean pilot. The charter holds `goal` and `context` (D15), `invariants` with ids (D16), `deliverable` (D2), `phases` (D22), `quality_bar` (D6), `personas` (D14), and `page` (D19). Its `grants` list each outward step that the charter covers, with the id of the words that grant it (D18). Step 1 has no demo runs, because a demo needs the implementation phase (D29). In step 1, `charter lint` refuses a charter whose `phases` hold `implementation`, or that has `repo` (call 24).
+The run starts after the seal, a clean preflight, and a clean pilot. The charter holds `goal` and `context` (D15), `invariants` with ids (D16), `deliverable` (D2), `phases` (D22), `quality_bar` (D6), `personas` (D14), and `page` (D19). Its `grants` list each outward step that the charter covers, with the id of the words that grant it (D18). Step 1 has no demo runs, because a demo needs the implementation phase (D29, D33). In step 1, `charter lint` refuses a charter whose `phases` hold `implementation`, or that has `repo` (call 24).
 
 In step 2, the charter also holds `repo` when code lands on main, and `main_deploys`, which is `false` by default (D32). With `repo`, the Brain asks about `main_deploys` with the workflows that run on a push to the base branch in view (call 26). The `grants` then also hold each gang answer that the charter covers: the grants of call 15, D30, and D31 (5.10).
 
@@ -167,7 +169,7 @@ flowchart TB
   Q -- "second block" --> X["Decision item for the owner,<br/>run goes on with a<br/>reversible default"] --> W
 ```
 
-A version is frozen. For documents, `submit --path` copies the files into `<run>/artifacts/<phase>/v<k>/` with a manifest of hashes. For code (step 2), `submit --sha` records the SHA, and the engine writes a `git archive` of it there. A verdict holds for one version, and a new version voids it, as in gang (`skills/gang/SKILL.md:100`). So the last round of a phase checks every blocking persona of that phase.
+A version is frozen. For documents, `submit --path` copies the files into `<run>/artifacts/<phase>/v<k>/` with a manifest of hashes. For code (step 2), `submit --sha` records the SHA, and the engine writes a `git archive` of it there. The SHA is `origin/<base>` while main does not deploy, and the trunk tip of gang when main deploys (D34). A verdict holds for one version, and a new version voids it, as in gang (`skills/gang/SKILL.md:100`). So the last round of a phase checks every blocking persona of that phase.
 
 The developer, each evaluator, and the reporter start at medium effort (D21). The engine gives max effort only to a second check and to the final acceptance check. A round has no fixed length, so the engine sets no round timeout. The Brain session keeps the effort that the owner started it with (call 6).
 
@@ -291,19 +293,20 @@ It imports no gang code (D27). It follows the patterns of gang: one file per com
 | `charter lint`, `seal`, `amend`, `persona set` | Brain | Checks, seals, or amends the charter with the words of the owner, and stores each persona brief |
 | `dev start` | Brain | Makes `dev/`, writes the developer kickoff, and prints the command that starts the session |
 | `dev hello`, `takeover`, `beat`, `handover` | Developer | Takes, takes over, or renews `dev`, and moves the relay config around a gang run (step 2) |
-| `submit`, `respond`, `decision add` | Developer | Freezes a version, answers findings, or logs a run decision |
+| `submit`, `respond`, `decision add`, `ship wait` | Developer | Freezes a version, answers findings, logs a run decision, or holds a landing until it may ship (step 2) |
 | `round open`, `round close`, `phase`, `accept`, `deliver` | Brain | Runs a round, moves between phases, runs the final acceptance check, and checks done |
 | `item open`, `item rule`, `item hold`, `wall open`, `wall clear` | Brain, and the developer for `item hold` and `wall open` | Keeps the walls and the decision items, and the gang tasks that an item holds (step 2) |
 | `watch`, `status`, `report`, `report done` | Any | Prints events, the state in 8 lines at most, or the page packet, and records a page write |
 | `context`, `relay words`, `relay prompt`, `relay mute` | Both | Reads the context, copies the words of the owner, writes a kickoff, or mutes the hook |
 
-The events are `VERSION`, `RESPONSE`, `FINDINGS`, `PHASE`, `ITEM`, `RULING`, `WALL`, `CLEARED`, `DEV_RELAYED`, `DEV_SILENT`, `REPORT_DUE`, and `DELIVERED`. Each role arms a Monitor on `watch --role <role>`. The Brain also keeps a heartbeat wakeup armed at all times, at most 45 minutes apart, as gang does (`skills/gang/reference/coordinator.md:93`). At each heartbeat, it checks the power and the lid, and it warns on the page when the Mac can sleep.
+The events are `VERSION`, `RESPONSE`, `FINDINGS`, `PHASE`, `ITEM`, `RULING`, `WALL`, `CLEARED`, `DEV_RELAYED`, `DEV_SILENT`, `REPORT_DUE`, `SHIP_OK`, and `DELIVERED`. Each role arms a Monitor on `watch --role <role>`. The Brain also keeps a heartbeat wakeup armed at all times, at most 45 minutes apart, as gang does (`skills/gang/reference/coordinator.md:93`). At each heartbeat, it checks the power and the lid, and it warns on the page when the Mac can sleep.
 
 The prompts keep the judgment: the questions, the charter draft, the persona briefs, and the picks for cards with no phases. They also keep the reviews, the work, the defaults, and the summary prose. The engine decides these in code, not in a prompt (D26):
 
 - the phases, their order, each send-back, and the panel of each phase, from the cards and the picks of the Brain
 - the effort of each check, and the content of each brief from the allowlist
 - the outcome of a round and of the run, from the verdict files
+- the ship gate when main deploys, from the accepted versions and their SHAs (D34)
 - the count per persona and phase, the cap, the escalation, and the reset
 - the waiting items, the leases, the relay configs, the kickoff prompts, and one event per key
 
@@ -325,7 +328,7 @@ Under the grant of D30, the developer derives the run settings that gang asks th
 
 The same grant covers the resume question of gang, which asks the user to confirm that the old session is closed (`skills/gang/reference/coordinator.md:66`). The developer answers it with `claude agents --json`, run as a normal call (`skills/gang/reference/relay.md:32`). The proof is a positive signal: the list loads, holds the current session, and does not list the old one (call 25). A listed session is alive in every state that the list shows, such as `working` and `blocked`. An empty or failed list is no proof, so the question becomes a wall, because gang never takes over a live driver.
 
-The tracker of gang is `none` in a source run (call 16). The writer of gang rewrites the summary of its page, and the Brain writes only one page. The agents of gang keep the efforts of its roles table, and D21 covers the agents that source starts (call 17). Plan 3 is the plan for the self-drive of gang, which call 23 moves from 0.6.0 to 0.7.0. It stays with gang and follows gang's own needs, because the Brain shares no engine code with gang (D26, D27, call 18).
+The tracker of gang is `none` in a source run (call 16). The writer of gang rewrites the summary of its page, and the Brain writes only one page. The agents of gang keep the efforts of its roles table, and D21 covers the agents that source starts (call 17). Plan 3 is the plan for the self-drive of gang, which D33 moves from 0.6.0 to 0.7.0. It stays with gang and follows gang's own needs, because the Brain shares no engine code with gang (D26, D27, call 18).
 
 The developer hands its relay to gang and takes it back (call 19):
 
@@ -333,13 +336,15 @@ The developer hands its relay to gang and takes it back (call 19):
 2. Once gang has its run folder, a standing order names the run and the role. It tells a relayed session to run `dev takeover --from <old session>`.
 3. After the close of gang, `dev handover --to source` writes the developer relay config again.
 
-The relay kickoff of gang names the old session, and gang's relay starts the `watch --role dev` Monitor again (section 3). At each gang checkpoint, the developer submits `origin/<base>` as a new version, with the merged PRs in its note. It turns each finding into a plan edit at the next checkpoint, which gang allows with no approval (`skills/gang/reference/coordinator.md:174`). A ruling against a default that merged code adds the revert and the rework as tasks, because gang pushes only its task branches (`skills/gang/SKILL.md:123`).
+The relay kickoff of gang names the old session, and gang's relay starts the `watch --role dev` Monitor again (section 3). At each gang checkpoint, the developer submits a new version, with the landings and the merged PRs in its note. The version is `origin/<base>`, or the trunk tip of gang when main deploys (D34). It turns each finding into a plan edit at the next checkpoint, which gang allows with no approval (`skills/gang/reference/coordinator.md:174`). A ruling against a default that merged code adds the revert and the rework as tasks, because gang pushes only its task branches (`skills/gang/SKILL.md:123`).
 
 When the charter says that main deploys, the developer keeps the tasks of each open item off the trunk (D32, call 27). The gang skill opens a PR only for the trunk task that `PR_NEXT` names, so a task off the trunk gets no PR (`skills/gang/SKILL.md:101`). Each task that reaches a held task through `depends_on` or `merge_after` is held too. The `--only` list leaves out such a task, because it cannot merge (`skills/gang/engine/engine.template.js:192-195,495-497`). A segment with a task that cannot merge can end as `INTERRUPTED`, which gang reads as a usage limit or an outage (`skills/gang/engine/engine.template.js:569-573`, `skills/gang/reference/coordinator.md:163`). The held tasks stay in the plan, so the done predicate of gang keeps the gang run open (`skills/gang/reference/planner.md:52`).
 
 On an `ITEM` event while main deploys, the developer records the gang tasks that the choice affects with `item hold <id> --tasks <ids>`. The developer then stops a running gang engine with `standing stop`, and waits until it stops. Next, the developer runs `standing clear-stop` and relaunches with `--only` the tasks that wait on no open item, as for a fix task (`skills/gang/reference/coordinator.md:131,189`). When the held tasks are all the work that is left, the developer opens a wall instead (5.5). After the `RULING` event, it edits the plan as the ruling asks at a checkpoint, and relaunches with no `--only` (`skills/gang/reference/coordinator.md:136,174`).
 
 A held task that is already on the trunk stops the queue at that task until the owner rules. An item that is open before the gang run starts gets the same hold, from the pilot on.
+
+When main deploys, the panel checks each landing before it ships (D34, call 28). On `PR_NEXT <id>`, the developer runs `ship wait <id> --sha <landing>` and opens no PR yet. The engine prints `SHIP_OK <id>` once the landing is an ancestor of a version whose round gave `ACCEPT` (5.4). Then the developer runs `pr open` for that task. A task that an open item holds gets no `SHIP_OK` (D32). The gang skill prints each `PR_NEXT` line once (`skills/gang/reference/coordinator.md:140`), so the engine keeps the wait.
 
 ### 5.11 Skill files
 
@@ -367,14 +372,14 @@ The build also changes `agents/monet.md`, with a route that tells the owner to t
 
 ### 5.13 Release
 
-The skill ships in two steps (D29, call 23):
+The skill ships in two steps (D29, D33):
 
 | Step | Release | What it ships |
 |---|---|---|
 | 1 | monet 0.6.0 | Section 5 without 5.10 and the parts marked step 2. Research, design, and report runs, with no implementation phase, no demo, and no gang. |
 | 2 | The minor release after the self-drive of gang | 5.10 and the parts marked step 2: the implementation phase, demo runs, gang, `repo`, `main_deploys`, and merges. |
 
-The self-drive of gang ships in 0.7.0, the next minor release after 0.6.0. This moves the self-drive from 0.6.0, the release that O3 of the gang 0.5 design names, to 0.7.0 (`docs/design/gang-0.5.md:78`). The owner confirms this move in review.
+The self-drive of gang ships in 0.7.0, the next minor release after 0.6.0. This moves the self-drive from 0.6.0, the release that O3 of the gang 0.5 design names, to 0.7.0 (`docs/design/gang-0.5.md:78`). The owner confirmed this move, so call 23 became D33.
 
 Step 2 needs a gang that asks nothing after its kickoff and relays from its first step (`docs/design/gang-0.5.md:20-21`). The handover of 5.10 relies on this, because gang 0.5.1 relays only after its launch. Plan 3 needs no change for source.
 
@@ -384,6 +389,7 @@ Step 2 needs a gang that asks nothing after its kickoff and relays from its firs
 |---|---|
 | In step 2, a gang release adds a question that the grants do not answer. | The developer treats it as a wall. Each answer quotes its grant on the page, and the kickoff names the gang release. |
 | In step 2, a wrong "no" for `main_deploys` makes a merge on a default irreversible. | The Brain asks with the workflows that run on a push to the base branch in view (call 26). A deploy outside those workflows, such as a tool that watches main, is a risk that only the owner can name. |
+| In step 2, when main deploys, a deferred `PR_NEXT` gets lost, because gang prints it once. | `ship wait` keeps the task in the engine, and `SHIP_OK` names it again after the accept (call 28). |
 | A permission prompt or the classifier stops a background session. | The pilot, accept-edits mode, and the allow rules. `DEV_SILENT` makes the Brain look, and a block becomes a wall. |
 | An evaluator reads a file outside its brief. | The notes live where no brief points, and the brief limits reads to its paths and sources. A subagent can still open any file. |
 | Same-model evaluators share the blind spots of the developer. | A fresh context, strong cards from the owner, and a max-effort second check. gang names the same risk (`docs/design/gang.md:415`). |
@@ -428,8 +434,9 @@ These are Claude's calls, not the owner's. The owner checks them in review.
 | 20 | The skill is typed only, and the sessions that the engine starts read the reference files by path. | A run takes hours and needs the owner at the kickoff, and the model cannot invoke a typed-only skill. |
 | 21 | Mutants run at review, not in `make check`. | They take minutes and need a planted control, and CI runs the Go tests. |
 | 22 | A contract test runs the STE check on the skill text. | The page and the skill text follow STE-lite. |
-| 23 | Step 1 ships in monet 0.6.0. The self-drive of gang then ships in the next minor release, 0.7.0, and step 2 ships in the minor release after the self-drive. This moves the self-drive from 0.6.0, the release that O3 of the gang 0.5 design names, to 0.7.0. The owner confirms this move in review. | Step 1 needs nothing from gang, a new skill ships in a minor release (0.3.0, `CHANGELOG.md:45-49`), and step 2 needs a released self-drive. |
+| 23 | Step 1 ships in monet 0.6.0. The self-drive of gang then ships in the next minor release, 0.7.0, and step 2 ships in the minor release after the self-drive. This moves the self-drive from 0.6.0, the release that O3 of the gang 0.5 design names, to 0.7.0. The owner confirmed it as D33. | Step 1 needs nothing from gang, a new skill ships in a minor release (0.3.0, `CHANGELOG.md:45-49`), and step 2 needs a released self-drive. |
 | 24 | In step 1, `charter lint` refuses a charter whose `phases` hold `implementation`, or that has `repo`. | A lint error at the kickoff is clearer than a run that stops later. |
 | 25 | In step 2, the developer confirms a dead session with `claude agents --json` only on a positive signal. The list loads, holds the current session, and does not list the old session, in any state. An empty or failed list is a wall. | An empty result reads the same as a dead session, a `blocked` session is still alive, and gang never takes over a live driver. |
 | 26 | In step 2, the Brain asks about `main_deploys` with the workflows that run on a push to the base branch in view. | A wrong "no" turns a merge on a default into an irreversible step. |
 | 27 | In step 2, while main deploys, the developer names the gang tasks of each open item with `item hold <id> --tasks <ids>`. It keeps them and their dependents off the trunk with `--only` relaunches of gang, and relaunches with no `--only` after the ruling. | The developer knows the gang plan, the Brain never calls gang, and gang opens a PR only for a trunk task (`skills/gang/SKILL.md:101`). |
+| 28 | In step 2, while main deploys, the developer parks each `PR_NEXT` task with `ship wait`. The engine prints `SHIP_OK` once an accepted version holds the landing. | D34 puts the panel before the ship, gang prints `PR_NEXT` once, and an ancestor check in code is exact. |
