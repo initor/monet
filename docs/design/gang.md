@@ -192,10 +192,10 @@ The coordinator launches `run/engine.js` with the Workflow tool and `scriptPath`
 
 ### 7.2 One task's lifecycle
 
-1. **Implement.** The agent runs `gang claim <id>` and `gang brief <id>`. It writes the `verify.tests_first` tests and confirms they fail. It writes the code, runs `gang gate run <id>`, and commits once with the line `Task: <id>` in the message. It writes `tasks/<id>/report.md`.
+1. **Implement.** The agent runs `gang claim <id>` and `gang brief <id>`. It writes the `verify.tests_first` tests and confirms they fail. It writes the code. Before the gate, it tries about 5 one-line mutants on the lines it changed, and pins each survivor with a test. It runs `gang gate run <id>`, and commits once with the line `Task: <id>` in the message. It writes `tasks/<id>/report.md`.
 2. **Review.** A fresh agent maps requirements to tests and re-runs the gate. It applies one-line mutants to each changed part. A surviving mutant is a blocker. A `risk: high` task also gets an adversarial reviewer.
 3. **Ledger.** As its last step, the reviewer records its verdict with `gang ledger record <id> <sha> --lens review|adversarial --blockers N --majors N --survivors N [--gate-ran] [--mutation-checked] --evidence <findings_path>`. Clean means 0 blockers, 0 majors, the gate ran, and the mutation check ran. The engine also checks the review JSON. A check that did not run forces another review. `gang merge` trusts only the ledger.
-4. **Fix.** A new agent per round gets the review, the report, and the expected tip SHA. The re-review covers the fix diff only. After `limits.fix_rounds` rounds, the task is BLOCKED.
+4. **Fix.** A new agent per round gets the review, the report, and the expected tip SHA. It runs the same mutant pass on the lines that the round changed. The re-review covers the fix diff only. After `limits.fix_rounds` rounds, the task is BLOCKED.
 5. **Merge.** A low-effort agent runs `gang merge <id> --sha <reviewed>`. An in-script mutex serializes merges.
    - On a conflict, a sync agent merges the trunk into the task branch. It never rebases.
    - Then a merge-only review runs. This repeats at most 3 times.

@@ -4,6 +4,10 @@ This file lists the notable changes to monet in each release. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Each gang implement and fix agent runs a self mutant pass before the gate: about 5 one-line mutants on the lines that it changed, and a new or a stronger test for each mutant that survives. It undoes each mutant by hand, because its work is not committed yet. The aim is fewer review rounds that start from a surviving mutant.
+
 ## [0.5.1] - 2026-11-01
 
 ### Fixed
