@@ -57,7 +57,12 @@ func Render(d store.Dir, p *plan.Plan, id string) (string, error) {
 	}
 	fmt.Fprintf(&b, "TASK %s: %s\nbranch: %s\nwave: %d\n", t.ID, t.Title, plan.BranchFor(t), t.Wave)
 	section(&b, "GOAL", t.Goal)
-	section(&b, "SCOPE", list("write", t.Scope.Write)+list("shared", t.Scope.Shared)+list("test_only", t.Scope.TestOnly)+list("peers", t.Peers))
+	globs := t.Scope.TestOnlyGlobs()
+	testOnly := list("test_only", globs)
+	if len(globs) > 0 {
+		testOnly += plan.TestOnlyRule + "\n"
+	}
+	section(&b, "SCOPE", list("write", t.Scope.Write)+list("shared", t.Scope.Shared)+testOnly+list("peers", t.Peers))
 	section(&b, "CONTEXT", list("depends_on", t.DependsOn)+list("merge_after", t.MergeAfter)+
 		list("requirements", reqs)+list("consumes", t.Interfaces.Consumes)+list("produces", t.Interfaces.Produces))
 	section(&b, "ACCEPTANCE", bullets(t.Acceptance))

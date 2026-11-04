@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -94,13 +93,13 @@ type Task struct {
 	Notes        string          `json:"notes,omitempty"`
 }
 
-// Scope is what a task may change. TestOnly files take test edits only: a
-// new test, or an update to an expectation that pins the behavior that the
-// task changes, never a removed assertion. Normalize adds TestGlobs(Write).
+// Scope is what a task may change. TestOnly holds test globs beyond the ones
+// that TestOnlyGlobs adds for the Go packages of Write. A plan that sets no
+// TestOnly saves no test_only key, so an older gang build still reads it.
 type Scope struct {
 	Write    []string `json:"write"`
 	Shared   []string `json:"shared"`
-	TestOnly []string `json:"test_only"`
+	TestOnly []string `json:"test_only,omitempty"`
 }
 
 type Interfaces struct {
@@ -157,9 +156,8 @@ func Load(path string) (*Plan, error) {
 }
 
 // Normalize fills zero limits, an empty wave title, and an empty repo.checks
-// with defaults, turns nil slices and maps into empty ones, sets an empty
-// risk to "low", and adds each glob of TestGlobs(scope.write) that
-// scope.test_only lacks to its end.
+// with defaults, turns nil slices and maps into empty ones, and sets an empty
+// risk to "low".
 func (p *Plan) Normalize() {
 	l := &p.Limits
 	orDefault(&l.TaskLines, 100)
@@ -199,11 +197,6 @@ func (p *Plan) Normalize() {
 			&t.Requirements, &t.Interfaces.Consumes, &t.Interfaces.Produces, &t.Acceptance,
 			&t.Verify.TestsFirst, &t.Verify.Commands, &t.Forbidden, &t.Locks} {
 			nonNil(s)
-		}
-		for _, g := range TestGlobs(t.Scope.Write) {
-			if !slices.Contains(t.Scope.TestOnly, g) {
-				t.Scope.TestOnly = append(t.Scope.TestOnly, g)
-			}
 		}
 		if t.Risk == "" {
 			t.Risk = "low"

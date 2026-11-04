@@ -6,8 +6,8 @@ This file lists the notable changes to monet in each release. The format follows
 
 ### Added
 
-- A gang task gains `scope.test_only`: test files that the task may edit only as tests. It may add a test, or update an expectation that pins behavior that the task changes, and it may never remove an assertion. Gang fills it with `<dir>/*_test.go` for each Go package in `scope.write` whose tests `scope.write` does not cover, when it saves or loads a plan, so `gang plan assemble`, `gang lint`, and `gang brief` all see it. The brief and `plan.md` list it, and lint rule 1 fails a `scope.test_only` glob that does not end in `_test.go`.
-- A plan that this version saves holds `scope.test_only`, and an older gang build refuses to load it. So build `<gang>` again after the update.
+- A gang task gets a test-only scope: the `*_test.go` files of each Go package in its `scope.write`, plus the globs in the new optional field `scope.test_only`. Gang computes the first part each time it reads a plan and never saves it, so it follows `scope.write` when a task changes. A test-only file takes test edits only: new tests, the call sites and fakes that the change needs, and updates to the expectations that pin behavior that the task changes. No edit may remove an assertion. The brief prints this rule under the list, `plan.md` lists the globs, and lint rule 1 fails a `scope.test_only` glob that does not end in `_test.go`.
+- A plan that sets `scope.test_only` needs this version of `<gang>`. A plan that does not set it still loads in an older build.
 
 ## [0.5.1] - 2026-11-01
 

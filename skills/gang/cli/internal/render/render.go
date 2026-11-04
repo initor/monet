@@ -81,7 +81,7 @@ func Markdown(p *plan.Plan, s *schedule.Result) string {
 		w("- Size: %s, timebox %d min\n", size, t.TimeboxMin)
 		w("- Scope write: %s\n", codes(t.Scope.Write))
 		w("- Scope shared: %s\n", codes(t.Scope.Shared))
-		w("- Scope test_only: %s\n", codes(t.Scope.TestOnly))
+		w("- Scope test_only: %s\n", codes(t.Scope.TestOnlyGlobs()))
 		w("- Peers: %s\n", ids(t.Peers))
 		w("- Depends on: %s\n", ids(t.DependsOn))
 		w("- Merge after: %s\n", ids(t.MergeAfter))

@@ -85,9 +85,10 @@ func TestPlanAssembleFlags(t *testing.T) {
 	}
 }
 
-// A draft names only scope.write. plan assemble writes the test_only glob of
-// each Go package in it into plan.json, and lint passes the result.
-func TestPlanAssembleAddsTestOnlyScope(t *testing.T) {
+// A draft names only scope.write. plan assemble saves no computed test glob,
+// so plan.json keeps the shape that an older gang build reads, and lint and
+// the brief still give the task the tests of its Go package as test-only scope.
+func TestPlanAssembleGivesTestOnlyScope(t *testing.T) {
 	dir := newTestGangDir(t, newTestRepo(t), testPlan())
 	skeleton, drafts := assembleInputs(t, t.TempDir())
 	a1 := testPlan().Tasks[0]
@@ -100,25 +101,15 @@ func TestPlanAssembleAddsTestOnlyScope(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var saved struct {
-		Tasks []struct {
-			ID    string `json:"id"`
-			Scope struct {
-				TestOnly []string `json:"test_only"`
-			} `json:"scope"`
-		} `json:"tasks"`
-	}
-	if err := json.Unmarshal(b, &saved); err != nil {
-		t.Fatal(err)
-	}
-	want := map[string][]string{"A1": {"alpha/*_test.go"}, "B1": {}}
-	for _, tk := range saved.Tasks {
-		if !reflect.DeepEqual(tk.Scope.TestOnly, want[tk.ID]) {
-			t.Errorf("%s scope.test_only in plan.json = %#v, want %#v", tk.ID, tk.Scope.TestOnly, want[tk.ID])
-		}
+	if strings.Contains(string(b), `"test_only"`) {
+		t.Errorf("plan.json holds a test_only key, want none:\n%s", b)
 	}
 	if out, _, code := runGang(t, &Ctx{Dir: dir}, "lint"); code != 0 {
 		t.Errorf("lint: code %d out %q", code, out)
+	}
+	out, _, code := runGang(t, &Ctx{Dir: dir}, "brief", "A1")
+	if want := "test_only:\n- alpha/*_test.go\n" + plan.TestOnlyRule + "\n"; code != 0 || !strings.Contains(out, want) {
+		t.Errorf("brief A1: code %d, want it to hold %q:\n%s", code, want, out)
 	}
 }
 

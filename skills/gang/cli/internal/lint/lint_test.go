@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -172,16 +173,16 @@ func TestEachRuleFiresAlone(t *testing.T) {
 	}
 }
 
-// Two tasks in one Go package get the same test_only glob. They need no
-// peers for it, because rule 5 reads scope.write only.
+// Two tasks in one Go package get the same test-only glob, and a hand-written
+// test_only glob may name the tests of another task's package. Neither needs
+// peers, because rule 5 reads scope.write only.
 func TestSharedTestOnlyScopeNeedsNoPeers(t *testing.T) {
 	p := validPlan()
-	p.Tasks[0].Scope.Write = []string{"alpha/a.go"}
-	p.Tasks[1].Scope.Write = []string{"alpha/b.go"}
-	p.Normalize()
+	p.Tasks[0].Scope = plan.Scope{Write: []string{"alpha/a.go"}, TestOnly: []string{"beta/*_test.go"}}
+	p.Tasks[1].Scope = plan.Scope{Write: []string{"alpha/b.go", "beta/b.go"}}
 	for _, tk := range p.Tasks {
-		if !reflect.DeepEqual(tk.Scope.TestOnly, []string{"alpha/*_test.go"}) {
-			t.Fatalf("%s test_only = %q, want [alpha/*_test.go]", tk.ID, tk.Scope.TestOnly)
+		if got := tk.Scope.TestOnlyGlobs(); !slices.Contains(got, "alpha/*_test.go") || !slices.Contains(got, "beta/*_test.go") {
+			t.Fatalf("%s test-only scope = %q, want alpha/*_test.go and beta/*_test.go", tk.ID, got)
 		}
 	}
 	if ps := Lint(p, Options{}); len(ps) != 0 {

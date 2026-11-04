@@ -29,7 +29,7 @@ func TaskFor(p *plan.Plan, id string) (*plan.Task, bool) {
 		ID:           id,
 		Title:        "Repair the integration branch",
 		Goal:         Goal,
-		Scope:        plan.Scope{Write: []string{"**"}, Shared: []string{}, TestOnly: []string{}},
+		Scope:        plan.Scope{Write: []string{"**"}, Shared: []string{}},
 		Peers:        []string{},
 		DependsOn:    []string{},
 		MergeAfter:   []string{},
