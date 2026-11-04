@@ -83,6 +83,7 @@ Send one drafter per area, with the `plan_draft` role. Each prompt holds:
 Tell each drafter these rules:
 
 - One task is one commit of at most `limits.task_lines` changed lines, 100 by default, tests included. Lock files and binary files do not count, and a renamed file counts only its edited lines. A task that cannot be split further carries `size.reason`, and no task goes above `limits.split_lines`, 300 by default.
+- `scope.write` holds the files that the task owns. Gang adds the `*_test.go` files of each Go package in it to `scope.test_only`, where the task may add tests and update the expectations that pin the behavior it changes. So `scope.write` needs a test file only when the task may remove or rewrite assertions in it.
 - `goal` is one sentence that a stranger can run.
 - Each `acceptance` line is one check that passes or fails.
 - `verify.tests_first` names tests that fail before the change and pass after it.

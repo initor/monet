@@ -9,6 +9,7 @@ SCOPE
 write:
 - **
 shared: none
+test_only: none
 peers: none
 
 CONTEXT

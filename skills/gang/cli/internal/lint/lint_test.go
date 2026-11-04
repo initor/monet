@@ -93,6 +93,8 @@ func TestEachRuleFiresAlone(t *testing.T) {
 		{"wave title without {k}", 1, func(p *plan.Plan) { p.Repo.WaveTitle = "chore(gang): land {slug}" }},
 		{"lock name with a slash", 1, func(p *plan.Plan) { p.Locks = append(p.Locks, "k8s/kind") }},
 		{"checks value", 1, func(p *plan.Plan) { p.Repo.Checks = "travis" }},
+		{"test_only glob of a non-test file", 1, func(p *plan.Plan) { p.Tasks[0].Scope.TestOnly = []string{"alpha/*_test.go", "alpha/a.go"} }},
+		{"empty test_only entry", 1, func(p *plan.Plan) { p.Tasks[1].Scope.TestOnly = []string{""} }},
 
 		{"empty goal", 2, func(p *plan.Plan) { p.Tasks[0].Goal = " " }},
 		{"no acceptance", 2, func(p *plan.Plan) { p.Tasks[0].Acceptance = []string{} }},
@@ -167,6 +169,23 @@ func TestEachRuleFiresAlone(t *testing.T) {
 				t.Errorf("rules %v, want [%d]: %v", got, c.rule, ps)
 			}
 		})
+	}
+}
+
+// Two tasks in one Go package get the same test_only glob. They need no
+// peers for it, because rule 5 reads scope.write only.
+func TestSharedTestOnlyScopeNeedsNoPeers(t *testing.T) {
+	p := validPlan()
+	p.Tasks[0].Scope.Write = []string{"alpha/a.go"}
+	p.Tasks[1].Scope.Write = []string{"alpha/b.go"}
+	p.Normalize()
+	for _, tk := range p.Tasks {
+		if !reflect.DeepEqual(tk.Scope.TestOnly, []string{"alpha/*_test.go"}) {
+			t.Fatalf("%s test_only = %q, want [alpha/*_test.go]", tk.ID, tk.Scope.TestOnly)
+		}
+	}
+	if ps := Lint(p, Options{}); len(ps) != 0 {
+		t.Fatalf("problems %v, want none", ps)
 	}
 }
 

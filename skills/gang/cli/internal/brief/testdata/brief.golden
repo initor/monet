@@ -8,8 +8,11 @@ Load config.yaml into a typed Config and reject unknown keys.
 SCOPE
 write:
 - internal/config/**
+- cmd/toy/main.go
 shared:
 - Makefile
+test_only:
+- cmd/toy/*_test.go
 peers:
 - C3
 

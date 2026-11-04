@@ -107,6 +107,11 @@ func (l *linter) shape() {
 		if t.Size.Lines < 0 || t.TimeboxMin < 0 || t.Wave < 0 {
 			l.add(1, t.ID, "size.lines, timebox_min, and wave must not be negative")
 		}
+		for _, g := range t.Scope.TestOnly {
+			if !strings.HasSuffix(g, "_test.go") {
+				l.add(1, t.ID, "scope.test_only %q must end in _test.go: it holds test files only", g)
+			}
+		}
 		for _, ref := range slices.Concat(t.Interfaces.Consumes, t.Interfaces.Produces) {
 			if !slices.ContainsFunc(refPrefixes, func(pre string) bool { return strings.HasPrefix(ref, pre) }) {
 				l.add(1, t.ID, "interface ref %q must start with one of %s", ref, strings.Join(refPrefixes, " "))

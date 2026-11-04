@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -93,9 +94,13 @@ type Task struct {
 	Notes        string          `json:"notes,omitempty"`
 }
 
+// Scope is what a task may change. TestOnly files take test edits only: a
+// new test, or an update to an expectation that pins the behavior that the
+// task changes, never a removed assertion. Normalize adds TestGlobs(Write).
 type Scope struct {
-	Write  []string `json:"write"`
-	Shared []string `json:"shared"`
+	Write    []string `json:"write"`
+	Shared   []string `json:"shared"`
+	TestOnly []string `json:"test_only"`
 }
 
 type Interfaces struct {
@@ -152,8 +157,9 @@ func Load(path string) (*Plan, error) {
 }
 
 // Normalize fills zero limits, an empty wave title, and an empty repo.checks
-// with defaults, turns nil slices and maps into empty ones, and sets an empty
-// risk to "low".
+// with defaults, turns nil slices and maps into empty ones, sets an empty
+// risk to "low", and adds each glob of TestGlobs(scope.write) that
+// scope.test_only lacks to its end.
 func (p *Plan) Normalize() {
 	l := &p.Limits
 	orDefault(&l.TaskLines, 100)
@@ -189,10 +195,15 @@ func (p *Plan) Normalize() {
 	}
 	for i := range p.Tasks {
 		t := &p.Tasks[i]
-		for _, s := range []*[]string{&t.Scope.Write, &t.Scope.Shared, &t.Peers, &t.DependsOn, &t.MergeAfter,
+		for _, s := range []*[]string{&t.Scope.Write, &t.Scope.Shared, &t.Scope.TestOnly, &t.Peers, &t.DependsOn, &t.MergeAfter,
 			&t.Requirements, &t.Interfaces.Consumes, &t.Interfaces.Produces, &t.Acceptance,
 			&t.Verify.TestsFirst, &t.Verify.Commands, &t.Forbidden, &t.Locks} {
 			nonNil(s)
+		}
+		for _, g := range TestGlobs(t.Scope.Write) {
+			if !slices.Contains(t.Scope.TestOnly, g) {
+				t.Scope.TestOnly = append(t.Scope.TestOnly, g)
+			}
 		}
 		if t.Risk == "" {
 			t.Risk = "low"

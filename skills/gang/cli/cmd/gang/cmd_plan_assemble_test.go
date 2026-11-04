@@ -85,6 +85,43 @@ func TestPlanAssembleFlags(t *testing.T) {
 	}
 }
 
+// A draft names only scope.write. plan assemble writes the test_only glob of
+// each Go package in it into plan.json, and lint passes the result.
+func TestPlanAssembleAddsTestOnlyScope(t *testing.T) {
+	dir := newTestGangDir(t, newTestRepo(t), testPlan())
+	skeleton, drafts := assembleInputs(t, t.TempDir())
+	a1 := testPlan().Tasks[0]
+	a1.Scope = plan.Scope{Write: []string{"alpha/a.go", "alpha/data/**"}}
+	writeDraft(t, filepath.Join(drafts, "a.json"), a1)
+	if _, stderr, code := runGang(t, &Ctx{Dir: dir}, "plan", "assemble", "--skeleton", skeleton, "--drafts", drafts); code != 0 {
+		t.Fatalf("assemble: code %d stderr %q", code, stderr)
+	}
+	b, err := os.ReadFile(store.Dir{Root: dir}.Plan())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var saved struct {
+		Tasks []struct {
+			ID    string `json:"id"`
+			Scope struct {
+				TestOnly []string `json:"test_only"`
+			} `json:"scope"`
+		} `json:"tasks"`
+	}
+	if err := json.Unmarshal(b, &saved); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string][]string{"A1": {"alpha/*_test.go"}, "B1": {}}
+	for _, tk := range saved.Tasks {
+		if !reflect.DeepEqual(tk.Scope.TestOnly, want[tk.ID]) {
+			t.Errorf("%s scope.test_only in plan.json = %#v, want %#v", tk.ID, tk.Scope.TestOnly, want[tk.ID])
+		}
+	}
+	if out, _, code := runGang(t, &Ctx{Dir: dir}, "lint"); code != 0 {
+		t.Errorf("lint: code %d out %q", code, out)
+	}
+}
+
 func TestPlanAssembleRefusals(t *testing.T) {
 	dir := newTestGangDir(t, newTestRepo(t), testPlan())
 	t.Run("duplicate id", func(t *testing.T) {

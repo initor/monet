@@ -24,7 +24,7 @@ func fixturePlan() *plan.Plan {
 			ID:           "B2",
 			Title:        "Parse the config file",
 			Goal:         "Load config.yaml into a typed Config and reject unknown keys.",
-			Scope:        plan.Scope{Write: []string{"internal/config/**"}, Shared: []string{"Makefile"}},
+			Scope:        plan.Scope{Write: []string{"internal/config/**", "cmd/toy/main.go"}, Shared: []string{"Makefile"}},
 			Peers:        []string{"C3"},
 			DependsOn:    []string{"A1"},
 			MergeAfter:   []string{},

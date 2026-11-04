@@ -37,7 +37,7 @@ func goldenPlan() *plan.Plan {
 			},
 			{
 				ID: "B1", Title: "beta cli", Goal: "Add the beta command.", Branch: "feat/beta",
-				Scope:        plan.Scope{Write: []string{"beta/**"}},
+				Scope:        plan.Scope{Write: []string{"beta/**", "cmd/beta/main.go"}},
 				DependsOn:    []string{"A1"},
 				Requirements: []string{"REQ-2"},
 				Interfaces:   plan.Interfaces{Consumes: []string{"py:alpha.parse"}},
@@ -98,6 +98,7 @@ const golden = "# Plan: demo\n" +
 	"- Size: 300 lines (size.reason: generated parser tables), timebox 40 min\n" +
 	"- Scope write: `alpha/**`\n" +
 	"- Scope shared: `docs/index.md`\n" +
+	"- Scope test_only: none\n" +
 	"- Peers: none\n" +
 	"- Depends on: none\n" +
 	"- Merge after: none\n" +
@@ -124,8 +125,9 @@ const golden = "# Plan: demo\n" +
 	"- Wave: 2\n" +
 	"- Risk: high\n" +
 	"- Size: 150 lines, timebox 30 min\n" +
-	"- Scope write: `beta/**`\n" +
+	"- Scope write: `beta/**`, `cmd/beta/main.go`\n" +
 	"- Scope shared: none\n" +
+	"- Scope test_only: `cmd/beta/*_test.go`\n" +
 	"- Peers: none\n" +
 	"- Depends on: A1\n" +
 	"- Merge after: none\n" +
