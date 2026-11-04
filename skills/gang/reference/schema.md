@@ -46,7 +46,7 @@ This file is the schema of `plan.json`. A task in the plan is its brief. Lint ru
 | `size.reason` | string | TIMEBOX | optional. Says why a task above `limits.task_lines` cannot be split. Lint fails such a task when this field is blank |
 | `forbidden` | strings | FORBIDDEN | added to the run-wide list |
 | `locks` | names | (scheduling) | each name is in the run-wide `locks` |
-| `risk` | `low` or `high` | (review) | `high` adds an adversarial reviewer |
+| `risk` | `low` or `high` | (review) | each tip gets one reviewer: the normal one for `low`, the adversarial one for `high`. Its CLEAN verdict alone lets the tip merge |
 | `wave` | int | (scheduling) | set by `gang schedule`, or kept from an adopted plan |
 | `model` | role overrides | (models) | optional, rare. The same shape as the run-wide `models` |
 | `notes` | string | (any) | optional. Names the requirement id, with the reason, when a requirement is covered twice. |

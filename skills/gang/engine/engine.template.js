@@ -33,6 +33,7 @@ const VARS = {
 const ROLES = ['implement', 'implement_hard', 'review', 'review_adversarial', 'fix', 'sync', 'merge', 'health', 'repair', 'plan_draft', 'plan_review']
 const MODELS = ['opus', 'sonnet', 'haiku', 'fable']
 const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max']
+const LENSES = ['review', 'adversarial']
 
 // ---- guards: throw before any spawn ----------------------------------------------------
 function fnv(str) { let h = 0x811c9dc5; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0 } return h }
@@ -47,7 +48,7 @@ if (IDS.size !== TASKS.length) throw new Error('data guard: duplicate task ids')
 TASKS.forEach((t, i) => {
   const bad = typeof t.id !== 'string' || typeof t.branch !== 'string' || !Array.isArray(t.deps) || !Array.isArray(t.mergeAfter)
     || !Array.isArray(t.locks) || typeof t.wave !== 'number' || typeof t.chain !== 'number' || !['low', 'high'].includes(t.risk)
-    || !t.roles || ROLES.some(r => !okRole(t.roles[r])) || t.deps.concat(t.mergeAfter).some(d => !IDS.has(d))
+    || !LENSES.includes(t.lens) || !t.roles || ROLES.some(r => !okRole(t.roles[r])) || t.deps.concat(t.mergeAfter).some(d => !IDS.has(d))
   if (bad) throw new Error(`data guard: bad task entry ${i} (${t.id})`)
 })
 if (CFG.onlyTasks && CFG.onlyTasks.some(id => !IDS.has(id))) throw new Error('data guard: onlyTasks names an unknown task')
@@ -284,9 +285,11 @@ async function implementStep(t, mode, ctx) {
   }
 }
 
-// ---- review: one reviewer per lens, two lenses for risk high ------------------------------
+// ---- review: one reviewer per tip, with the lens that gang gen wrote for the task ----------
 const reviewPath = (t, lens, n) => `${CFG.dir}/run/tasks/${t.id}/${lens}-${CFG.runTag}-${n}.md`
-const lensesOf = t => (t.risk === 'high' ? ['review', 'adversarial'] : ['review'])
+// gang gen takes t.lens from ledger.LensFor: review for risk low, adversarial for risk high.
+// gang merge needs that lens CLEAN, and no other.
+const lensesOf = t => [t.lens]
 // Clean matches the ledger's CLEAN (Contract 4): no blocker, major, or surviving mutant, and every check ran.
 const isClean = (r, tip) => !!r && r.reviewed_sha === tip && r.blockers === 0 && r.majors === 0 && r.survivors === 0 && r.gate === 'pass' && r.mutation_checked === true && r.ledger_recorded === true
 const incomplete = r => r.blockers === 0 && r.majors === 0 && r.survivors === 0 && r.gate !== 'fail' && !(r.gate === 'pass' && r.mutation_checked === true && r.ledger_recorded === true)
@@ -319,7 +322,7 @@ async function lensReview(t, tip, lens, mode, x) {
   return r
 }
 
-// Leaves only when the last implementer-type agent reported a passing gate AND every lens is clean.
+// Leaves only when the last implementer-type agent reported a passing gate AND the task's lens is clean.
 async function qualityLoop(t, tip, gateOk, gateSummary, mode, prevTip) {
   let rs = []
   let reviewed = false
@@ -412,7 +415,7 @@ function repair(redSha, report) {
       }
       const id = newFixId()
       const ft = { id, idx: 100000 + nextFix, kind: 'fix', title: `repair ${CFG.integration}`, branch: 'gang/' + id,
-        deps: [], mergeAfter: [], locks: [], wave: 0, chain: 0, risk: 'low', roles: FIX_ROLES,
+        deps: [], mergeAfter: [], locks: [], wave: 0, chain: 0, risk: 'low', lens: 'review', roles: FIX_ROLES,
         redSha: sha, failing: (rep.failing || []).join(', ') || 'unknown', healthSummary: rep.summary || 'none', recent: mergesSince(lastGreen) }
       tasks.set(id, ft)
       merged.set(id, deferred())

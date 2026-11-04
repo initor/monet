@@ -9,6 +9,10 @@ This file lists the notable changes to monet in each release. The format follows
 - A gang task gets a test-only scope: the `*_test.go` files of each Go package in its `scope.write`, plus the globs in the new optional field `scope.test_only`. Gang computes the first part each time it reads a plan and never saves it, so it follows `scope.write` when a task changes. A test-only file takes test edits only: new tests, the call sites and fakes that the change needs, and updates to the expectations that pin behavior that the task changes. No edit may remove an assertion, and a file that `scope.write` or `scope.shared` also matches keeps the rules of that field. The brief prints this rule under the list, `plan.md` lists the globs, and lint rule 1 fails a `scope.test_only` glob that does not end in `_test.go`.
 - A plan that sets `scope.test_only` needs this version of `<gang>`. A plan that does not set it still loads in an older build.
 
+### Changed
+
+- Each tip of a gang task gets one reviewer. A risk-high task no longer gets the normal review beside the adversarial review: the adversarial reviewer also maps each requirement and acceptance line to a test, checks the task commit and its `Task:` line, and checks how a sync resolved a conflict, which the merge review checked before. Its CLEAN verdict alone lets the tip merge. A risk-low task keeps the normal review.
+
 ## [0.5.1] - 2026-11-01
 
 ### Fixed

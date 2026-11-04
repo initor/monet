@@ -144,16 +144,17 @@ func TestPrepareRefusesWhatCannotShip(t *testing.T) {
 	}
 }
 
-func TestReviewedNeedsEveryRequiredLens(t *testing.T) {
+// A risk-high tip needs its one lens, the adversarial one, and nothing more.
+func TestReviewedNeedsTheLensOfTheRisk(t *testing.T) {
 	_, d, p := queueFixture(t)
 	p.Tasks[0].Risk = "high"
-	tip := strings.Repeat("a", 40)
+	tip, other := strings.Repeat("a", 40), strings.Repeat("b", 40)
 	testkit.LedgerRow(t, d, "T1", tip, "review", "CLEAN")
 	_, err := reviewed(d, p, "T1", tip)
 	wantExit(t, err, exit.Refused, "T1 tip aaaaaaa is not ledger CLEAN: missing [adversarial]")
-	testkit.LedgerRow(t, d, "T1", tip, "adversarial", "CLEAN")
-	if _, err := reviewed(d, p, "T1", tip); err != nil {
-		t.Fatalf("reviewed with both lenses = %v, want nil", err)
+	testkit.LedgerRow(t, d, "T1", other, "adversarial", "CLEAN")
+	if _, err := reviewed(d, p, "T1", other); err != nil {
+		t.Fatalf("reviewed with only the adversarial lens CLEAN = %v, want nil", err)
 	}
 }
 
@@ -222,7 +223,7 @@ func TestReuseReturnsAGitError(t *testing.T) {
 func TestBodyNamesGoalRequirementsReviewAndSize(t *testing.T) {
 	for _, c := range []struct{ risk, ids, reqs, lenses, src, lines string }{
 		{"", "R1 R2", "R1, R2", "[review]", "package b\n", "1"},
-		{"high", "", "-", "[review adversarial]", "package b\n\nvar B = 1\n", "3"},
+		{"high", "", "-", "[adversarial]", "package b\n\nvar B = 1\n", "3"},
 	} {
 		repo, d, p := queueFixture(t)
 		land(t, repo, d, "T2", map[string]string{"b/T2.go": c.src, "go.sum": "x\n"})

@@ -27,6 +27,8 @@ if (!templatePath === !enginePath) {
 function fnv(str) { let h = 0x811c9dc5; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0 } return h }
 function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296 } }
 const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+// The one lens that reviews a tip and that gang merge checks (ledger.LensFor). A repair task is risk low.
+const lensFor = t => (t && t.risk === 'high' ? 'adversarial' : 'review')
 const usedVars = text => [...new Set([...text.matchAll(/\{\{([A-Za-z0-9_]+)\}\}/g)].map(m => m[1]))].sort()
 
 // ---- roles.md: one fenced text block per key, and the variables table (parsed the way gen does) ----
@@ -120,7 +122,7 @@ function synthGraph(seed) {
   }
   const size = new Map(g.map(t => [t.id, t.size]))
   const tasks = g.map((t, i) => ({ id: t.id, title: t.title, branch: t.branch, deps: t.deps, mergeAfter: t.mergeAfter,
-    wave: 1 + Math.floor((level[i] - 1) * 5 / top), chain: chain[i], risk: t.risk, locks: t.locks,
+    wave: 1 + Math.floor((level[i] - 1) * 5 / top), chain: chain[i], risk: t.risk, lens: lensFor(t), locks: t.locks,
     roles: i % 7 === 3 ? { ...BASE_ROLES, review: { model: 'sonnet', effort: 'xhigh' } } : BASE_ROLES }))
   return { tasks, size }
 }
@@ -268,6 +270,8 @@ async function runSegment(W, R, o, segNo) {
 
   async function reviewer(id, lens, n, L, prompt, rkey) {
     if (!W.gateOk[id]) fail(`${L}: reviewed a tip whose gate failed`)
+    // One reviewer per tip: the lens of the task's risk, never the other one.
+    if (lens !== lensFor(byId.get(id))) fail(`${L}: the lens of ${id} is ${lensFor(byId.get(id))}, but a ${lens} reviewer ran`)
     const tm = prompt.match(TIP_RE)
     if (!tm || tm[1] !== W.tips[id]) fail(`${L}: told tip ${tm && tm[1].slice(-4)}, branch is ${String(W.tips[id]).slice(-4)}`)
     const lm = prompt.match(/ledger record (\S+) <reviewed sha> --lens (review|adversarial) --blockers <N> --majors <N> --survivors <N> /)
@@ -320,8 +324,7 @@ async function runSegment(W, R, o, segNo) {
     if (!t && !S.fixIds.has(id)) return refuse('unknown task')
     if (sha !== W.tips[id]) return refuse('tip differs from --sha')
     if (!W.taskLine[id]) return refuse('no Task line')
-    const lenses = t && t.risk === 'high' ? ['review', 'adversarial'] : ['review']
-    const missing = lenses.filter(l => W.ledger.get(`${id} ${sha} ${l}`) !== 'CLEAN')
+    const missing = [lensFor(t)].filter(l => W.ledger.get(`${id} ${sha} ${l}`) !== 'CLEAN')
     if (missing.length) return refuse(`ledger not CLEAN for ${missing.join(', ')}`)
     if (t) for (const d of t.deps.concat(t.mergeAfter)) if (!W.merged.has(d)) return refuse(`${d} not merged yet`)
     if (W.mergedSha[id] === sha) return { status: 'ALREADY', trunk_sha: W.trunk, files: [], reason: '' }
@@ -400,9 +403,7 @@ async function runSegment(W, R, o, segNo) {
     if (res.trunkTip !== W.trunk) fail(`trunkTip ${String(res.trunkTip).slice(-4)} != world ${W.trunk.slice(-4)}`)
     // Each mergeLog entry names the merged tip, so `gang ledger check <id> <sha>` is CLEAN on it (plan 05, addition C).
     for (const x of res.mergeLog) {
-      const t = byId.get(x.id)
-      const lenses = t && t.risk === 'high' ? ['review', 'adversarial'] : ['review']
-      const bad = lenses.filter(l => W.ledger.get(`${x.id} ${x.sha} ${l}`) !== 'CLEAN')
+      const bad = [lensFor(byId.get(x.id))].filter(l => W.ledger.get(`${x.id} ${x.sha} ${l}`) !== 'CLEAN')
       if (bad.length) fail(`mergeLog ${x.id} ${String(x.sha).slice(-4)}: the ledger is not CLEAN for ${bad.join(', ')}`)
       if (!/^[0-9a-f]{40}$/.test(x.trunk || '')) fail(`mergeLog ${x.id}: no trunk SHA`)
     }
@@ -503,7 +504,7 @@ function buildScenarios(base) {
   while (ids.includes('CI' + ciN)) ciN++
   const fixId = 'CI' + ciN // the coordinator's fix task after a red wave PR (Contract 0, item 13)
   const withFix = T.concat([{ id: fixId, title: 'fix the red checks of a wave PR', branch: 'gang/' + fixId, deps: [], mergeAfter: [], wave: 1,
-    chain: Math.max(...T.map(t => t.chain)) + 10, risk: 'low', locks: [], roles: T[0].roles }])
+    chain: Math.max(...T.map(t => t.chain)) + 10, risk: 'low', lens: 'review', locks: [], roles: T[0].roles }])
   const CHAOS = { pConflict: 0.2, pClean: 0.5, pBlocked: 0.01, pRed: 0.02, pNull: 0.02, pHealthRed: 0.03, pGateFail: 0.1, pNotRun: 0.05,
     pHealthErr: 0.02, pTrunkMoved: 0.03, pNoMutation: 0.03, pNoLedger: 0.03 }
   const S = []
@@ -516,7 +517,7 @@ function buildScenarios(base) {
   add('every first review finds a blocker', 10, { pClean: 0, pCleanLater: 1, expect: { stop: 'DONE', merged: N },
     check: every('fix round', t => `${t.id} fix 1 (round 1)`) })
   add('every first merge conflicts', 11, { pConflict: 1, pClean: 1, expect: { stop: 'DONE', merged: N },
-    check: all(every('sync', t => `${t.id} sync 1`), every('merge review', t => `${t.id} review 2 merge`)) })
+    check: all(every('sync', t => `${t.id} sync 1`), every('merge review', t => (lensFor(t) === 'review' ? `${t.id} review 2 merge` : `${t.id} adversarial 2`))) })
   add('review gate not run', 7, { pNotRun: 0.3, pClean: 1, pCleanLater: 1, expect: { stop: 'DONE', merged: N } })
   add('review checks incomplete (mutation, ledger)', 9, { pNoMutation: 0.15, pNoLedger: 0.15, pClean: 1, pCleanLater: 1, expect: { stop: 'DONE', merged: N } })
   add('surviving mutants with no blocker get a fix round', 44, { pSurvivors: 0.5, pClean: 1, pCleanLater: 1, expect: { stop: 'DONE', merged: N },
@@ -599,9 +600,14 @@ function buildScenarios(base) {
       check: ({ S: s }) => (s.firstRed === Infinity ? ['the trunk never went red'] : s.mergeCalls.some(x => x.plan && x.i > s.firstRed) ? ['a task merged onto a red trunk'] : []) })
   } else add('a red trunk during a drain ends merges', 41, {}, 'needs three root tasks running at once')
   if (high.length) {
-    add(`risk high needs both lenses (${high.length} tasks)`, 36, { advBlockFirst: true, pClean: 1, pCleanLater: 1, expect: { stop: 'DONE', merged: N },
-      check: ({ S: s }) => high.flatMap(t => (s.labels[`${t.id} fix 1 (round 1)`] && s.labels[`${t.id} adversarial 2`] ? [] : [`${t.id} merged without a second adversarial review`])) })
-  } else add('risk high needs both lenses', 36, {}, 'the plan has no risk high task')
+    // The adversarial reviewer is the only reviewer of a risk-high task, and its block alone sends the task to a fix round.
+    add(`risk high has one reviewer, the adversarial one (${high.length} tasks)`, 36, { advBlockFirst: true, pClean: 1, pCleanLater: 1, expect: { stop: 'DONE', merged: N },
+      check: ({ S: s }) => high.flatMap(t => (s.labels[`${t.id} fix 1 (round 1)`] && s.labels[`${t.id} adversarial 2`] ? [] : [`${t.id} merged without a second adversarial review`]))
+        .concat(Object.keys(s.labels).filter(l => / (review|adversarial) \d+/.test(l)).filter(l => {
+          const [id, kind] = l.split(' ')
+          return kind !== lensFor(T.find(t => t.id === id))
+        }).map(l => `${l}: a reviewer with the other lens ran`)) })
+  } else add('risk high has one reviewer, the adversarial one', 36, {}, 'the plan has no risk high task')
   add(`PR_RED relaunch: ${fixId} first, then the rest`, 37, [
     { tasks: withFix, done: order.slice(0, K), cfg: { onlyTasks: [fixId] }, redOnce: true, pClean: 1, expect: { stop: 'DONE', fixes: 1 },
       check: ({ res, S: s }) => (s.order[0] !== fixId ? [`${s.order[0]} merged before ${fixId}`] : res.fixTasks[0] !== 'F01' ? [`the repair task is ${res.fixTasks[0]}, not F01`] : []) },
@@ -654,6 +660,7 @@ async function guardChecks() {
   await try1('missing prompt', { ...d, prompts: { ...IN.prompts, repair: undefined } }, undefined, /missing prompt/)
   await try1('unknown DONE id', { ...d, done: ['X99'] }, undefined, /unknown task/)
   await try1('raw model id', { ...d, tasks: IN.tasks.map((t, i) => (i ? t : { ...t, roles: { ...t.roles, review: { model: 'claude-opus-4', effort: 'high' } } })) }, undefined, /bad task entry/)
+  await try1('unknown lens', { ...d, tasks: IN.tasks.map((t, i) => (i ? t : { ...t, lens: 'style' })) }, undefined, /bad task entry/)
   return errs
 }
 
@@ -674,7 +681,7 @@ console.log(`${statics.length ? 'FAIL' : 'ok  '} prompts: ${KEYS.length} keys, t
 for (const e of statics) console.log('     ' + e)
 if (statics.length) bad++
 const guards = await guardChecks()
-console.log(`${guards.length ? 'FAIL' : 'ok  '} guards: bad checksum, task count, unknown variable, missing prompt, unknown DONE id, raw model id`)
+console.log(`${guards.length ? 'FAIL' : 'ok  '} guards: bad checksum, task count, unknown variable, missing prompt, unknown DONE id, raw model id, unknown lens`)
 for (const e of guards) console.log('     ' + e)
 if (guards.length) bad++
 const base = await scenario('base order', 1, [{ pConflict: 0.15, pClean: 1 }])
