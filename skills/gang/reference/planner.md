@@ -83,6 +83,7 @@ Send one drafter per area, with the `plan_draft` role. Each prompt holds:
 Tell each drafter these rules:
 
 - One task is one commit of at most `limits.task_lines` changed lines, 100 by default, tests included. Lock files and binary files do not count, and a renamed file counts only its edited lines. A task that cannot be split further carries `size.reason`, and no task goes above `limits.split_lines`, 300 by default.
+- `scope.write` holds the files that the task owns. Gang gives the task the `*_test.go` files of each Go package in it as test-only scope, as the `scope.test_only` row of the schema says. List a test file in `scope.write` only when the task must remove an assertion from it. Put the tests of another package that the change breaks, such as callers of a changed function, in `scope.test_only`.
 - `goal` is one sentence that a stranger can run.
 - Each `acceptance` line is one check that passes or fails.
 - `verify.tests_first` names tests that fail before the change and pass after it.
@@ -105,7 +106,7 @@ Tell each drafter these rules:
 
 Run `<gang> render`. Then send all reviewers and the critic in one message, with the `plan_review` role.
 
-- **One reviewer per area.** It reads the draft and the area's specs. It writes findings to `<dir>/run/planning/review-<area>.md`, each with a severity and a task id. It checks requirement coverage, concrete goals, checkable acceptance, honest sizes, a `scope.write` that covers each file, and tests that fail first. It also checks that each size is within `limits.task_lines` or carries `size.reason`.
+- **One reviewer per area.** It reads the draft and the area's specs. It writes findings to `<dir>/run/planning/review-<area>.md`, each with a severity and a task id. It checks requirement coverage, concrete goals, checkable acceptance, honest sizes, a `scope.write` that covers each file (apart from the test files of the test-only scope), and tests that fail first. It also checks that each size is within `limits.task_lines` or carries `size.reason`.
 - **One global critic.** It reads `<dir>/plan/plan.md` and the output of `<gang> schedule`. It writes `<dir>/run/planning/critic.md`. It checks cross-area `depends_on` edges from `interfaces`, `merge_after` where the trunk must stay green, peers, locks, `risk`, and the critical chain.
 
 ### 5. Fix

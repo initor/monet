@@ -93,9 +93,13 @@ type Task struct {
 	Notes        string          `json:"notes,omitempty"`
 }
 
+// Scope is what a task may change. TestOnly holds test globs beyond the ones
+// that TestOnlyGlobs adds for the Go packages of Write. A plan that sets no
+// TestOnly saves no test_only key, so an older gang build still reads it.
 type Scope struct {
-	Write  []string `json:"write"`
-	Shared []string `json:"shared"`
+	Write    []string `json:"write"`
+	Shared   []string `json:"shared"`
+	TestOnly []string `json:"test_only,omitempty"`
 }
 
 type Interfaces struct {
@@ -189,7 +193,7 @@ func (p *Plan) Normalize() {
 	}
 	for i := range p.Tasks {
 		t := &p.Tasks[i]
-		for _, s := range []*[]string{&t.Scope.Write, &t.Scope.Shared, &t.Peers, &t.DependsOn, &t.MergeAfter,
+		for _, s := range []*[]string{&t.Scope.Write, &t.Scope.Shared, &t.Scope.TestOnly, &t.Peers, &t.DependsOn, &t.MergeAfter,
 			&t.Requirements, &t.Interfaces.Consumes, &t.Interfaces.Produces, &t.Acceptance,
 			&t.Verify.TestsFirst, &t.Verify.Commands, &t.Forbidden, &t.Locks} {
 			nonNil(s)

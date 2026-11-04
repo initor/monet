@@ -85,6 +85,34 @@ func TestPlanAssembleFlags(t *testing.T) {
 	}
 }
 
+// A draft names only scope.write. plan assemble saves no computed test glob,
+// so plan.json keeps the shape that an older gang build reads, and lint and
+// the brief still give the task the tests of its Go package as test-only scope.
+func TestPlanAssembleGivesTestOnlyScope(t *testing.T) {
+	dir := newTestGangDir(t, newTestRepo(t), testPlan())
+	skeleton, drafts := assembleInputs(t, t.TempDir())
+	a1 := testPlan().Tasks[0]
+	a1.Scope = plan.Scope{Write: []string{"alpha/a.go", "alpha/data/**"}}
+	writeDraft(t, filepath.Join(drafts, "a.json"), a1)
+	if _, stderr, code := runGang(t, &Ctx{Dir: dir}, "plan", "assemble", "--skeleton", skeleton, "--drafts", drafts); code != 0 {
+		t.Fatalf("assemble: code %d stderr %q", code, stderr)
+	}
+	b, err := os.ReadFile(store.Dir{Root: dir}.Plan())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), `"test_only"`) {
+		t.Errorf("plan.json holds a test_only key, want none:\n%s", b)
+	}
+	if out, _, code := runGang(t, &Ctx{Dir: dir}, "lint"); code != 0 {
+		t.Errorf("lint: code %d out %q", code, out)
+	}
+	out, _, code := runGang(t, &Ctx{Dir: dir}, "brief", "A1")
+	if want := "test_only:\n- alpha/*_test.go\n" + plan.TestOnlyRule + "\n"; code != 0 || !strings.Contains(out, want) {
+		t.Errorf("brief A1: code %d, want it to hold %q:\n%s", code, want, out)
+	}
+}
+
 func TestPlanAssembleRefusals(t *testing.T) {
 	dir := newTestGangDir(t, newTestRepo(t), testPlan())
 	t.Run("duplicate id", func(t *testing.T) {

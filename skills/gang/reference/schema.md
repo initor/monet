@@ -34,6 +34,7 @@ This file is the schema of `plan.json`. A task in the plan is its brief. Lint ru
 | `title`, `goal` | string | GOAL | `goal` is one sentence a stranger can run |
 | `branch` | string | (git) | optional. Defaults to `gang/<id>`. Differs from `repo.base`, `repo.integration`, and every other task's branch |
 | `scope.write`, `scope.shared` | globs | SCOPE | `shared` means append-only edits |
+| `scope.test_only` | globs | SCOPE | optional. Test globs beyond the ones that gang adds: each time it reads the plan, gang adds `<dir>/*_test.go` for each Go package in `scope.write` whose tests `scope.write` does not match, and it saves none of them. A test_only file takes test edits only: new tests, the call sites and fakes that the change needs, and updates to the expectations that pin behavior that the task changes. No edit may remove an assertion. A file that a scope.write or scope.shared glob also matches takes the rules of that field. Two tasks may share a test-only glob without `peers`, and the merge sync resolves a conflict |
 | `peers` | ids | SCOPE | tasks allowed to write the same files |
 | `depends_on`, `merge_after` | ids | CONTEXT | must exist, no cycles |
 | `requirements` | ids | CONTEXT | each id exists in the run-wide list |
@@ -57,7 +58,7 @@ REPORT is a fixed return schema that the engine gives each agent. STANDING is `r
 
 Lint fails with exit 1 and names every problem. It checks:
 
-1. Schema shape and types. Unknown fields fail. So does a value outside its pattern or range above, a `version` other than 1, a `repo.integration` equal to `repo.base`, a lock name that does not start with a letter or digit or holds a character other than letters, digits, `.`, `_`, and `-`, and a `repo.wave_title` that lacks `{k}` or renders to more than 72 characters for wave 99. So does a `repo.checks` other than `github` or `gate`.
+1. Schema shape and types. Unknown fields fail. So does a value outside its pattern or range above, a `version` other than 1, a `repo.integration` equal to `repo.base`, a lock name that does not start with a letter or digit or holds a character other than letters, digits, `.`, `_`, and `-`, and a `repo.wave_title` that lacks `{k}` or renders to more than 72 characters for wave 99. So does a `repo.checks` other than `github` or `gate`, and a `scope.test_only` glob that does not end in `_test.go`.
 2. Every required field is present and not empty: the run-wide `slug`, `repo.remote`, `repo.base`, `repo.integration`, `done`, and `commands.gate`, the `id` and `source` of each requirement, and the `id`, `title`, `goal`, `scope.write`, `acceptance`, `verify.tests_first`, `size.lines`, and `timebox_min` of each task (a `0` counts as empty). The other list fields may be empty.
 3. ids are unique. Every reference resolves. Task branches do not collide. The graph has no cycle across `depends_on` and `merge_after`.
 4. Each requirement is covered by at least one task. A requirement covered by two or more tasks must be named by its id, with the reason, in the `notes` of each of them.
