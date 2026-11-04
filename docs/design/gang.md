@@ -178,7 +178,7 @@ Schedule simulates the graph with the measured agent cap (CPUs minus 2, or `--ca
 | `health` | `opus` | medium |
 | `plan_draft`, `plan_review` | `opus` | high |
 
-Review independence comes from three things: a fresh agent, a different lens, and the mutation check. The mutation check does not depend on the model.
+Review independence comes from three things: a fresh agent, the adversarial lens for `risk: high`, and the mutation check. The mutation check does not depend on the model.
 
 ## 7. Engine
 
@@ -195,10 +195,10 @@ The coordinator launches `run/engine.js` with the Workflow tool and `scriptPath`
 1. **Implement.** The agent runs `gang claim <id>` and `gang brief <id>`. It writes the `verify.tests_first` tests and confirms they fail. It writes the code, runs `gang gate run <id>`, and commits once with the line `Task: <id>` in the message. It writes `tasks/<id>/report.md`.
 2. **Review.** A fresh agent maps requirements to tests and re-runs the gate. It applies one-line mutants to each changed part. A surviving mutant is a blocker. Each tip gets one reviewer. For a `risk: high` task, that reviewer is the adversarial one, which also hunts edge cases.
 3. **Ledger.** As its last step, the reviewer records its verdict with `gang ledger record <id> <sha> --lens review|adversarial --blockers N --majors N --survivors N [--gate-ran] [--mutation-checked] --evidence <findings_path>`. Clean means 0 blockers, 0 majors, the gate ran, and the mutation check ran. The engine also checks the review JSON. A check that did not run forces another review. `gang merge` trusts only the ledger.
-4. **Fix.** A new agent per round gets the review, the report, and the expected tip SHA. The re-review covers the fix diff only. After `limits.fix_rounds` rounds, the task is BLOCKED.
+4. **Fix.** A new agent per round gets the review, the report, and the expected tip SHA. For a `risk: low` task, the re-review covers the fix diff only. A `risk: high` task gets the full adversarial review again. After `limits.fix_rounds` rounds, the task is BLOCKED.
 5. **Merge.** A low-effort agent runs `gang merge <id> --sha <reviewed>`. An in-script mutex serializes merges.
    - On a conflict, a sync agent merges the trunk into the task branch. It never rebases.
-   - Then a merge-only review runs. This repeats at most 3 times.
+   - Then a merge-only review runs, or for a `risk: high` task the full adversarial review, which also checks the merge. This repeats at most 3 times.
 6. **Health.** After merges (coalesced), a health agent runs `gang gate run --health` on the trunk tip. A red trunk stops new merges and starts a repair task that owns the trunk, at most `limits.repair_tries` times.
 
 ### 7.3 Return schemas
