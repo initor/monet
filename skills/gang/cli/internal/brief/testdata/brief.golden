@@ -13,7 +13,7 @@ shared:
 - Makefile
 test_only:
 - cmd/toy/*_test.go
-A test_only file takes test edits only: new tests, the call sites and fakes that the change needs, and updates to the expectations that pin behavior that the task changes. No edit may remove an assertion. A file that a scope.write glob also matches takes the scope.write rules.
+A test_only file takes test edits only: new tests, the call sites and fakes that the change needs, and updates to the expectations that pin behavior that the task changes. No edit may remove an assertion. A file that a scope.write or scope.shared glob also matches takes the rules of that field.
 peers:
 - C3
 

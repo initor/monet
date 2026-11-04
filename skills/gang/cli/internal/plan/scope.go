@@ -10,7 +10,7 @@ import (
 // the test_only list, and reference/schema.md states it word for word.
 const TestOnlyRule = "A test_only file takes test edits only: new tests, the call sites and fakes that the change needs, " +
 	"and updates to the expectations that pin behavior that the task changes. No edit may remove an assertion. " +
-	"A file that a scope.write glob also matches takes the scope.write rules."
+	"A file that a scope.write or scope.shared glob also matches takes the rules of that field."
 
 // TestOnlyGlobs is the test-only scope of s: the globs in s.TestOnly, then
 // each glob of TestGlobs(s.Write) that they lack. gang computes the second
@@ -96,7 +96,9 @@ func segments(p string) []string {
 
 // matchSegments matches a directory against a glob, one segment at a time.
 // A "**" segment matches any number of segments, and any other segment
-// matches as path.Match does.
+// matches as path.Match does. The directory of a write glob can hold glob
+// text too, and a segment such as "*" or "**" there matches only the same
+// text, so that a narrower glob never counts as covering it.
 func matchSegments(pattern, dir []string) bool {
 	if len(pattern) == 0 {
 		return len(dir) == 0
@@ -111,6 +113,9 @@ func matchSegments(pattern, dir []string) bool {
 	}
 	if len(dir) == 0 {
 		return false
+	}
+	if strings.ContainsAny(dir[0], `*?[\`) {
+		return pattern[0] == dir[0] && matchSegments(pattern[1:], dir[1:])
 	}
 	ok, _ := path.Match(pattern[0], dir[0])
 	return ok && matchSegments(pattern[1:], dir[1:])

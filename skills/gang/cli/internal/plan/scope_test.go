@@ -38,6 +38,12 @@ func TestTestGlobs(t *testing.T) {
 		{"a deep glob over the package", []string{"a/**/*.go", "a/b/c/x.go"}, []string{}},
 		{"a deep test glob", []string{"**/*_test.go", "a/x.go"}, []string{}},
 		{"a leading ./", []string{"./*.go", "main.go"}, []string{}},
+		{"a tree glob over its own package", []string{"a/**", "a/x.go"}, []string{}},
+		{"the whole repo over a root package", []string{"**", "main.go"}, []string{}},
+		{"a one-segment glob does not cover a deep one", []string{"a/**/x.go", "a/*/*.go"}, []string{"a/**/*_test.go"}},
+		{"a one-segment glob does not cover a deep one at the root", []string{"**/x.go", "*/*.go"}, []string{"**/*_test.go"}},
+		{"a one-character glob does not cover a star", []string{"a/*/x.go", "a/?/*.go"}, []string{"a/*/*_test.go"}},
+		{"a narrower test glob does not cover a deep one", []string{"a/**/x.go", "a/*/*_test.go"}, []string{"a/**/*_test.go"}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			if got := TestGlobs(c.write); !reflect.DeepEqual(got, c.want) {
