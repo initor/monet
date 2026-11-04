@@ -139,17 +139,25 @@ func TestCheckIsKeyedByExactSHA(t *testing.T) {
 	}
 }
 
-func TestCheckNeedsEveryRequiredLens(t *testing.T) {
+// One CLEAN row for the lens of the task's risk is enough, and a CLEAN row
+// for the other lens never stands in for it.
+func TestCheckNeedsOnlyTheLensOfTheRisk(t *testing.T) {
 	d := store.Dir{Root: t.TempDir()}
 	high := &plan.Task{ID: "H3", Risk: "high"}
 	mustRecord(t, d, clean("H3", shaA, LensReview))
 	ok, missing, err := Check(d, "H3", shaA, RequiredLenses(high))
 	if err != nil || ok || !reflect.DeepEqual(missing, []Lens{LensAdversarial}) {
-		t.Fatalf("review only: ok=%v missing=%v err=%v, want missing adversarial", ok, missing, err)
+		t.Fatalf("high, review only: ok=%v missing=%v err=%v, want missing adversarial", ok, missing, err)
 	}
-	mustRecord(t, d, clean("H3", shaA, LensAdversarial))
-	if ok, _, err := Check(d, "H3", shaA, RequiredLenses(high)); err != nil || !ok {
-		t.Fatalf("both lenses clean: ok=%v err=%v", ok, err)
+	mustRecord(t, d, clean("H3", shaB, LensAdversarial))
+	if ok, missing, err := Check(d, "H3", shaB, RequiredLenses(high)); err != nil || !ok || len(missing) != 0 {
+		t.Fatalf("high, adversarial only: ok=%v missing=%v err=%v, want clean", ok, missing, err)
+	}
+	low := &plan.Task{ID: "A1", Risk: "low"}
+	mustRecord(t, d, clean("A1", shaA, LensAdversarial))
+	ok, missing, err = Check(d, "A1", shaA, RequiredLenses(low))
+	if err != nil || ok || !reflect.DeepEqual(missing, []Lens{LensReview}) {
+		t.Fatalf("low, adversarial only: ok=%v missing=%v err=%v, want missing review", ok, missing, err)
 	}
 }
 
@@ -195,12 +203,18 @@ func TestCheckRejectsOtherBooleanSpellings(t *testing.T) {
 	}
 }
 
-func TestRequiredLenses(t *testing.T) {
-	if got := RequiredLenses(&plan.Task{Risk: "low"}); !reflect.DeepEqual(got, []Lens{LensReview}) {
-		t.Errorf("low risk: %v", got)
-	}
-	if got := RequiredLenses(&plan.Task{Risk: "high"}); !reflect.DeepEqual(got, []Lens{LensReview, LensAdversarial}) {
-		t.Errorf("high risk: %v", got)
+func TestLensForAndRequiredLenses(t *testing.T) {
+	for _, c := range []struct {
+		risk string
+		want Lens
+	}{{"low", LensReview}, {"high", LensAdversarial}, {"", LensReview}} {
+		task := &plan.Task{Risk: c.risk}
+		if got := LensFor(task); got != c.want {
+			t.Errorf("LensFor(risk %q) = %s, want %s", c.risk, got, c.want)
+		}
+		if got := RequiredLenses(task); !reflect.DeepEqual(got, []Lens{c.want}) {
+			t.Errorf("RequiredLenses(risk %q) = %v, want [%s]", c.risk, got, c.want)
+		}
 	}
 }
 

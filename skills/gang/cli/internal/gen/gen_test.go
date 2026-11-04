@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"gang/internal/exit"
+	"gang/internal/ledger"
 	"gang/internal/plan"
 	"gang/internal/schedule"
 	"gang/internal/store"
@@ -113,6 +114,9 @@ func TestGenerateFillsEveryPlaceholder(t *testing.T) {
 		if g.Chain != sched.ChainScore[pt.ID] {
 			t.Errorf("task %s chain = %v, schedule says %v", pt.ID, g.Chain, sched.ChainScore[pt.ID])
 		}
+		if want := string(ledger.LensFor(pt)); g.Lens != want {
+			t.Errorf("task %s lens = %q, ledger.LensFor says %q", pt.ID, g.Lens, want)
+		}
 		if len(g.Roles) != len(plan.Roles) {
 			t.Errorf("task %s has %d roles, want %d", pt.ID, len(g.Roles), len(plan.Roles))
 		}
@@ -124,6 +128,10 @@ func TestGenerateFillsEveryPlaceholder(t *testing.T) {
 	}
 	if got[1].Roles["review"].Model != "sonnet" {
 		t.Errorf("task override lost: %+v", got[1].Roles["review"])
+	}
+	// One reviewer per tip: the review lens for risk low, the adversarial lens for risk high.
+	if got[0].Lens != "review" || got[1].Lens != "adversarial" {
+		t.Errorf("lenses = %q, %q, want review for the low task and adversarial for the high one", got[0].Lens, got[1].Lens)
 	}
 
 	var sum uint32

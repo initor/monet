@@ -60,12 +60,20 @@ func Compute(blockers, majors, survivors int, gateRan, mutationChecked bool) Ver
 	return Incomplete
 }
 
-// RequiredLenses is review, plus adversarial for a risk-high task.
-func RequiredLenses(t *plan.Task) []Lens {
+// LensFor is the one lens that reviews each tip of t: adversarial for a
+// risk-high task, review for any other. gang gen writes it into the engine,
+// so the engine runs the same lens that merge checks.
+func LensFor(t *plan.Task) Lens {
 	if t.Risk == "high" {
-		return []Lens{LensReview, LensAdversarial}
+		return LensAdversarial
 	}
-	return []Lens{LensReview}
+	return LensReview
+}
+
+// RequiredLenses is the lenses that Check needs CLEAN before a tip of t
+// merges: LensFor(t) alone.
+func RequiredLenses(t *plan.Task) []Lens {
+	return []Lens{LensFor(t)}
 }
 
 // Record appends one row. It computes the verdict itself and ignores r.Verdict.
