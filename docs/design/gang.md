@@ -132,7 +132,7 @@ A task in the plan is its brief. Each of pstack's 9 brief fields is a required f
 | `size.lines`, `timebox_min` | ints | TIMEBOX | `size.lines` is at most `limits.task_lines` |
 | `forbidden` | strings | FORBIDDEN | added to the run-wide list |
 | `locks` | names | (scheduling) | each name is in the run-wide `locks` |
-| `risk` | `low` or `high` | (review) | `high` adds an adversarial reviewer |
+| `risk` | `low` or `high` | (review) | `high` gets the adversarial reviewer in place of the normal one |
 | `wave` | int | (scheduling) | set by `gang schedule`, or kept from an adopted plan |
 | `model` | role overrides | (models) | optional, rare |
 | `notes` | string | (any) | optional. Gives the reason when a requirement is covered twice. |
@@ -193,7 +193,7 @@ The coordinator launches `run/engine.js` with the Workflow tool and `scriptPath`
 ### 7.2 One task's lifecycle
 
 1. **Implement.** The agent runs `gang claim <id>` and `gang brief <id>`. It writes the `verify.tests_first` tests and confirms they fail. It writes the code, runs `gang gate run <id>`, and commits once with the line `Task: <id>` in the message. It writes `tasks/<id>/report.md`.
-2. **Review.** A fresh agent maps requirements to tests and re-runs the gate. It applies one-line mutants to each changed part. A surviving mutant is a blocker. A `risk: high` task also gets an adversarial reviewer.
+2. **Review.** A fresh agent maps requirements to tests and re-runs the gate. It applies one-line mutants to each changed part. A surviving mutant is a blocker. Each tip gets one reviewer. For a `risk: high` task, that reviewer is the adversarial one, which also hunts edge cases.
 3. **Ledger.** As its last step, the reviewer records its verdict with `gang ledger record <id> <sha> --lens review|adversarial --blockers N --majors N --survivors N [--gate-ran] [--mutation-checked] --evidence <findings_path>`. Clean means 0 blockers, 0 majors, the gate ran, and the mutation check ran. The engine also checks the review JSON. A check that did not run forces another review. `gang merge` trusts only the ledger.
 4. **Fix.** A new agent per round gets the review, the report, and the expected tip SHA. The re-review covers the fix diff only. After `limits.fix_rounds` rounds, the task is BLOCKED.
 5. **Merge.** A low-effort agent runs `gang merge <id> --sha <reviewed>`. An in-script mutex serializes merges.

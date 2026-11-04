@@ -16,6 +16,7 @@ import (
 
 	"gang/internal/exit"
 	"gang/internal/gitx"
+	"gang/internal/ledger"
 	"gang/internal/plan"
 	"gang/internal/schedule"
 	"gang/internal/store"
@@ -30,7 +31,9 @@ type Options struct {
 	Defaults map[string]plan.Role
 }
 
-// taskEntry is one TASKS element (Contract 8).
+// taskEntry is one TASKS element (Contract 8). Lens is the one review lens
+// of the task, ledger.LensFor, so the engine reviews with the lens that
+// gang merge checks.
 type taskEntry struct {
 	ID         string               `json:"id"`
 	Title      string               `json:"title"`
@@ -40,6 +43,7 @@ type taskEntry struct {
 	Wave       int                  `json:"wave"`
 	Chain      float64              `json:"chain"`
 	Risk       string               `json:"risk"`
+	Lens       string               `json:"lens"`
 	Locks      []string             `json:"locks"`
 	Roles      map[string]plan.Role `json:"roles"`
 }
@@ -163,7 +167,7 @@ func Generate(repo string, d store.Dir, p *plan.Plan, skillDir, exe string, o Op
 		entries = append(entries, taskEntry{
 			ID: t.ID, Title: t.Title, Branch: plan.BranchFor(t),
 			Deps: t.DependsOn, MergeAfter: t.MergeAfter, Wave: t.Wave,
-			Chain: sched.ChainScore[t.ID], Risk: t.Risk, Locks: t.Locks, Roles: roles,
+			Chain: sched.ChainScore[t.ID], Risk: t.Risk, Lens: string(ledger.LensFor(t)), Locks: t.Locks, Roles: roles,
 		})
 	}
 	runRoles := map[string]plan.Role{}
