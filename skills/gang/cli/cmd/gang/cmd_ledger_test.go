@@ -26,8 +26,9 @@ func TestLedgerRecordAndCheck(t *testing.T) {
 	if code != 0 || out != "CHANGES\n" {
 		t.Fatalf("record changes: code=%d out=%q", code, out)
 	}
+	// A risk-high task needs only the adversarial lens, so its review row does not count.
 	out, _, code = runGang(t, c, "ledger", "check", "H3", rsSHA)
-	if code != 2 || out != "NOT-VERIFIED review,adversarial\n" {
+	if code != 2 || out != "NOT-VERIFIED adversarial\n" {
 		t.Fatalf("check H3: code=%d out=%q", code, out)
 	}
 
@@ -51,6 +52,15 @@ func TestLedgerRecordAndCheck(t *testing.T) {
 	}
 	if out, _, code = runGang(t, c, "ledger", "check", "A1", rsSHA); code != 2 || out != "NOT-VERIFIED review\n" {
 		t.Fatalf("check A1 after a survivor: code=%d out=%q", code, out)
+	}
+
+	// One CLEAN adversarial row verifies H3, although its review row is CHANGES.
+	out, _, code = runGang(t, c, "ledger", "record", "H3", rsSHA, "--lens", "adversarial", "--blockers", "0", "--majors", "0", "--survivors", "0", "--gate-ran", "--mutation-checked", "--evidence", "a-2.md")
+	if code != 0 || out != "CLEAN\n" {
+		t.Fatalf("record adversarial clean: code=%d out=%q", code, out)
+	}
+	if out, _, code = runGang(t, c, "ledger", "check", "H3", rsSHA); code != 0 || out != "CLEAN\n" {
+		t.Fatalf("check H3 after a clean adversarial row: code=%d out=%q", code, out)
 	}
 }
 

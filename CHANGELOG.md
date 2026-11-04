@@ -4,6 +4,10 @@ This file lists the notable changes to monet in each release. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Each tip of a gang task gets one reviewer. A risk-high task no longer gets the normal review beside the adversarial review: the adversarial reviewer also maps each requirement and acceptance line to a test, checks the task commit and its `Task:` line, and checks how a sync resolved a conflict, which the merge review checked before. Its CLEAN verdict alone lets the tip merge. A risk-low task keeps the normal review.
+
 ## [0.5.1] - 2026-11-01
 
 ### Fixed

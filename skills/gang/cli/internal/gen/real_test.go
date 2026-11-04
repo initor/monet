@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -93,4 +94,58 @@ func TestGenerateWithRealTemplatePromptsAndSim(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sim.mjs --engine failed: %v\n%s", err, sim)
 	}
+}
+
+// A risk-high task has one reviewer, the adversarial one, so its prompt holds
+// the checks of the full normal review word for word: the map of requirements
+// to tests, and the task commit with its Task line.
+func TestAdversarialPromptHoldsTheFullReviewChecks(t *testing.T) {
+	md, err := os.ReadFile("../../../reference/roles.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	prompts, err := ParsePrompts(md)
+	if err != nil {
+		t.Fatal(err)
+	}
+	adv := prompts["adversarial"]
+	for _, label := range []string{"Requirements:", "The commits:"} {
+		want := stepText(t, "review_full", prompts["review_full"], label)
+		if got := stepText(t, "adversarial", adv, label); got != want {
+			t.Errorf("adversarial step %q =\n%s\nwant the review_full step\n%s", label, got, want)
+		}
+	}
+	// A sync of a risk-high task gets no merge review, so the adversarial
+	// review makes its resolution check, in the words of review_merge.
+	resolution := strings.TrimPrefix(stepText(t, "review_merge", prompts["review_merge"], "Check that the resolution"), "Check")
+	for _, want := range []string{
+		"You are its only reviewer",
+		"When a \"Fix round\" section of it declines a finding with a reason, count that finding again only when you disagree with the reason",
+		"The gate already runs the commands that VERIFY lists, so do not run them again.",
+		"the map of requirements to tests, each edge case",
+		"a requirement or an acceptance line that is unmet, untested, or breaks on an edge case, work of either side that a merge lost",
+		"when `{{integration}}..HEAD` holds a merge commit of {{integration}}",
+		resolution,
+	} {
+		if !strings.Contains(adv, want) {
+			t.Errorf("the adversarial prompt lacks %q", want)
+		}
+	}
+	if strings.Contains(adv, "another reviewer") {
+		t.Error("the adversarial prompt still says that another reviewer checks the task")
+	}
+}
+
+var stepRe = regexp.MustCompile(`^[0-9]+\. (.*)$`)
+
+// stepText returns the numbered step of prompt that starts with label, without its number.
+func stepText(t *testing.T, key, prompt, label string) string {
+	t.Helper()
+	for _, line := range strings.Split(prompt, "\n") {
+		if m := stepRe.FindStringSubmatch(line); m != nil && strings.HasPrefix(m[1], label) {
+			return m[1]
+		}
+	}
+	t.Fatalf("%s has no numbered step that starts with %q", key, label)
+	return ""
 }

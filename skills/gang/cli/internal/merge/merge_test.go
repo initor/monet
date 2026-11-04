@@ -200,6 +200,11 @@ func TestMergeRefusalsInContractOrder(t *testing.T) {
 			f.clean(t, "H3", sha, ledger.LensReview)
 			return "H3", sha
 		}, "ledger not CLEAN for %s: adversarial"},
+		{"review lens missing on a risk-low task", func(t *testing.T, f *fixture) (string, string) {
+			sha := f.commit(t, "gang/B2", "b.txt", "1\n", "B2")
+			f.clean(t, "B2", sha, ledger.LensAdversarial)
+			return "B2", sha
+		}, "ledger not CLEAN for %s: review"},
 		{"depends_on not merged", func(t *testing.T, f *fixture) (string, string) {
 			sha := f.commit(t, "gang/B2", "b.txt", "1\n", "B2")
 			f.clean(t, "B2", sha, ledger.LensReview)
@@ -231,6 +236,17 @@ func TestMergeRefusalsInContractOrder(t *testing.T) {
 				t.Fatal("a refused merge moved the integration branch")
 			}
 		})
+	}
+}
+
+// A risk-high task has one reviewer, the adversarial one, so its CLEAN row
+// alone lands the tip.
+func TestMergeHighRiskNeedsOnlyTheAdversarialLens(t *testing.T) {
+	f := newFixture(t)
+	h3 := f.commit(t, "gang/H3", "h.txt", "h\n", "H3")
+	f.clean(t, "H3", h3, ledger.LensAdversarial)
+	if r := f.merge(t, "H3", h3); r.Status != Merged {
+		t.Fatalf("%+v, want MERGED with only the adversarial lens CLEAN", r)
 	}
 }
 
