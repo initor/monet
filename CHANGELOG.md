@@ -12,6 +12,7 @@ This file lists the notable changes to monet in each release. The format follows
 ### Changed
 
 - Each tip of a gang task gets one reviewer. A risk-high task no longer gets the normal review beside the adversarial review: the adversarial reviewer also maps each requirement and acceptance line to a test, checks the task commit and its `Task:` line, and checks how a sync resolved a conflict, which the merge review checked before. Its CLEAN verdict alone lets the tip merge. A risk-low task keeps the normal review.
+- The gang agent that implements a new task, and each fix agent, runs a self mutant pass before the gate: about 5 one-line mutants on the lines that it changed, and a new or a stronger test for each mutant that survives. It undoes each mutant by hand, because its work is not committed yet. The aim is fewer review rounds that start from a surviving mutant.
 
 ## [0.5.1] - 2026-11-01
 
