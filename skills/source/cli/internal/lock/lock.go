@@ -64,6 +64,79 @@ func WithMutex(path string, fn func() error) error {
 	}
 }
 
+// Acquire takes the lease for holder until now+ttl. The lease is free when it
+// has no file, when holder already has it (a renew), or when now is not
+// before its expiry. Otherwise it returns ErrHeld, naming the holder.
+func Acquire(dir, name, holder string, ttl time.Duration, now time.Time) (Lease, error) {
+	if err := validate(name, holder, ttl); err != nil {
+		return Lease{}, err
+	}
+	var got Lease
+	err := WithMutex(filepath.Join(dir, name+".mutex"), func() error {
+		cur, ok, err := Read(dir, name)
+		if err != nil {
+			return err
+		}
+		if ok && cur.Holder != holder && now.Before(cur.Expires) {
+			return fmt.Errorf("%w: %s by %s until %s", ErrHeld, name, cur.Holder, cur.Expires.Format(time.RFC3339))
+		}
+		got = Lease{Name: name, Holder: holder, Expires: now.Add(ttl)}
+		return write(dir, got)
+	})
+	return got, err
+}
+
+// Renew moves the expiry of a lease that holder still has to now+ttl. A
+// lease that another holder took, or that has no file, gives ErrHeld.
+func Renew(dir, name, holder string, ttl time.Duration, now time.Time) error {
+	if err := validate(name, holder, ttl); err != nil {
+		return err
+	}
+	return WithMutex(filepath.Join(dir, name+".mutex"), func() error {
+		cur, ok, err := Read(dir, name)
+		if err != nil {
+			return err
+		}
+		if !ok || cur.Holder != holder {
+			return fmt.Errorf("%w: %s is not held by %s", ErrHeld, name, holder)
+		}
+		cur.Expires = now.Add(ttl)
+		return write(dir, cur)
+	})
+}
+
+// Release removes the lease. Releasing a free lock is a no-op. Another
+// holder gets ErrHeld and the lease stays.
+func Release(dir, name, holder string) error {
+	if err := validate(name, holder, 1); err != nil {
+		return err
+	}
+	return WithMutex(filepath.Join(dir, name+".mutex"), func() error {
+		cur, ok, err := Read(dir, name)
+		if err != nil || !ok {
+			return err
+		}
+		if cur.Holder != holder {
+			return fmt.Errorf("%w: %s by %s", ErrHeld, name, cur.Holder)
+		}
+		return os.Remove(filepath.Join(dir, name+".json"))
+	})
+}
+
+// validate refuses a bad lock name, an empty holder, or a TTL that is not
+// positive. Release has no TTL and passes 1.
+func validate(name, holder string, ttl time.Duration) error {
+	switch {
+	case !ValidName(name):
+		return fmt.Errorf("lock name %q must match %s", name, nameRE)
+	case holder == "":
+		return errors.New("lock holder is empty")
+	case ttl <= 0:
+		return errors.New("lock ttl must be positive")
+	}
+	return nil
+}
+
 // Read returns the lease in dir/<name>.json, decoded strictly. A missing file
 // gives ok false and no error.
 func Read(dir, name string) (Lease, bool, error) {

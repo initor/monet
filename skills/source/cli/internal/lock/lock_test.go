@@ -3,10 +3,12 @@ package lock
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 )
@@ -149,5 +151,102 @@ func TestReadRefuses(t *testing.T) {
 	}
 	if _, _, err := Read(dir, "../x"); err == nil {
 		t.Error("bad name accepted")
+	}
+}
+
+// TestLeaseRules walks one lease through a take, a renew by acquire, a
+// takeover at expiry, a lost renew, and release. After each step Read gives
+// the holder and the expiry (as an offset from t0) that the row names.
+func TestLeaseRules(t *testing.T) {
+	d, t0, hr, m := t.TempDir(), testNow, time.Hour, time.Minute
+	acq := func(holder string, at, exp time.Duration) func() error {
+		return func() error {
+			l, err := Acquire(d, "brain", holder, hr, t0.Add(at))
+			if err == nil && (l.Holder != holder || !l.Expires.Equal(t0.Add(exp))) {
+				return fmt.Errorf("lease %+v, want %s until t0+%s", l, holder, exp)
+			}
+			return err
+		}
+	}
+	for _, st := range []struct {
+		step   string
+		call   func() error
+		want   error
+		names  string
+		holder string
+		exp    time.Duration
+	}{
+		{"step 1", acq("h1", 0, hr), nil, "", "h1", hr},
+		{"step 2", acq("h2", 0, hr), ErrHeld, "h1", "h1", hr},
+		{"step 3", acq("h1", 30*m, 90*m), nil, "", "h1", 90 * m},
+		{"step 4", acq("h2", 90*m, 150*m), nil, "", "h2", 150 * m},
+		{"step 5", func() error { return Renew(d, "brain", "h1", hr, t0.Add(91*m)) }, ErrHeld, "", "h2", 150 * m},
+		{"renew by h2", func() error { return Renew(d, "brain", "h2", hr, t0.Add(100*m)) }, nil, "", "h2", 160 * m},
+		{"step 6", func() error { return Release(d, "brain", "h1") }, ErrHeld, "", "h2", 160 * m},
+		{"step 7 first release", func() error { return Release(d, "brain", "h2") }, nil, "", "", 0},
+		{"step 7 second release", func() error { return Release(d, "brain", "h2") }, nil, "", "", 0},
+	} {
+		err := st.call()
+		if !errors.Is(err, st.want) || (err != nil && !strings.Contains(err.Error(), st.names)) {
+			t.Fatalf("%s: err %v, want %v naming %q", st.step, err, st.want, st.names)
+		}
+		l, ok, rerr := Read(d, "brain")
+		if rerr != nil || ok != (st.holder != "") || l.Holder != st.holder || (ok && !l.Expires.Equal(t0.Add(st.exp))) {
+			t.Fatalf("%s: Read = %+v, %v, %v, want %q until t0+%s", st.step, l, ok, rerr, st.holder, st.exp)
+		}
+	}
+}
+
+// A bad name, an empty holder, or a TTL of 0 is an error that is not
+// ErrHeld, and it leaves the held lease as it was. The bad name holds a
+// slash, so a refusal that came after the mutex would leave a folder.
+func TestLeaseValidation(t *testing.T) {
+	d, hr := t.TempDir(), time.Hour
+	if _, err := Acquire(d, "brain", "h1", hr, testNow); err != nil {
+		t.Fatal(err)
+	}
+	for name, call := range map[string]func() error{
+		"acquire bad name":     func() error { _, err := Acquire(d, "a/b", "h1", hr, testNow); return err },
+		"acquire empty holder": func() error { _, err := Acquire(d, "brain", "", hr, testNow); return err },
+		"acquire zero ttl":     func() error { _, err := Acquire(d, "brain", "h1", 0, testNow); return err },
+		"renew bad name":       func() error { return Renew(d, "a/b", "h1", hr, testNow) },
+		"renew empty holder":   func() error { return Renew(d, "brain", "", hr, testNow) },
+		"renew zero ttl":       func() error { return Renew(d, "brain", "h1", 0, testNow) },
+		"release bad name":     func() error { return Release(d, "a/b", "h1") },
+		"release empty holder": func() error { return Release(d, "brain", "") },
+	} {
+		if err := call(); err == nil || errors.Is(err, ErrHeld) {
+			t.Errorf("%s: err %v, want a validation error", name, err)
+		}
+	}
+	l, ok, err := Read(d, "brain")
+	if err != nil || !ok || l.Holder != "h1" || !l.Expires.Equal(testNow.Add(hr)) {
+		t.Fatalf("lease changed: %+v, %v, %v", l, ok, err)
+	}
+	if ents, err := os.ReadDir(d); err != nil || len(ents) != 1 {
+		t.Fatalf("dir holds %d entries (err %v), want only brain.json", len(ents), err)
+	}
+}
+
+// A lease file that fails the strict decode is an error for Acquire, Renew,
+// and Release, not ErrHeld, and the file stays as it was.
+func TestLeaseReadErrors(t *testing.T) {
+	d, hr := t.TempDir(), time.Hour
+	p := filepath.Join(d, "brain.json")
+	body := `{"name":"brain","holder":"h1","pid":7,"expires":"2026-11-01T10:00:00Z"}`
+	for name, call := range map[string]func() error{
+		"acquire": func() error { _, err := Acquire(d, "brain", "h2", hr, testNow); return err },
+		"renew":   func() error { return Renew(d, "brain", "h1", hr, testNow) },
+		"release": func() error { return Release(d, "brain", "h1") },
+	} {
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := call(); err == nil || errors.Is(err, ErrHeld) {
+			t.Errorf("%s: err %v, want the read error", name, err)
+		}
+		if b, err := os.ReadFile(p); err != nil || string(b) != body {
+			t.Errorf("%s: lease file changed (err %v)", name, err)
+		}
 	}
 }
