@@ -5,6 +5,9 @@
 # Build output of the gang CLI.
 skills/gang/cli/gang
 
+# Build output of the monet-source CLI.
+skills/source/cli/monet-source
+
 # Python bytecode and macOS metadata.
 __pycache__/
 .DS_Store
