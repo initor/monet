@@ -34,7 +34,7 @@ func TestLoadIsStrict(t *testing.T) {
 	}
 }
 
-// Each row breaks one rule of the plan's A12 table in a fresh copy of the fixture.
+// Each row breaks one rule of the plan's A12 or A13 table in a fresh copy of the fixture.
 func TestLintFields(t *testing.T) {
 	for i, row := range []struct {
 		edit func(c *Charter)
@@ -56,12 +56,35 @@ func TestLintFields(t *testing.T) {
 		{func(c *Charter) { c.Invariants[1].ID = "J1" }, "invariants: J1: want an id like I1"},
 		{func(c *Charter) { c.Invariants[1].ID = "I1" }, "invariants: I1: duplicate"},
 		{func(c *Charter) { c.Invariants[0].Text = " " }, "invariants: I1: empty text"},
-		{func(c *Charter) { c.Phases = nil }, "phases: empty"},
-		{func(c *Charter) { c.Phases = []string{} }, "phases: empty"},
-		{func(c *Charter) { c.Phases[1] = "review" }, "phases: review: want research or design"},
-		{func(c *Charter) { c.Phases[1] = "research" }, "phases: research: duplicate"},
+		{func(c *Charter) { c.Phases = nil }, "phases: empty\npersonas: reviewer: phase research is not in phases\npersonas: reviewer: phase design is not in phases\npersonas: reader: phase design is not in phases"},
+		{func(c *Charter) { c.Phases = []string{} }, "phases: empty\npersonas: reviewer: phase research is not in phases\npersonas: reviewer: phase design is not in phases\npersonas: reader: phase design is not in phases"},
+		{func(c *Charter) { c.Phases[1] = "review" }, "phases: review: want research or design\npersonas: reviewer: phase design is not in phases\npersonas: reader: phase design is not in phases"},
+		{func(c *Charter) { c.Phases[1] = "research" }, "phases: research: duplicate\npersonas: reviewer: phase design is not in phases\npersonas: reader: phase design is not in phases"},
 		{func(c *Charter) { c.Phases = []string{"design", "research"} }, "phases: want research first"},
 		{func(c *Charter) { c.Phases = append(c.Phases, "implementation") }, "phases: implementation comes with step 2 (call 24)"},
+		{func(c *Charter) { c.Personas = nil }, "personas: none"},
+		{func(c *Charter) { c.Personas = []Card{} }, "personas: none"},
+		{func(c *Charter) { c.Personas[1].ID = "Reader" }, "personas: Reader: want an id like code-reviewer"},
+		{func(c *Charter) { c.Personas[1].ID = "9reader" }, "personas: 9reader: want an id like code-reviewer"},
+		{func(c *Charter) { c.Personas[1].ID = "re_ader" }, "personas: re_ader: want an id like code-reviewer"},
+		{func(c *Charter) { c.Personas[1].ID = "x reader" }, "personas: x reader: want an id like code-reviewer"},
+		{func(c *Charter) { c.Personas[1].ID = "" }, "personas: : want an id like code-reviewer"},
+		{func(c *Charter) { c.Personas[1].ID = "new-reader2" }, ""},
+		{func(c *Charter) { c.Personas[1].ID = "reviewer" }, "personas: reviewer: duplicate"},
+		{func(c *Charter) { c.Personas[1].Weight = "optional" }, "personas: reader: weight optional: want blocking or advisory"},
+		{func(c *Charter) { c.Personas[1].Weight = "blocking" }, ""},
+		{func(c *Charter) { c.Personas[1].Description = " " }, "personas: reader: description: empty"},
+		{func(c *Charter) { c.Personas[1].Phases = []string{"design", "review"} }, "personas: reader: phase review is not in phases"},
+		{func(c *Charter) { c.Personas[1].Phases = nil }, ""},
+		{func(c *Charter) { c.Phases = c.Phases[:1] }, "personas: reviewer: phase design is not in phases\npersonas: reader: phase design is not in phases"},
+		{func(c *Charter) { c.Personas[0].Weight = "advisory" }, "personas: no blocking persona, so no persona can accept (call 4)"},
+		{func(c *Charter) { c.Personas = c.Personas[1:] }, "personas: no blocking persona, so no persona can accept (call 4)"},
+		{func(c *Charter) { c.Personas[0].Weight = "Blocking" },
+			"personas: reviewer: weight Blocking: want blocking or advisory\npersonas: no blocking persona, so no persona can accept (call 4)"},
+		{func(c *Charter) { c.Grants[0].Step = " " }, "grants: 1: step: empty"},
+		{func(c *Charter) { c.Grants[0].Words = "" }, "grants: 1: words: empty"},
+		{func(c *Charter) { c.Grants = append(c.Grants, Grant{Step: "\t", Words: "u2"}) }, "grants: 2: step: empty"},
+		{func(c *Charter) { c.Grants = nil }, ""},
 	} {
 		c, err := Load("testdata/charter.json")
 		if err != nil {
@@ -80,7 +103,24 @@ func TestLintOrder(t *testing.T) {
 	c := &Charter{Version: 0, Page: "x", Invariants: []Invariant{{ID: "I1"}}, Phases: []string{"implementation"}}
 	want := []string{"version: want 1", "goal: empty", "context: empty", "deliverable: empty", "quality_bar: empty",
 		"page: want an https link", "invariants: I1: empty text", "phases: want research first",
-		"phases: implementation comes with step 2 (call 24)"}
+		"phases: implementation comes with step 2 (call 24)", "personas: none"}
+	if got := Lint(c); strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+// The card rules run per card in table order, then call 4, then the grants.
+func TestLintCardOrder(t *testing.T) {
+	c, err := Load("testdata/charter.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Personas = []Card{{ID: "A", Weight: "x", Phases: []string{"review"}}, {ID: "A", Weight: "advisory", Description: "d"}}
+	c.Grants = []Grant{{}}
+	want := []string{"personas: A: want an id like code-reviewer", "personas: A: weight x: want blocking or advisory",
+		"personas: A: description: empty", "personas: A: phase review is not in phases",
+		"personas: A: want an id like code-reviewer", "personas: A: duplicate",
+		"personas: no blocking persona, so no persona can accept (call 4)", "grants: 1: step: empty", "grants: 1: words: empty"}
 	if got := Lint(c); strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("got %q, want %q", got, want)
 	}
