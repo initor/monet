@@ -9,6 +9,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 
 	"source/internal/exit"
@@ -131,4 +133,45 @@ func newFlagSet(name string) *flag.FlagSet {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	return fs
+}
+
+// parseFlags parses args with flags allowed before, between, or after the
+// positional arguments, and returns the positionals in order. "--" ends flag
+// parsing. A bad flag is a usage error.
+func parseFlags(fs *flag.FlagSet, args []string) ([]string, error) {
+	var pos []string
+	for {
+		if err := fs.Parse(args); err != nil {
+			return nil, exit.New(exit.Usage, "%s: %v", fs.Name(), err)
+		}
+		rest := fs.Args()
+		if len(rest) == 0 {
+			return pos, nil
+		}
+		if used := len(args) - len(rest); used > 0 && args[used-1] == "--" {
+			return append(pos, rest...), nil
+		}
+		pos = append(pos, rest[0])
+		args = rest[1:]
+	}
+}
+
+// subcommands returns a handler that dispatches on its first argument to
+// subs, for multi-word commands such as "charter seal" or "dev start".
+func subcommands(name string, subs map[string]func(c *Ctx, args []string) error) func(c *Ctx, args []string) error {
+	return func(c *Ctx, args []string) error {
+		names := make([]string, 0, len(subs))
+		for n := range subs {
+			names = append(names, n)
+		}
+		sort.Strings(names)
+		if len(args) == 0 {
+			return exit.New(exit.Usage, "%s: want a subcommand: %s", name, strings.Join(names, ", "))
+		}
+		h, ok := subs[args[0]]
+		if !ok {
+			return exit.New(exit.Usage, "%s: unknown subcommand %q: want %s", name, args[0], strings.Join(names, ", "))
+		}
+		return h(c, args[1:])
+	}
 }
