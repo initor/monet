@@ -6,6 +6,8 @@ import (
 	"errors"
 	"os"
 	"regexp"
+	"slices"
+	"strconv"
 	"strings"
 
 	"source/internal/store"
@@ -59,10 +61,13 @@ func Load(path string) (*Charter, error) {
 	return &c, nil
 }
 
-var invariantID = regexp.MustCompile(`^I[0-9]+$`)
+var (
+	invariantID = regexp.MustCompile(`^I[0-9]+$`)
+	personaID   = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
+)
 
-// Lint returns the field, invariant, and phase problems of c in the order of
-// the plan's A12 table. Step 1 has no implementation phase (call 24).
+// Lint returns the problems of c in the order of the plan's A12 and A13
+// tables. Step 1 has no implementation phase (call 24).
 func Lint(c *Charter) []string {
 	var out []string
 	if c.Version != 1 {
@@ -111,6 +116,49 @@ func Lint(c *Charter) []string {
 	}
 	if impl {
 		out = append(out, "phases: implementation comes with step 2 (call 24)")
+	}
+	return append(out, lintCards(c)...)
+}
+
+// lintCards returns the persona and grant problems of c. Done needs a
+// blocking persona that can accept, so a charter with none is refused (call 4).
+func lintCards(c *Charter) []string {
+	var out []string
+	if len(c.Personas) == 0 {
+		out = append(out, "personas: none")
+	}
+	ids, blocking := map[string]bool{}, false
+	for _, p := range c.Personas {
+		at := "personas: " + p.ID + ": "
+		if !personaID.MatchString(p.ID) {
+			out = append(out, at+"want an id like code-reviewer")
+		}
+		if ids[p.ID] {
+			out = append(out, at+"duplicate")
+		}
+		ids[p.ID] = true
+		if p.Weight != "blocking" && p.Weight != "advisory" {
+			out = append(out, at+"weight "+p.Weight+": want blocking or advisory")
+		}
+		blocking = blocking || p.Weight == "blocking"
+		if strings.TrimSpace(p.Description) == "" {
+			out = append(out, at+"description: empty")
+		}
+		for _, ph := range p.Phases {
+			if !slices.Contains(c.Phases, ph) {
+				out = append(out, at+"phase "+ph+" is not in phases")
+			}
+		}
+	}
+	if len(c.Personas) > 0 && !blocking {
+		out = append(out, "personas: no blocking persona, so no persona can accept (call 4)")
+	}
+	for i, g := range c.Grants {
+		for _, f := range []struct{ name, v string }{{"step", g.Step}, {"words", g.Words}} {
+			if strings.TrimSpace(f.v) == "" {
+				out = append(out, "grants: "+strconv.Itoa(i+1)+": "+f.name+": empty")
+			}
+		}
 	}
 	return out
 }
