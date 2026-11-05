@@ -1,10 +1,13 @@
 package store
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -50,5 +53,47 @@ func TestReadTSV(t *testing.T) {
 		if !reflect.DeepEqual(rows, tc.want) {
 			t.Errorf("%s: rows %q, want %q", tc.name, rows, tc.want)
 		}
+	}
+}
+
+// Eight racing appends to a new file give one header and eight whole rows.
+func TestAppendTSVRace(t *testing.T) {
+	p, h := filepath.Join(t.TempDir(), "e.tsv"), []string{"key", "at"}
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			if err := AppendTSV(p, h, []string{fmt.Sprint("k", i), "t"}); err != nil {
+				t.Error(err)
+			}
+		}(i)
+	}
+	wg.Wait()
+	if rows, err := ReadTSV(p, h); err != nil || len(rows) != 8 {
+		t.Fatalf("rows %d, err %v", len(rows), err)
+	}
+}
+
+// AppendTSV sanitizes cells, refuses a bad row or a failed create, makes a 0644 file from a temp file in the target dir, and leaves no temp file; createWith keeps an existing file.
+func TestAppendTSV(t *testing.T) {
+	p, h := filepath.Join(t.TempDir(), "sub", "e.tsv"), []string{"key", "at"}
+	t.Setenv("TMPDIR", filepath.Join(p, "none")) // a temp file made outside the target dir fails the create
+	if err := errors.Join(AppendTSV(p, h, []string{"a\tb", "=1"}), AppendTSV(p, h, []string{"c", "2"})); err != nil {
+		t.Fatal(err)
+	}
+	long := filepath.Join(filepath.Dir(p), strings.Repeat("x", 250)) // its temp name passes NAME_MAX, so createWith fails
+	if err := AppendTSV(p, h, []string{"short"}); err == nil || !strings.Contains(err.Error(), "1 cells, want 2") || AppendTSV(long, h, h) == nil {
+		t.Errorf("short row: err %v, want 1 cells, want 2; or the failed create of %s gave no error", err, long)
+	}
+	if created, err := createWith(p, "x\n"); created || err != nil {
+		t.Errorf("createWith over an existing file: created %v, err %v", created, err)
+	}
+	fi, err := os.Stat(p)
+	if data, _ := os.ReadFile(p); string(data) != "key\tat\na b\t'=1\nc\t2\n" || err != nil || fi.Mode().Perm() != 0o644 {
+		t.Errorf("file %q, stat err %v, want mode 0644", data, err)
+	}
+	if ents, _ := os.ReadDir(filepath.Dir(p)); len(ents) != 1 {
+		t.Errorf("dir holds %d entries, want only e.tsv", len(ents))
 	}
 }
