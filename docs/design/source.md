@@ -290,7 +290,7 @@ It imports no gang code (D27). It follows the patterns of gang: one file per com
 | Command | Caller | What it does |
 |---|---|---|
 | `init`, `preflight`, `lock` | Brain | Makes `<run>`, takes `brain`, writes the Brain relay config, checks the preflight, and keeps the leases |
-| `charter lint`, `seal`, `amend`, `persona set` | Brain | Checks, seals, or amends the charter with the words of the owner, and stores each persona brief |
+| `charter lint`, `render`, `seal`, `amend`, `persona set` | Brain | Checks the charter, renders `charter.md`, seals or amends the charter with the words of the owner, and stores each persona brief |
 | `dev start` | Brain | Makes `dev/`, writes the developer kickoff, and prints the command that starts the session |
 | `dev hello`, `takeover`, `beat`, `handover` | Developer | Takes, takes over, or renews `dev`, and moves the relay config around a gang run (step 2) |
 | `submit`, `respond`, `decision add`, `ship wait` | Developer | Freezes a version, answers findings, logs a run decision, or holds a landing until it may ship (step 2) |
