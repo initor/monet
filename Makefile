@@ -109,3 +109,14 @@ check: lint
 lint:
 	@echo "==> lint: python3 tools/check_skills.py"
 	python3 tools/check_skills.py
+
+# The monet-source Go tests, once skills/source/cli exists (PLAN-A1).
+test: source
+.PHONY: source
+source:
+	@if [ -d skills/source/cli ]; then \
+	  echo "==> source: tools/test-source.sh"; \
+	  tools/test-source.sh; \
+	else \
+	  echo "skip source: skills/source/cli not present"; \
+	fi
