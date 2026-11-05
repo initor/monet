@@ -267,3 +267,60 @@ func TestSkillDirOrder(t *testing.T) {
 		}
 	}
 }
+
+// Flags parse before, between, or after the positionals, and "--" ends flag
+// parsing, so a flag-shaped word after it stays a positional.
+func TestParseFlagsAnywhere(t *testing.T) {
+	for _, tc := range []struct {
+		args, pos []string
+		x         string
+		c         bool
+	}{
+		{[]string{"a", "--x", "1", "b", "--", "--c"}, []string{"a", "b", "--c"}, "1", false},
+		{[]string{"--x", "1", "a", "b", "--c"}, []string{"a", "b"}, "1", true},
+		{[]string{"--x", "1", "--c"}, nil, "1", true},
+		{[]string{"a", "--", "b", "--c"}, []string{"a", "b", "--c"}, "", false},
+	} {
+		fs := newFlagSet("t")
+		x, c := fs.String("x", "", ""), fs.Bool("c", false, "")
+		pos, err := parseFlags(fs, tc.args)
+		if err != nil || !reflect.DeepEqual(pos, tc.pos) || *x != tc.x || *c != tc.c {
+			t.Errorf("%q: pos %q, x %q, c %v, err %v", tc.args, pos, *x, *c, err)
+		}
+	}
+	_, err := parseFlags(newFlagSet("t"), []string{"a", "--nope"})
+	var e *exit.Error
+	if !errors.As(err, &e) || e.Code != exit.Usage || e.Msg != "t: flag provided but not defined: -nope" {
+		t.Fatalf("bad flag: err %v", err)
+	}
+}
+
+// A multi-word command dispatches on its first argument. No subcommand or an
+// unknown one is a usage error that lists the subcommands in sorted order.
+func TestSubcommands(t *testing.T) {
+	var got []string
+	probe := func(name string) func(*Ctx, []string) error {
+		return func(_ *Ctx, args []string) error { got = append([]string{name}, args...); return nil }
+	}
+	// p shows that the handler gets the Ctx and that its error is returned.
+	p := func(c *Ctx, _ []string) error { io.WriteString(c.Stdout, c.Run); return exit.New(exit.Refused, "no") }
+	commands["t-sub"] = subcommands("t-sub", map[string]func(c *Ctx, args []string) error{"q": probe("q"), "p": p})
+	t.Cleanup(func() { delete(commands, "t-sub") })
+	run := realTempDir(t)
+	if _, e, code := runSource(t, &Ctx{Run: run}, "t-sub", "q", "a", "--b"); code != exit.OK || !reflect.DeepEqual(got, []string{"q", "a", "--b"}) {
+		t.Fatalf("q: code %d, stderr %q, got %q", code, e, got)
+	}
+	if out, e, code := runSource(t, &Ctx{Run: run}, "t-sub", "p"); code != exit.Refused || out != run || e != "monet-source: no\n" {
+		t.Fatalf("p: code %d, stdout %q, stderr %q", code, out, e)
+	}
+	got = nil
+	// Map order is random, so the repeats pin the sort.
+	for i := 0; i < 20; i++ {
+		if _, e, code := runSource(t, &Ctx{Run: run}, "t-sub"); code != exit.Usage || e != "monet-source: t-sub: want a subcommand: p, q\n" {
+			t.Fatalf("none: code %d, stderr %q", code, e)
+		}
+	}
+	if _, e, code := runSource(t, &Ctx{Run: run}, "t-sub", "r"); code != exit.Usage || e != "monet-source: t-sub: unknown subcommand \"r\": want p, q\n" || got != nil {
+		t.Fatalf("unknown: code %d, stderr %q, got %q", code, e, got)
+	}
+}
