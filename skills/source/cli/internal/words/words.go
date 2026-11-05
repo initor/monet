@@ -1,12 +1,14 @@
-// Package words reads owner-words.md, the words of the owner. Each entry is a
+// Package words reads and appends owner-words.md, the words of the owner. Each entry is a
 // header line, the text, and one blank line, as gang relay.mjs:173-174 writes.
 package words
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -50,4 +52,33 @@ func Get(path, id string) (Entry, error) {
 		}
 	}
 	return Entry{}, fmt.Errorf("owner words: no entry %s", id)
+}
+
+// idForm is the form of an entry ID that Append accepts, and headerLike finds each text line that Append escapes.
+var idForm, headerLike = regexp.MustCompile(`^[A-Za-z0-9._:-]+$`), regexp.MustCompile(`(?m)^<!-- owner-words `)
+
+// Append adds e to path as its header line, its text, and one blank line in one O_APPEND write. It refuses a bad
+// or existing ID, a header that does not read back as e, and a file that does not end in a newline, and gives one
+// leading space to each text line that starts with "<!-- owner-words ", so that Read keeps the line as text.
+// The ID check and the write are two steps, so callers that can race hold the run lock.
+func Append(path string, e Entry) error {
+	if !idForm.MatchString(e.ID) {
+		return fmt.Errorf("owner words: bad id %q", e.ID)
+	}
+	h := "<!-- owner-words uuid=" + e.ID + " at=" + e.At + strings.Repeat(" supersedes="+e.Supersedes, min(len(e.Supersedes), 1)) + " -->"
+	if m := header.FindStringSubmatch(h); m == nil || m[2] != e.At {
+		return fmt.Errorf("owner words: entry %s: bad header %q", e.ID, h)
+	}
+	if entries, err := Read(path); err != nil || slices.ContainsFunc(entries, func(o Entry) bool { return o.ID == e.ID }) {
+		return cmp.Or(err, fmt.Errorf("owner words: entry %s exists", e.ID))
+	}
+	if data, _ := os.ReadFile(path); len(data) > 0 && data[len(data)-1] != '\n' {
+		return fmt.Errorf("owner words: %s does not end in a newline", path)
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o644)
+	if err != nil {
+		return err
+	}
+	_, err = f.WriteString(h + "\n" + headerLike.ReplaceAllString(e.Text, " $0") + "\n\n")
+	return errors.Join(err, f.Close())
 }
