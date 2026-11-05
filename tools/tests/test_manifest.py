@@ -26,6 +26,7 @@ IGNORED_PATHS = (
     ".planning/x",
     ".claude/worktrees/x",
     "skills/gang/cli/gang",
+    "skills/source/cli/monet-source",
     "tools/__pycache__/x",
     ".DS_Store",
 )
@@ -143,6 +144,7 @@ class RepoFiles(unittest.TestCase):
             ".planning/",
             ".claude/worktrees/",
             "skills/gang/cli/gang",
+            "skills/source/cli/monet-source",
             "__pycache__/",
             ".DS_Store",
         ):
