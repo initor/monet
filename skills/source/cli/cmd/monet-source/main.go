@@ -18,6 +18,9 @@ import (
 // -ldflags "-X main.skillDir=<path>".
 var skillDir string
 
+// executable reports the running binary's path. Tests replace it.
+var executable = os.Executable
+
 // Ctx is what every command handler receives.
 type Ctx struct {
 	Run, SkillDir  string
@@ -74,27 +77,53 @@ func run(c *Ctx, args []string) error {
 	if c.Run, err = resolveRun(*runDir); err != nil {
 		return err
 	}
-	c.SkillDir = *skill
-	if c.SkillDir == "" {
-		c.SkillDir = skillDir
-	}
+	c.SkillDir = firstSet(*skill, os.Getenv("SOURCE_SKILL"), skillDir)
 	return h(c, fs.Args()[1:])
 }
 
-// resolveRun returns the absolute run dir from --run, its only source. The
-// dir must exist.
+// resolveRun picks the run dir: the flag, then SOURCE_RUN, then <dir> when
+// the binary is <dir>/bin/monet-source. The dir must exist. It returns the
+// absolute path with symlinks resolved, the only form the engine stores.
 func resolveRun(flagRun string) (string, error) {
-	if flagRun == "" {
-		return "", exit.New(exit.Usage, "no run dir: pass --run")
+	dir := firstSet(flagRun, os.Getenv("SOURCE_RUN"))
+	if dir == "" {
+		if exe, err := executable(); err == nil && filepath.Base(exe) == "monet-source" && filepath.Base(filepath.Dir(exe)) == "bin" {
+			dir = filepath.Dir(filepath.Dir(exe))
+		}
 	}
-	abs, err := filepath.Abs(flagRun)
+	if dir == "" {
+		return "", exit.New(exit.Usage, "no run dir: pass --run, set SOURCE_RUN, or run <dir>/bin/monet-source")
+	}
+	abs, err := filepath.Abs(dir)
 	if err != nil {
-		return "", exit.New(exit.Usage, "run dir %s: %v", flagRun, err)
+		return "", exit.New(exit.Usage, "run dir %s: %v", dir, err)
 	}
 	if fi, err := os.Stat(abs); err != nil || !fi.IsDir() {
 		return "", exit.New(exit.Usage, "run dir %s does not exist", abs)
 	}
-	return abs, nil
+	resolved, err := filepath.EvalSymlinks(abs)
+	if err != nil {
+		return "", exit.New(exit.Usage, "run dir %s: %v", abs, err)
+	}
+	return resolved, nil
+}
+
+// firstSet returns the first non-empty value, or "" when all are empty.
+func firstSet(vals ...string) string {
+	for _, v := range vals {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// needSkill returns the skill dir, or a usage error when none was resolved.
+func needSkill(c *Ctx) (string, error) {
+	if c.SkillDir == "" {
+		return "", exit.New(exit.Usage, "no skill dir: pass --skill or set SOURCE_SKILL")
+	}
+	return c.SkillDir, nil
 }
 
 // newFlagSet returns a FlagSet that reports errors only through its result.
