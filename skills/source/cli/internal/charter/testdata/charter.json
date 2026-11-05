@@ -1,0 +1,8 @@
+{
+  "version": 1, "goal": "Explain how the run store keeps state safe.", "context": "The owner reads it before a review.",
+  "deliverable": "One explainer page.", "quality_bar": "A newcomer can say why each write is atomic.",
+  "page": "https://example.com/source/run", "phases": ["research", "design"],
+  "invariants": [{"id": "I1", "text": "Every claim cites a file."}, {"id": "I2", "text": "The page uses no internal names."}],
+  "personas": [{"id": "reviewer", "description": "Checks each claim against the code.", "weight": "blocking", "sources": ["skills/source/cli"], "phases": ["research", "design"]},
+    {"id": "reader", "description": "Reads the page as a newcomer.", "weight": "advisory", "sources": [], "phases": ["design"]}],
+  "grants": [{"step": "publish the page", "words": "u1"}]}
