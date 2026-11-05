@@ -3,9 +3,14 @@
 package store
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // Dir is a run dir, <home>/.planning/source/<slug>.
@@ -81,4 +86,42 @@ func WriteJSON(path string, v any) error {
 		return err
 	}
 	return WriteFileAtomic(path, append(data, '\n'), 0o644)
+}
+
+// AppendLine appends line and a newline in one O_APPEND write, creating the
+// file and its parent dirs when missing. A line holding CR or LF is an error.
+func AppendLine(path, line string) error {
+	if strings.ContainsAny(line, "\r\n") {
+		return fmt.Errorf("append %s: line holds a newline", path)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o644)
+	if err != nil {
+		return err
+	}
+	if _, err := f.WriteString(line + "\n"); err != nil {
+		f.Close()
+		return err
+	}
+	return f.Close()
+}
+
+// DecodeStrict decodes the one JSON value in path into v. Unknown fields and
+// trailing data are errors.
+func DecodeStrict(path string, v any) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(v); err != nil {
+		return fmt.Errorf("%s: %w", path, err)
+	}
+	if err := dec.Decode(&json.RawMessage{}); !errors.Is(err, io.EOF) {
+		return fmt.Errorf("%s: trailing data after the JSON value", path)
+	}
+	return nil
 }

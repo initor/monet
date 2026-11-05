@@ -116,3 +116,59 @@ func TestWriteJSONFormat(t *testing.T) {
 		t.Error("WriteJSON of a func succeeded, want an encode error")
 	}
 }
+
+// DecodeStrict reads one JSON value and refuses unknown fields and trailing data.
+func TestDecodeStrict(t *testing.T) {
+	type v struct {
+		A int `json:"a"`
+	}
+	for _, tc := range []struct{ body, wantErr string }{
+		{`{"a":1}`, ""},
+		{`{"a":1,"b":2}`, "unknown field"},
+		{`{"a":1}{}`, "trailing data"},
+	} {
+		p := filepath.Join(t.TempDir(), "x.json")
+		if err := os.WriteFile(p, []byte(tc.body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		var got v
+		err := DecodeStrict(p, &got)
+		if (tc.wantErr == "") != (err == nil) || (err != nil && !strings.Contains(err.Error(), tc.wantErr)) {
+			t.Fatalf("%s: err %v, want %q", tc.body, err, tc.wantErr)
+		}
+		if err == nil && got.A != 1 {
+			t.Errorf("%s: A = %d, want 1", tc.body, got.A)
+		}
+	}
+}
+
+// AppendLine creates the file and its folders and adds each line with a newline.
+func TestAppendLineAppends(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "sub", "log.tsv")
+	for _, line := range []string{"a", "b"} {
+		if err := AppendLine(p, line); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := os.ReadFile(p)
+	if err != nil || string(got) != "a\nb\n" {
+		t.Errorf("file = %q (err %v), want %q", got, err, "a\nb\n")
+	}
+}
+
+// A line that holds LF or CR is an error, and the file does not change.
+func TestAppendLineRefusesNewline(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "log.tsv")
+	if err := AppendLine(p, "a"); err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range []string{"x\ny", "x\ry"} {
+		if err := AppendLine(p, line); err == nil {
+			t.Errorf("AppendLine(%q) succeeded, want an error", line)
+		}
+	}
+	got, err := os.ReadFile(p)
+	if err != nil || string(got) != "a\n" {
+		t.Errorf("file = %q (err %v), want %q", got, err, "a\n")
+	}
+}
