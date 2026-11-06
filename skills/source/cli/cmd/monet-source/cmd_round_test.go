@@ -12,6 +12,7 @@ import (
 	"source/internal/charter"
 	"source/internal/events"
 	"source/internal/exit"
+	"source/internal/item"
 	"source/internal/round"
 	"source/internal/state"
 	"source/internal/store"
@@ -198,15 +199,15 @@ func openRound(t *testing.T, run string) {
 	}
 }
 
-// closeRound closes round n as h1, needs exit 0, outcome on stdout and in round.json, and a closed
-// round, and returns the state, round.json, and findings.md after the close.
-func closeRound(t *testing.T, run string, n int, outcome string) (state.State, round.Round, string) {
+// closeRound closes round n as h1, needs exit 0, the outcome and then each draft line on stdout, the outcome
+// in round.json, and a closed round, and returns the state, round.json, and findings.md after the close.
+func closeRound(t *testing.T, run string, n int, outcome string, drafts ...string) (state.State, round.Round, string) {
 	t.Helper()
 	out, e, code := runSource(t, &Ctx{Run: run}, "round", "close", "--holder", "h1")
 	s, err := state.Load(store.Dir{Root: run})
 	r, rerr := round.Load(run, n)
-	if code != exit.OK || out != outcome+"\n" || e != "" || err != nil || rerr != nil || s.RoundOpen || r.Outcome != outcome {
-		t.Fatalf("round close %d: code %d, stdout %q, stderr %q, open %v, outcome %q (errs %v, %v); want 0 and %s", n, code, out, e, s.RoundOpen, r.Outcome, err, rerr, outcome)
+	if want := strings.Join(append([]string{outcome}, drafts...), "\n") + "\n"; code != exit.OK || out != want || e != "" || err != nil || rerr != nil || s.RoundOpen || r.Outcome != outcome {
+		t.Fatalf("round close %d: code %d, stdout %q, stderr %q, open %v, outcome %q (errs %v, %v); want 0 and %q", n, code, out, e, s.RoundOpen, r.Outcome, err, rerr, want)
 	}
 	return s, r, readOr(t, round.Path(run, n, "findings.md"))
 }
@@ -319,8 +320,8 @@ func TestRoundCloseNeedsOpenRound(t *testing.T) {
 }
 
 // Each block adds 1 to the count of its persona, and an ACCEPT keeps the Accepted entries of the
-// other phases. Both key by the round phase, also when the state phase moves while the round is open.
-// FINDINGS names the round number (round 1 checks v2) and the outcome of each round.
+// other phases. Both key by the round phase, also when the state phase moves while the round is open,
+// and so does the draft of the second block. FINDINGS names the round number (round 1 checks v2) and the outcome.
 func TestRoundCloseAcrossRounds(t *testing.T) {
 	run := newLoopRun(t)
 	d := store.Dir{Root: run}
@@ -331,13 +332,13 @@ func TestRoundCloseAcrossRounds(t *testing.T) {
 	}
 	findings := map[string][]round.Finding{"block": {{ID: "F1", Severity: "blocker"}}}
 	submitFile(t, run, "a.md", "one\n")
-	for i, tc := range [][2]string{{"block", "FIX"}, {"block", "FIX"}, {"accept", "ACCEPT"}} {
+	for i, tc := range [][]string{{"block", "FIX"}, {"block", "ACCEPT", "item D1 draft for reviewer"}, {"accept", "ACCEPT"}} {
 		phase("research")
 		submitFile(t, run, "a.md", fmt.Sprintf("research %d\n", i))
 		openRound(t, run)
 		writeVerdict(t, run, i+1, "reviewer", tc[0], findings[tc[0]]...)
 		phase("design")
-		closeRound(t, run, i+1, tc[1])
+		closeRound(t, run, i+1, tc[1], tc[2:]...)
 	}
 	submitFile(t, run, "a.md", "design\n")
 	openRound(t, run)
@@ -345,9 +346,111 @@ func TestRoundCloseAcrossRounds(t *testing.T) {
 	writeVerdict(t, run, 4, "reader", "accept")
 	s, _, _ := closeRound(t, run, 4, "ACCEPT")
 	lines, _, err := events.For(d, "dev", 0)
-	want := []string{"FINDINGS 1 FIX", "FINDINGS 2 FIX", "FINDINGS 3 ACCEPT", "FINDINGS 4 ACCEPT"}
-	if !reflect.DeepEqual(s.Counts, map[string]map[string]int{"research": {"reviewer": 2}}) ||
+	want, d1 := []string{"FINDINGS 1 FIX", "FINDINGS 2 ACCEPT", "FINDINGS 3 ACCEPT", "FINDINGS 4 ACCEPT"}, item.Item{ID: "D1", Phase: "research", Persona: "reviewer", Round: 2, Findings: []string{"F1"}, Status: "draft"}
+	if items := loadItems(t, run); !reflect.DeepEqual(s.Counts, map[string]map[string]int{"research": {"reviewer": 2}}) || !reflect.DeepEqual(items, []item.Item{d1}) ||
 		!reflect.DeepEqual(s.Accepted, map[string]int{"research": 4, "design": 1}) || err != nil || !reflect.DeepEqual(lines, want) {
-		t.Fatalf("counts %v, accepted %v, dev events %q (err %v); want research reviewer 2, research 4 and design 1, %q", s.Counts, s.Accepted, lines, err, want)
+		t.Fatalf("counts %v, items %+v, accepted %v, dev events %q (err %v); want research reviewer 2, %+v, research 4 and design 1, %q", s.Counts, items, s.Accepted, lines, err, d1, want)
+	}
+}
+
+// loadItems decodes each file in <run>/items strictly as an Item, in name order.
+func loadItems(t *testing.T, run string) (items []item.Item) {
+	t.Helper()
+	paths, err := filepath.Glob(filepath.Join(run, "items", "*"))
+	for _, p := range paths {
+		var it item.Item
+		if err == nil {
+			err = store.DecodeStrict(p, &it)
+		}
+		items = append(items, it)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	return items
+}
+
+// The cap of 2 (R19): reviewer blocks at rounds 1 to 3 of research, each on a new version, and accepts at round 4.
+// Each block from the second on saves a draft with the ids of its blocker findings only, holds its check, and
+// prints its line after the outcome, with no event and one FINDINGS row in the log. The accept opens no item.
+func TestCapOpensItemAtEachLaterBlock(t *testing.T) {
+	run := newLoopRun(t)
+	d := store.Dir{Root: run}
+	f := func(severities ...string) (fs []round.Finding) {
+		for i, sev := range severities {
+			fs = append(fs, round.Finding{ID: fmt.Sprintf("F%d", i+1), Severity: sev})
+		}
+		return fs
+	}
+	var want []item.Item
+	for i, tc := range []struct {
+		verdict  string
+		findings []round.Finding
+		outcome  string
+		count    int
+		draft    string
+		ids      []string
+	}{
+		{"block", f("blocker"), "FIX", 1, "", nil},
+		{"block", f("blocker", "major"), "ACCEPT", 2, "D1", []string{"F1"}},
+		{"block", f("major", "blocker", "blocker"), "ACCEPT", 3, "D2", []string{"F2", "F3"}},
+		{"accept", f("minor"), "ACCEPT", 3, "", nil},
+	} {
+		n, lines := i+1, []string(nil)
+		submitFile(t, run, "a.md", fmt.Sprintf("v%d\n", n))
+		openRound(t, run)
+		writeVerdict(t, run, n, "reviewer", tc.verdict, tc.findings...)
+		if tc.draft != "" {
+			lines = []string{"item " + tc.draft + " draft for reviewer"}
+			want = append(want, item.Item{ID: tc.draft, Phase: "research", Persona: "reviewer", Round: n, Findings: tc.ids, Status: "draft"})
+		}
+		evs, log := readOr(t, d.Events()), readOr(t, d.Log())
+		s, r, _ := closeRound(t, run, n, tc.outcome, lines...)
+		newEvs, newLog, finding := strings.TrimPrefix(readOr(t, d.Events()), evs), strings.TrimPrefix(readOr(t, d.Log()), log), fmt.Sprintf("FINDINGS %d %s", n, tc.outcome)
+		if items := loadItems(t, run); s.Counts["research"]["reviewer"] != tc.count || r.Checks[0].Item != tc.draft || s.Items != len(want) || !reflect.DeepEqual(items, want) ||
+			!strings.HasPrefix(newEvs, finding+"\t") || strings.Count(newEvs, "\n") != 1 || !strings.HasSuffix(newLog, "\t"+finding+"\n") || strings.Count(newLog, "\n") != 1 {
+			t.Fatalf("round %d: count %d, item %q, items %d %+v, new events %q, new log %q; want %d, %q, %+v, one %s row each", n, s.Counts["research"]["reviewer"], r.Checks[0].Item, s.Items, items, newEvs, newLog, tc.count, tc.draft, want, finding)
+		}
+	}
+}
+
+// In design, reader (advisory) blocks at two rounds while reviewer accepts: both give ACCEPT, reader
+// gets no count, and no draft is saved.
+func TestCapSkipsAdvisory(t *testing.T) {
+	run := newLoopRun(t)
+	if err := state.Update(store.Dir{Root: run}, func(s *state.State) error { s.Phase = "design"; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	for n := 1; n <= 2; n++ {
+		submitFile(t, run, "a.md", fmt.Sprintf("v%d\n", n))
+		openRound(t, run)
+		writeVerdict(t, run, n, "reviewer", "accept")
+		writeVerdict(t, run, n, "reader", "block", round.Finding{ID: "F1", Severity: "blocker"})
+		if s, r, _ := closeRound(t, run, n, "ACCEPT"); len(s.Counts) != 0 || s.Items != 0 || loadItems(t, run) != nil || r.Checks[1].Persona != "reader" || r.Checks[1].Item != "" {
+			t.Fatalf("round %d: counts %v, items %d, files %+v, checks %+v; want no count and no item", n, s.Counts, s.Items, loadItems(t, run), r.Checks)
+		}
+	}
+}
+
+// In design, reviewer and reader (made blocking) both block at two rounds. The second close saves D1 for
+// reviewer and D2 for reader, ids from Items, each with the design phase and its own persona, and prints both
+// lines in check order.
+func TestCapDraftsEachPersona(t *testing.T) {
+	run := newLoopRun(t)
+	writeCharter(t, run, `"weight": "advisory"`, `"weight": "blocking"`)
+	if err := state.Update(store.Dir{Root: run}, func(s *state.State) error { s.Phase = "design"; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	for n, outcome := range []string{"FIX", "ACCEPT"} {
+		submitFile(t, run, "a.md", fmt.Sprintf("v%d\n", n+1))
+		openRound(t, run)
+		writeVerdict(t, run, n+1, "reviewer", "block", round.Finding{ID: "F1", Severity: "blocker"})
+		writeVerdict(t, run, n+1, "reader", "block", round.Finding{ID: "F1", Severity: "blocker"})
+		closeRound(t, run, n+1, outcome, []string{"item D1 draft for reviewer", "item D2 draft for reader"}[:2*n]...)
+	}
+	want := []item.Item{{ID: "D1", Phase: "design", Persona: "reviewer", Round: 2, Findings: []string{"F1"}, Status: "draft"},
+		{ID: "D2", Phase: "design", Persona: "reader", Round: 2, Findings: []string{"F1"}, Status: "draft"}}
+	if items := loadItems(t, run); !reflect.DeepEqual(items, want) {
+		t.Fatalf("items %+v; want %+v", items, want)
 	}
 }
