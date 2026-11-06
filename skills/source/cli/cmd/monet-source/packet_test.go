@@ -36,6 +36,11 @@ func TestPacketSummary(t *testing.T) {
 		Deliverable: "One explainer page.", Phase: "research", Round: &packetRound{2, "research", false, 2, "ACCEPT"},
 		Counts: map[string]map[string]int{"research": {"reviewer": 2}}, Diagram: "none",
 		Waiting: packetWaiting{Items: []packetItem{{"D1", "reviewer", "research", "draft", "", "", ""}}, Walls: []packetWall{{"W1", "q", "d", "b"}}}}
+	logAt := testNow.Format(time.RFC3339Nano)
+	for _, l := range []string{"charter sealed with words w1", "VERSION research v1", "FINDINGS 1 FIX", "VERSION research v2", "FINDINGS 2 ACCEPT", "WALL W1"} {
+		want.Log = append(want.Log, packetLine{logAt, l})
+	}
+	want.Decisions, want.LogNext, want.Changed = []packetDecision{}, 6, logAt
 	if err != nil || !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v, err %v; want %+v", got, err, want)
 	}
@@ -60,6 +65,7 @@ func TestPacketSummary(t *testing.T) {
 	}
 	want.Phase, want.Round, want.LastWrite = "design", &packetRound{2, "research", true, 3, "open"}, &at
 	want.Waiting.Items = []packetItem{{"D1", "reviewer", "research", "open", "keep v1", "phase back research", "design"}}
+	want.Log, want.LogNext = append(want.Log, packetLine{logAt, "ITEM D1"}), 7
 	if got, err := buildPacket(store.Dir{Root: run}); err != nil || !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v, err %v; want %+v", got, err, want)
 	}
@@ -82,7 +88,7 @@ func TestPacketSummary(t *testing.T) {
 	writeCharter(t, kick)
 	p, err := buildPacket(store.Dir{Root: kick})
 	data, _ := json.Marshal(p)
-	if err != nil || p.Phase != "kickoff" || p.Round != nil || !strings.Contains(string(data), `"round":null`) ||
+	if err != nil || p.Phase != "kickoff" || p.Round != nil || p.Changed != "" || !strings.Contains(string(data), `"round":null`) ||
 		!strings.Contains(string(data), `"last_write":null`) || strings.Contains(string(data), "delivered") || strings.Contains(string(data), "verdicts") {
 		t.Fatalf("kickoff packet %s, err %v; want phase kickoff, a null round and last_write, no delivered or verdicts", data, err)
 	}
@@ -96,9 +102,49 @@ func TestPacketSummary(t *testing.T) {
 		{packetItem{}, "id persona phase status default way_back affects"},
 		{packetWall{}, "id question default blocks"},
 		{packetWaiting{}, "items walls"},
+		{packetDecision{}, "at by decision reason"},
+		{packetLine{}, "at line"},
 	} {
 		if got := strings.Join(jsonNames(tc.v), " "); got != tc.want {
 			t.Errorf("%T names %q; want %q", tc.v, got, tc.want)
 		}
 	}
+}
+
+// buildPacket gives every decisions.tsv row, the log.tsv rows from report_row on (none past the end), log_next as
+// the row count, and changed as the at of the last row.
+func TestPacketLog(t *testing.T) {
+	run := newLoopRun(t)
+	d := store.Dir{Root: run}
+	submitFile(t, run, "a.md", "one\n")
+	submitFile(t, run, "a.md", "two\n")
+	later := &Ctx{Run: run, Now: func() time.Time { return testNow.Add(time.Hour) }}
+	if _, e, code := runSource(t, later, "decision", "add", "keep one page", "--reason", "it reads faster", "--holder", "d1"); code != exit.OK {
+		t.Fatalf("decision add: code %d, stderr %q", code, e)
+	}
+	at := testNow.Format(time.RFC3339Nano)
+	all := []packetLine{{at, "charter sealed with words w1"}, {at, "VERSION research v1"}, {at, "VERSION research v2"}}
+	decs := []packetDecision{{testNow.Add(time.Hour).Format(time.RFC3339Nano), "dev", "keep one page", "it reads faster"}, {at, "brain", "b", "r"}}
+	if err := store.AppendTSV(d.Path("decisions.tsv"), decisionHeader, []string{at, "brain", "b", "r"}); err != nil {
+		t.Fatal(err)
+	}
+	check := func(row, next int, changed string, log []packetLine) {
+		t.Helper()
+		if err := state.Update(d, func(s *state.State) error { s.ReportRow = row; return nil }); err != nil {
+			t.Fatal(err)
+		}
+		got, err := buildPacket(d)
+		if err != nil || !reflect.DeepEqual(got.Decisions, decs) || !reflect.DeepEqual(got.Log, log) || got.LogNext != next || got.Changed != changed {
+			t.Errorf("report_row %d: decisions %+v, log %+v, log_next %d, changed %q, err %v; want %+v, %+v, %d, %q",
+				row, got.Decisions, got.Log, got.LogNext, got.Changed, err, decs, log, next, changed)
+		}
+	}
+	check(0, 3, at, all)
+	check(2, 3, at, all[2:])
+	check(9, 3, at, []packetLine{})
+	last := testNow.Add(2 * time.Hour).Format(time.RFC3339Nano)
+	if err := store.AppendTSV(d.Log(), logHeader, []string{last, "WALL W1"}); err != nil {
+		t.Fatal(err)
+	}
+	check(3, 4, last, []packetLine{{last, "WALL W1"}})
 }
