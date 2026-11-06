@@ -4,9 +4,12 @@ package preflight
 
 import (
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"source/internal/relay"
 )
 
 // Check is one result: its name, whether it passed, and the reason when it did not.
@@ -70,4 +73,45 @@ func version(run Runner, name, arg string, read func(string) (int, bool), least 
 		return Check{Name: name, Detail: fmt.Sprintf(older, n)}
 	}
 	return Check{Name: name, OK: true}
+}
+
+// Power passes when pmset -g batt names 'AC Power'.
+func Power(run Runner) Check {
+	return holds(run, "power", "'AC Power'", true, "the Mac runs on battery", "pmset", "-g", "batt")
+}
+
+// Lid passes unless ioreg -r -k AppleClamshellState holds "AppleClamshellState" = Yes.
+func Lid(run Runner) Check {
+	return holds(run, "lid", `"AppleClamshellState" = Yes`, false, "the lid is closed", "ioreg", "-r", "-k", "AppleClamshellState")
+}
+
+// holds runs prog with args and passes when whether its output holds text equals want.
+// A runner error fails the check with its text.
+func holds(run Runner, name, text string, want bool, detail, prog string, args ...string) Check {
+	out, err := run(prog, args...)
+	if err != nil {
+		return Check{Name: name, Detail: err.Error()}
+	}
+	if strings.Contains(out, text) != want {
+		return Check{Name: name, Detail: detail}
+	}
+	return Check{Name: name, OK: true}
+}
+
+// RelayConfig passes when home has no relay config or its procedure is <run>/relay/brain.md.
+// A config that cannot be read fails with the read error.
+func RelayConfig(home, run string) Check {
+	cfg, found, err := relay.ReadConfig(home)
+	if err != nil {
+		return Check{Name: "relay config", Detail: err.Error()}
+	}
+	if found && cfg.Procedure != filepath.Join(run, "relay", "brain.md") {
+		return Check{Name: "relay config", Detail: fmt.Sprintf("%s names %s, not this run", relay.ConfigPath(home), cfg.Procedure)}
+	}
+	return Check{Name: "relay config", OK: true}
+}
+
+// All gives the checks of Tools, then power, lid, and relay config, in that order.
+func All(run Runner, home, runDir string) []Check {
+	return append(Tools(run), Power(run), Lid(run), RelayConfig(home, runDir))
 }
