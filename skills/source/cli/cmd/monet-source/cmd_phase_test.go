@@ -122,3 +122,54 @@ func TestPhaseNextNeedsAcceptOnNewest(t *testing.T) {
 		}
 	}
 }
+
+// Each row runs on a fresh run in design after one move, optionally set to acceptance or delivered. A charter
+// phase before the current one, or any charter phase from acceptance or delivered, gives 0: brain renews, the
+// run moves with PHASE 2 <phase>, and decisions.tsv gets one row by brain. Every other row writes nothing.
+func TestPhaseBack(t *testing.T) {
+	const reason, usage = "the claims need a source", "usage: monet-source phase back <phase> --reason <reason> --holder <session>"
+	for _, tc := range []struct {
+		from string // the phase set before phase back, or "" to stay in design
+		args []string
+		code int
+		e    string // stderr after "monet-source: ", or the phase after a move
+	}{
+		{"", []string{"research", "--reason", reason}, exit.OK, "research"},
+		{"", []string{"design", "--reason", reason}, exit.Refused, "phase back: design is not before design"},
+		{"", []string{"implementation", "--reason", reason}, exit.Refused, "phase back: implementation is not before design"},
+		{phaseAcceptance, []string{"design", "--reason", reason}, exit.OK, "design"},
+		{phaseDelivered, []string{"design", "--reason", reason}, exit.OK, "design"},
+		{"", []string{"research"}, exit.Usage, usage},
+		{"", []string{"--reason", reason}, exit.Usage, usage},
+		{"", []string{"research", "--reason", reason, "--holder", "h2"}, exit.Held, "lock held: brain is not held by h2"},
+	} {
+		run := newLoopRun(t)
+		d := store.Dir{Root: run}
+		submitFile(t, run, "a.md", "one\n")
+		acceptRound(t, run, 1, "reviewer")
+		if _, e, code := runSource(t, &Ctx{Run: run}, "phase", "next", "--holder", "h1"); code != exit.OK {
+			t.Fatalf("phase next: code %d, stderr %q", code, e)
+		}
+		if err := state.Update(d, func(s *state.State) error { s.Phase = firstSet(tc.from, s.Phase); return nil }); err != nil {
+			t.Fatal(err)
+		}
+		files := func() string { return phaseFiles(t, run) + "-- decisions.tsv\n" + readOr(t, d.Path("decisions.tsv")) }
+		before, later := files(), testNow.Add(time.Hour)
+		out, e, code := runSource(t, &Ctx{Run: run, Now: func() time.Time { return later }}, append([]string{"phase", "back", "--holder", "h1"}, tc.args...)...)
+		if tc.code != exit.OK {
+			if code != tc.code || out != "" || e != "monet-source: "+tc.e+"\n" || files() != before {
+				t.Errorf("%v from %q: code %d, stdout %q, stderr %q, wrote %v; want %d, %q", tc.args, tc.from, code, out, e, files() != before, tc.code, tc.e)
+			}
+			continue
+		}
+		s, err := state.Load(d)
+		rows, rerr := store.ReadTSV(d.Path("decisions.tsv"), decisionHeader)
+		want := [][]string{{"2026-11-01T13:00:00Z", "brain", "send back to " + tc.e, reason}}
+		if code != exit.OK || out != "" || e != "" || err != nil || s.Phase != tc.e || s.Moves != 2 || rerr != nil || !reflect.DeepEqual(rows, want) ||
+			!strings.HasSuffix(readOr(t, d.Log()), "\n2026-11-01T13:00:00Z\tPHASE 2 "+tc.e+"\n") {
+			t.Errorf("%v from %q: code %d, stdout %q, stderr %q, phase %q, moves %d (err %v), decisions %q (err %v), log %q",
+				tc.args, tc.from, code, out, e, s.Phase, s.Moves, err, rows, rerr, readOr(t, d.Log()))
+		}
+		checkLease(t, run, "brain", later.Add(leaseTTL))
+	}
+}

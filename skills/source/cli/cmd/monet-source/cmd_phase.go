@@ -12,7 +12,7 @@ import (
 func init() { commands["phase"] = subcommands("phase", phaseSubs) }
 
 // phaseSubs maps each phase subcommand to its handler. Later phase commands add to it.
-var phaseSubs = map[string]func(c *Ctx, args []string) error{"next": phaseNext}
+var phaseSubs = map[string]func(c *Ctx, args []string) error{"next": phaseNext, "back": phaseBack}
 
 // The phases after the charter phases: acceptance follows the last one, and delivered ends the run.
 const (
@@ -66,6 +66,47 @@ func phaseNext(c *Ctx, args []string) error {
 		line = moveTo(s, to)
 		return nil
 	}); err != nil {
+		return err
+	}
+	return record(c, d, line)
+}
+
+// phaseBack renews brain, then under the state mutex needs <phase> to be a charter phase before the current
+// one, or any charter phase from acceptance or delivered (R32), and moves there. A refusal is exit 2 and writes
+// nothing. After the move it logs the run decision by brain (R23) and records the move. This is the engine part of resume (R28).
+func phaseBack(c *Ctx, args []string) error {
+	fs := newFlagSet("phase back")
+	reason := fs.String("reason", "", "why the run goes back")
+	holder := fs.String("holder", "", "the brain lease holder")
+	pos, err := parseFlags(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) != 1 || *reason == "" {
+		return exit.New(exit.Usage, "usage: monet-source phase back <phase> --reason <reason> --holder <session>")
+	}
+	if err := requireLease(c, "brain", *holder); err != nil {
+		return err
+	}
+	to, d, line := pos[0], store.Dir{Root: c.Run}, ""
+	if err := state.Update(d, func(s *state.State) error {
+		_, ch, err := cleanCharter(c, d)
+		if err != nil {
+			return err
+		}
+		j, i := slices.Index(ch.Phases, to), slices.Index(ch.Phases, s.Phase)
+		if s.Phase == phaseAcceptance || s.Phase == phaseDelivered {
+			i = len(ch.Phases)
+		}
+		if j < 0 || j >= i {
+			return exit.New(exit.Refused, "phase back: %s is not before %s", to, firstSet(s.Phase, "kickoff"))
+		}
+		line = moveTo(s, to)
+		return nil
+	}); err != nil {
+		return err
+	}
+	if err := logDecision(c, d, "brain", "send back to "+to, *reason); err != nil {
 		return err
 	}
 	return record(c, d, line)
