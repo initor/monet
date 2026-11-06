@@ -17,6 +17,7 @@ type State struct {
 	Created time.Time `json:"created"`
 	Phase   string    `json:"phase"`
 	Sealed  *Seal     `json:"sealed,omitempty"`
+	Amends  []Seal    `json:"amends,omitempty"` // one entry for each charter amend, oldest first
 }
 
 // Seal is the confirmation of the charter: the id of the owner words, when the
