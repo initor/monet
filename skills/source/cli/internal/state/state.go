@@ -35,6 +35,9 @@ type State struct {
 	Items     int                       `json:"items,omitempty"`
 	Walls     int                       `json:"walls,omitempty"`
 	Moves     int                       `json:"moves,omitempty"`
+	// The page write: when the page was last written, and the log.tsv row where the next packet starts.
+	LastReport *time.Time `json:"last_report,omitempty"`
+	ReportRow  int        `json:"report_row,omitempty"`
 }
 
 // Seal is the confirmation of the charter: the id of the owner words, when the

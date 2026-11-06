@@ -31,3 +31,23 @@ func TestRecordWritesEventAndLog(t *testing.T) {
 		t.Errorf("a broken events.tsv: err %v, log.tsv stat %v; want an error and no log.tsv", err, serr)
 	}
 }
+
+// recordOnce logs a line only on the call whose emit appended it, at the clock of c in UTC.
+func TestRecordOnceLogsOnce(t *testing.T) {
+	d, bad := store.Dir{Root: realTempDir(t)}, store.Dir{Root: realTempDir(t)}
+	os.WriteFile(bad.Events(), []byte("bad\n"), 0o644)
+	c := &Ctx{Run: d.Root, Now: func() time.Time { return testNow.Add(5).In(time.FixedZone("PST", -8*3600)) }}
+	first, err1 := recordOnce(c, d, "REPORT_DUE x")
+	second, err2 := recordOnce(c, d, "REPORT_DUE x")
+	ev, eerr := store.ReadTSV(d.Events(), events.Header)
+	lg, lerr := store.ReadTSV(d.Log(), logHeader)
+	s := "2026-11-01T12:00:00.000000005Z"
+	want := [][][]string{{{"REPORT_DUE x", s}}, {{s, "REPORT_DUE x"}}}
+	if got := [][][]string{ev, lg}; !first || second || cmp.Or(err1, err2, eerr, lerr) != nil || !reflect.DeepEqual(got, want) {
+		t.Errorf("calls %v, %v (%v, %v); events and log %q (%v, %v), want true, false and %q", first, second, err1, err2, got, eerr, lerr, want)
+	}
+	ok, err := recordOnce(c, bad, "REPORT_DUE x")
+	if _, serr := os.Stat(bad.Log()); ok || err == nil || !os.IsNotExist(serr) {
+		t.Errorf("a broken events.tsv: %v, err %v, log.tsv stat %v; want false, an error and no log.tsv", ok, err, serr)
+	}
+}

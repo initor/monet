@@ -71,7 +71,7 @@ func TestLoadKeepsPermissionError(t *testing.T) {
 	}
 }
 
-var loopNames = []string{"dev", "last_beat", "versions", "checked", "accepted", "round", "round_open", "counts", "picks", "items", "walls", "moves"} // typed out, so a renamed tag fails
+var loopNames = []string{"dev", "last_beat", "versions", "checked", "accepted", "round", "round_open", "counts", "picks", "items", "walls", "moves", "last_report", "report_row"} // typed out, so a renamed tag fails
 
 func TestStateLoopFieldsRoundTrip(t *testing.T) {
 	d := store.Dir{Root: t.TempDir()}
@@ -79,7 +79,7 @@ func TestStateLoopFieldsRoundTrip(t *testing.T) {
 	in := State{Version: 1, Slug: "demo", Dev: "d1", LastBeat: &at, Versions: map[string]int{"research": 2},
 		Checked: map[string]int{"research": 2}, Accepted: map[string]int{"research": 1}, Round: 3, RoundOpen: true,
 		Counts: map[string]map[string]int{"research": {"reviewer": 1}}, Picks: map[string][]string{"design": {"x"}},
-		Items: 1, Walls: 2, Moves: 4}
+		Items: 1, Walls: 2, Moves: 4, LastReport: &at, ReportRow: 5}
 	err := store.WriteJSON(d.State(), in)
 	if got, lerr := Load(d); err != nil || lerr != nil || !reflect.DeepEqual(got, in) {
 		t.Fatalf("got %+v, write err %v, load err %v", got, err, lerr)
