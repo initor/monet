@@ -1,6 +1,9 @@
 package main
 
 import (
+	"fmt"
+	"os"
+
 	"source/internal/exit"
 	"source/internal/lock"
 	"source/internal/state"
@@ -10,7 +13,42 @@ import (
 func init() { commands["dev"] = subcommands("dev", devSubs) }
 
 // devSubs maps each dev subcommand to its handler. Later dev commands add to it.
-var devSubs = map[string]func(c *Ctx, args []string) error{"hello": devHello, "beat": devBeat, "takeover": devTakeover}
+var devSubs = map[string]func(c *Ctx, args []string) error{"hello": devHello, "beat": devBeat, "takeover": devTakeover, "start": devStart}
+
+// devStart needs a skill dir, renews brain, and needs a seal. Then it makes <run>/dev when
+// missing, writes the kickoff <run>/handoff/dev-<stamp>.md (R4), and prints the command that
+// starts the developer. It runs nothing (call 14).
+func devStart(c *Ctx, args []string) error {
+	fs := newFlagSet("dev start")
+	holder := fs.String("holder", "", "the brain lease holder")
+	if err := fs.Parse(args); err != nil || fs.NArg() != 0 {
+		return exit.New(exit.Usage, "usage: monet-source dev start --holder <session>")
+	}
+	skill, err := needSkill(c)
+	if err != nil {
+		return err
+	}
+	if err := requireLease(c, "brain", *holder); err != nil {
+		return err
+	}
+	d := store.Dir{Root: c.Run}
+	s, err := state.Load(d)
+	if err != nil {
+		return err
+	}
+	if s.Sealed == nil {
+		return exit.New(exit.Refused, "dev start: seal the charter first")
+	}
+	if err := os.MkdirAll(d.Path("dev"), 0o755); err != nil {
+		return err
+	}
+	kick := d.Path("handoff", "dev-"+c.Now().UTC().Format("20060102T150405Z")+".md")
+	if err := store.WriteFileAtomic(kick, []byte(devKickoff(s.Slug, c.Run, skill)), 0o644); err != nil {
+		return err
+	}
+	_, err = fmt.Fprintln(c.Stdout, devStartCommand(s.Slug, c.Run, kick))
+	return err
+}
 
 // devHello acquires the dev lease for holder (another live holder is exit 4).
 var devHello = devMark(func(c *Ctx, h string) error {
