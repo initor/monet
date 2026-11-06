@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -18,7 +19,7 @@ import (
 func init() { commands["round"] = subcommands("round", roundSubs) }
 
 // roundSubs maps each round subcommand to its handler. Later round commands add to it.
-var roundSubs = map[string]func(c *Ctx, args []string) error{"open": roundOpen}
+var roundSubs = map[string]func(c *Ctx, args []string) error{"open": roundOpen, "close": roundClose}
 
 // roundOpen renews brain, then under the state mutex needs a charter phase, no open round, and a
 // newest version that no round checked (R13), fixes the picks at the first round of the phase (R12),
@@ -106,5 +107,67 @@ func openChecks(c *Ctx, d store.Dir, s *state.State, ch *charter.Charter, r *rou
 	}
 	s.Round, s.RoundOpen, s.Checked[r.Phase] = r.N, true, r.Version
 	_, err = fmt.Fprint(c.Stdout, lines.String())
+	return err
+}
+
+// roundClose renews brain, then under the state mutex needs an open round (exit 2), sets each check result
+// from its verdict file (R18), counts each block of a blocking persona, writes findings.md, and sets the
+// outcome and, for an ACCEPT of a round that is not final, Accepted. It records FINDINGS and prints the outcome.
+func roundClose(c *Ctx, args []string) error {
+	fs := newFlagSet("round close")
+	holder := fs.String("holder", "", "the brain lease holder")
+	if pos, err := parseFlags(fs, args); err != nil {
+		return err
+	} else if len(pos) != 0 {
+		return exit.New(exit.Usage, "usage: monet-source round close --holder <session>")
+	}
+	if err := requireLease(c, "brain", *holder); err != nil {
+		return err
+	}
+	d := store.Dir{Root: c.Run}
+	var r round.Round
+	err := state.Update(d, func(s *state.State) (err error) {
+		if !s.RoundOpen {
+			return exit.New(exit.Refused, "round close: no round is open")
+		} else if r, err = round.Load(c.Run, s.Round); err != nil {
+			return err
+		}
+		entries := make([]round.Entry, len(r.Checks))
+		for i := range r.Checks {
+			ck := &r.Checks[i]
+			v, err := round.ParseVerdict(ck.Verdict, ck.ID, ck.Persona)
+			switch ck.Result = v.Verdict; {
+			case errors.Is(err, os.ErrNotExist):
+				ck.Result = "missing"
+			case err != nil:
+				ck.Result = "invalid: " + err.Error()
+			case ck.Result == "block" && ck.Weight == "blocking":
+				if s.Counts == nil {
+					s.Counts = map[string]map[string]int{}
+				}
+				if s.Counts[r.Phase] == nil {
+					s.Counts[r.Phase] = map[string]int{}
+				}
+				s.Counts[r.Phase][ck.Persona]++
+			}
+			entries[i] = round.Entry{Persona: ck.Persona, Weight: ck.Weight, Result: ck.Result, Findings: v.Findings}
+		}
+		if err := store.WriteFileAtomic(round.Path(c.Run, r.N, "findings.md"), []byte(round.Findings(r.N, entries)), 0o644); err != nil {
+			return err
+		}
+		if r.Outcome = round.Outcome(r.Checks); r.Outcome == "ACCEPT" && !r.Final {
+			if s.Accepted == nil {
+				s.Accepted = map[string]int{}
+			}
+			s.Accepted[r.Phase] = r.Version
+		}
+		s.RoundOpen = false
+		return round.Save(c.Run, r)
+	})
+	if err == nil {
+		if err = record(c, d, fmt.Sprintf("FINDINGS %d %s", r.N, r.Outcome)); err == nil {
+			_, err = fmt.Fprintln(c.Stdout, r.Outcome)
+		}
+	}
 	return err
 }
