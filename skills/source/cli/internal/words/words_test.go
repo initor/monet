@@ -1,9 +1,16 @@
 package words
 
 import (
+	"errors"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime/debug"
+	"slices"
 	"strings"
+	"sync"
+	"syscall"
 	"testing"
 )
 
@@ -61,5 +68,181 @@ func TestHeaderEdits(t *testing.T) {
 				t.Errorf("%q reads as %q (err %v)", s, g, err)
 			}
 		}
+	}
+}
+
+// Append gives one leading space to each text line that starts with "<!-- owner-words ", the first line too, so that Read keeps it as text.
+func TestAppendKeepsHeaderLikeLine(t *testing.T) {
+	for text, want := range map[string]string{"a\n<!-- owner-words uuid=fake at=x -->\nb": "a\n <!-- owner-words uuid=fake at=x -->\nb", "<!-- owner-words uuid=f at=x\n<!-- owner-words  uuid=g -->\r\n <!-- owner-words uuid=h at=x -->\n<!-- owner-words\n": " <!-- owner-words uuid=f at=x\n <!-- owner-words  uuid=g -->\r\n <!-- owner-words uuid=h at=x -->\n<!-- owner-words\n", "<!-- owner-words \n<!-- owner-words\tx\n<!-- owner-wordsX\na\n<!-- owner-words ": " <!-- owner-words \n<!-- owner-words\tx\n<!-- owner-wordsX\na\n <!-- owner-words "} {
+		p := filepath.Join(t.TempDir(), "owner-words.md")
+		if err := Append(p, Entry{ID: "u1", At: "2026-11-01T12:00:00Z", Text: text}); err != nil {
+			t.Fatal(err)
+		}
+		if got, err := Read(p); err != nil || len(got) != 1 || got[0].Text != want {
+			t.Errorf("Read = %q (err %v), want text %q", got, err, want)
+		}
+	}
+}
+
+// Each one-byte edit s of "<!-- owner-words x" as a middle text line reads back with one leading space exactly when s
+// starts with "<!-- owner-words ", and word for word otherwise.
+func TestAppendEscapeEdits(t *testing.T) {
+	const pre = "<!-- owner-words x"
+	for k := range pre {
+		for _, s := range []string{pre[:k] + pre[k+1:], pre[:k] + pre[k:k+1] + pre[k:], pre[:k] + "\t" + pre[k+1:], pre[:k] + "_" + pre[k+1:], pre[:k] + " " + pre[k:], pre[:k] + strings.ToUpper(pre[k:k+1]) + pre[k+1:], pre[:k] + "\r" + pre[k:]} {
+			p, want := filepath.Join(t.TempDir(), "owner-words.md"), "a\n"+s+"\nb"
+			if strings.HasPrefix(s, "<!-- owner-words ") {
+				want = "a\n " + s + "\nb"
+			}
+			if err := Append(p, Entry{ID: "u", At: "x", Text: "a\n" + s + "\nb"}); err != nil {
+				t.Fatal(err)
+			}
+			if got, err := Read(p); err != nil || len(got) != 1 || got[0].Text != want {
+				t.Errorf("edit %q: Read = %q (err %v), want text %q", s, got, err, want)
+			}
+		}
+	}
+}
+
+// Two entries, one with Markdown on 3 lines, read back with their exact fields and text, in the bytes that gang relay.mjs:173-174 writes.
+func TestAppendRoundTrip(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "owner-words.md")
+	want := []Entry{{"u1", "2026-11-01T12:00:00Z", "", "# Plan\n\n- keep *A* and `b`"}, {"2026-11-01T12:05:00.000Z", "unknown", "u1", " ok\t\n"}}
+	for _, e := range want {
+		if err := Append(p, e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	data, _ := os.ReadFile(p)
+	if got, err := Read(p); err != nil || len(got) != 2 || got[0] != want[0] || got[1] != want[1] || string(data) != "<!-- owner-words uuid=u1 at=2026-11-01T12:00:00Z -->\n# Plan\n\n- keep *A* and `b`\n\n<!-- owner-words uuid=2026-11-01T12:05:00.000Z at=unknown supersedes=u1 -->\n ok\t\n\n\n" {
+		t.Errorf("Read = %q (err %v), file %q", got, err, data)
+	}
+}
+
+// Append of an ID that the file holds, first or last, fails and leaves the file as it was. Near IDs (prefix, suffix,
+// other case) and an ID that only an escaped text line or a supersedes value names pass.
+func TestAppendRefusesDuplicate(t *testing.T) {
+	body := "intro\n\n<!-- owner-words uuid=u1 at=x -->\nhi\n <!-- owner-words uuid=u3 at=x -->\n\n<!-- owner-words uuid=u2 at=x supersedes=u4 -->\nho\n\n"
+	p := write(t, body)
+	for _, id := range []string{"u1", "u2"} {
+		if err := Append(p, Entry{ID: id, At: "y", Text: "new"}); err == nil || err.Error() != "owner words: entry "+id+" exists" {
+			t.Errorf("Append %s: err %v", id, err)
+		}
+	}
+	if data, err := os.ReadFile(p); err != nil || string(data) != body {
+		t.Errorf("file %q (err %v), want %q", data, err, body)
+	}
+	for _, id := range []string{"u", "1", "U1", "u3", "u4"} {
+		if err := Append(p, Entry{ID: id, At: "y"}); err != nil {
+			t.Errorf("Append %s: err %v", id, err)
+		}
+	}
+}
+
+// Append refuses an ID outside ^[A-Za-z0-9._:-]+$, an at or supersedes that its header does not read back, a file with a bad header, and a file that ends in a letter or a lone CR.
+func TestAppendRefusesBadEntry(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "owner-words.md")
+	for want, e := range map[string]Entry{`owner words: bad id ""`: {At: "x"}, `owner words: bad id "a/b"`: {ID: "a/b", At: "x"}, `owner words: bad id "a=b"`: {ID: "a=b", At: "x"}, `owner words: bad id "a b"`: {ID: "a b", At: "x"}, `owner words: entry u: bad header "<!-- owner-words uuid=u at= -->"`: {ID: "u"}, `owner words: entry u: bad header "<!-- owner-words uuid=u at=x y -->"`: {ID: "u", At: "x y"}, `owner words: entry u: bad header "<!-- owner-words uuid=u at=x supersedes=y -->"`: {ID: "u", At: "x supersedes=y"}, `owner words: entry u: bad header "<!-- owner-words uuid=u at=x supersedes=a b -->"`: {ID: "u", At: "x", Supersedes: "a b"}, `owner words: entry u: bad header "<!-- owner-words uuid=u at=x supersedes=a\nb -->"`: {ID: "u", At: "x", Supersedes: "a\nb"}} {
+		if err := Append(p, e); err == nil || err.Error() != want {
+			t.Errorf("Append %q: err %v, want %s", e, err, want)
+		}
+	}
+	if _, err := os.Stat(p); err == nil {
+		t.Errorf("a refused Append wrote %s", p)
+	}
+	nl, nd := write(t, "<!-- owner-words uuid=u0 at=x -->\nhi"), filepath.Join(t.TempDir(), "no-dir", "owner-words.md")
+	if err := Append(p, Entry{ID: "Az09._:-", At: "x"}); err != nil {
+		t.Fatalf("Append of a good id: err %v", err)
+	}
+	for f, want := range map[string]string{write(t, "<!-- owner-words uuid=bad\n"): "owner words: %s line 1: bad header", nl: "owner words: %s does not end in a newline", write(t, "<!-- owner-words uuid=u0 at=x -->\nhi\r"): "owner words: %s does not end in a newline", write(t, "x"): "owner words: %s does not end in a newline", nd: "open %s: no such file or directory"} {
+		if err := Append(f, Entry{ID: "u", At: "x"}); err == nil || err.Error() != fmt.Sprintf(want, f) {
+			t.Errorf("Append to %s: err %v", f, err)
+		}
+	}
+}
+
+// Append of the IDs c+"zz", "a"+c+"b" and "qq"+c passes when c is in A-Z, a-z, 0-9 or ._:- and fails with "bad id" for
+// each other ASCII byte and every non-ASCII rune, and an ID of 1,056 class characters passes. The file exists with
+// 0 bytes first, and each passed entry reads back with its empty text.
+func TestAppendIDClass(t *testing.T) {
+	p, ok := write(t, ""), "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._:-"
+	for c := range rune(0x110000) {
+		for _, id := range []string{string(c) + "zz", "a" + string(c) + "b", "qq" + string(c)} {
+			if err := Append(p, Entry{ID: id, At: "x"}); strings.ContainsRune(ok, c) != (err == nil) || err != nil && err.Error() != fmt.Sprintf("owner words: bad id %q", id) {
+				t.Fatalf("Append of id %q: err %v", id, err)
+			}
+		}
+	}
+	if err := Append(p, Entry{ID: strings.Repeat(ok, 16), At: "x"}); err != nil {
+		t.Errorf("Append of a 1,056-character id: err %v", err)
+	}
+	if got, err := Read(p); err != nil || len(got) != 3*len(ok)+1 || slices.ContainsFunc(got, func(e Entry) bool { return e.Text != "" }) {
+		t.Errorf("Read = %q (err %v), want %d entries with empty text", got, err, 3*len(ok)+1)
+	}
+}
+
+// Append to a file that ends in one newline (LF or CRLF) passes, and the entry before keeps its text.
+func TestAppendAfterOneNewline(t *testing.T) {
+	for body, want := range map[string][]Entry{"\n": {{"u", "x", "", ""}}, "intro\n": {{"u", "x", "", ""}}, "<!-- owner-words uuid=u0 at=x -->\nhi\n": {{"u0", "x", "", "hi\n"}, {"u", "x", "", ""}}, "<!-- owner-words uuid=u0 at=x -->\nhi\r\n": {{"u0", "x", "", "hi\r\n"}, {"u", "x", "", ""}}} {
+		p := write(t, body)
+		if err := Append(p, Entry{ID: "u", At: "x"}); err != nil {
+			t.Errorf("Append after %q: err %v", body, err)
+		}
+		if got, err := Read(p); err != nil || !slices.Equal(got, want) {
+			t.Errorf("Read after %q = %q (err %v), want %q", body, got, err, want)
+		}
+	}
+}
+
+// 64 racing Appends of distinct IDs, 20 times, give 64 entries with their own text, since each entry is one write.
+func TestAppendRace(t *testing.T) {
+	for range 20 {
+		p, wg := filepath.Join(t.TempDir(), "owner-words.md"), sync.WaitGroup{}
+		for i := range 64 {
+			wg.Add(1)
+			go func(id string) {
+				defer wg.Done()
+				if err := Append(p, Entry{ID: id, At: "x", Text: id + "\n" + id}); err != nil {
+					t.Error(err)
+				}
+			}(fmt.Sprint("k", i))
+		}
+		wg.Wait()
+		if got, err := Read(p); err != nil || len(got) != 64 || slices.ContainsFunc(got, func(e Entry) bool { return e.Text != e.ID+"\n"+e.ID }) {
+			t.Fatalf("Read = %q (err %v)", got, err)
+		}
+	}
+}
+
+// Append closes its file: the open files of the process (GC off, so no finalizer closes a leak) are the same after
+// 50 Appends, and one os.Open adds one.
+func TestAppendClosesFile(t *testing.T) {
+	defer debug.SetGCPercent(debug.SetGCPercent(-1))
+	fds := func() int { d, _ := os.ReadDir("/dev/fd"); return len(d) }
+	p, before := filepath.Join(t.TempDir(), "owner-words.md"), fds()
+	for i := range 50 {
+		if err := Append(p, Entry{ID: fmt.Sprint("u", i), At: "x"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	f, err := os.Open(p)
+	if after := fds(); err != nil || after != before+1 {
+		t.Errorf("open files: %d before 50 Appends and one Open, %d after (err %v)", before, after, err)
+	}
+	f.Close()
+}
+
+// A write past a 64-byte file size limit returns its error. A child test process sets the limit around Append, because the limit holds for every file of a process, such as the go test log and coverage files.
+func TestAppendReportsFailedWrite(t *testing.T) {
+	if old := new(syscall.Rlimit); os.Getenv("WORDS_FSIZE_CHILD") != "" {
+		err := syscall.Getrlimit(syscall.RLIMIT_FSIZE, old)
+		if err = errors.Join(err, syscall.Setrlimit(syscall.RLIMIT_FSIZE, &syscall.Rlimit{Cur: 64, Max: old.Max}), Append(filepath.Join(t.TempDir(), "owner-words.md"), Entry{ID: "u", At: "x", Text: strings.Repeat("x", 100)}), syscall.Setrlimit(syscall.RLIMIT_FSIZE, old)); !errors.Is(err, syscall.EFBIG) {
+			t.Errorf("Append past a 64-byte limit: err %v", err)
+		}
+		return
+	}
+	t.Setenv("WORDS_FSIZE_CHILD", "1")
+	if out, err := exec.Command(os.Args[0], "-test.run=^TestAppendReportsFailedWrite$", "-test.v").CombinedOutput(); err != nil || !strings.Contains(string(out), "--- PASS: TestAppendReportsFailedWrite") {
+		t.Errorf("child test: err %v, output %s", err, out)
 	}
 }
