@@ -60,7 +60,7 @@ func TestCharterLintCommand(t *testing.T) {
 	if _, e, code := runSource(t, &Ctx{Run: run}, "charter", "lint", "a", "b"); code != exit.Usage || e != "monet-source: charter lint: want at most one path\n" {
 		t.Fatalf("two paths: code %d, stderr %q", code, e)
 	}
-	if _, e, code := runSource(t, &Ctx{Run: run}, "charter"); code != exit.Usage || !strings.Contains(e, "charter: want a subcommand: lint") {
+	if _, e, code := runSource(t, &Ctx{Run: run}, "charter"); code != exit.Usage || !strings.Contains(e, "charter: want a subcommand: amend, lint, render, seal\n") {
 		t.Fatalf("no subcommand: code %d, stderr %q", code, e)
 	}
 	if ents, err := os.ReadDir(run); err != nil || len(ents) != 1 {
@@ -218,20 +218,21 @@ func TestSealSetsFirstPhase(t *testing.T) {
 	}
 }
 
-// Seal checks its usage, then renews brain, then refuses in the order lint, words, hash, and state:
+// Seal and amend check usage, then renew brain, then refuse in the order lint, words, hash, and state:
 // a row that breaks two checks gets the refusal of the earlier one. No refusal writes state or log.
 func TestSealChecksInOrder(t *testing.T) {
 	advisory, changed := []string{`"weight": "blocking"`, `"weight": "advisory"`}, []string{`"One explainer page."`, `"Two explainer pages."`}
-	usage := "monet-source: usage: monet-source charter seal --words <id> --holder <session>\n"
-	for _, tc := range []struct {
+	usage := "monet-source: usage: monet-source charter <sub> --words <id> --holder <session>\n"
+	rows := []struct {
 		name   string
 		setup  func(run string)
 		args   []string
 		code   int
-		out, e string // <run> in e stands for the run dir
+		out, e string // <run> and <sub> in e stand for the run dir and the subcommand
 	}{
 		{"no words", nil, []string{"--holder", "h1"}, exit.Usage, "", usage},
 		{"argument", nil, []string{"x", "--words", "w1", "--holder", "h1"}, exit.Usage, "", usage},
+		{"bad flag", nil, []string{"--bogus"}, exit.Usage, "", "monet-source: charter <sub>: flag provided but not defined: -bogus\n"},
 		{"no holder", nil, []string{"--words", "w1"}, exit.Usage, "", "monet-source: --holder <session> is required: the brain lease holder\n"},
 		{"lease before lint", func(run string) { writeCharter(t, run, advisory...) }, []string{"--words", "w1", "--holder", "h2"}, exit.Held, "", "monet-source: lock held: brain is not held by h2\n"},
 		{"no charter.json", func(run string) { os.Remove(filepath.Join(run, "charter.json")) }, []string{"--words", "w9", "--holder", "h1"}, exit.Refused, "", "monet-source: open <run>/charter.json: no such file or directory\n"},
@@ -254,15 +255,17 @@ func TestSealChecksInOrder(t *testing.T) {
 			}
 			writeCharter(t, run, changed...)
 		}, []string{"--words", "w1", "--holder", "h1"}, exit.Conflict, "", "monet-source: charter.json changed after charter.md was rendered: render it and get the yes of the owner again\n"},
-	} {
+	}
+	for i, tc := range append(rows, rows...) { // each row runs for seal, then for amend
+		sub := []string{"seal", "amend"}[i/len(rows)]
 		run := newSealableRun(t)
 		if tc.setup != nil {
 			tc.setup(run)
 		}
 		before, now := sealFiles(t, run), testNow.Add(time.Hour)
-		out, e, code := runSource(t, &Ctx{Run: run, Now: func() time.Time { return now }}, append([]string{"charter", "seal"}, tc.args...)...)
-		if code != tc.code || out != tc.out || e != strings.ReplaceAll(tc.e, "<run>", run) || sealFiles(t, run) != before {
-			t.Errorf("%s: code %d, stdout %q, stderr %q, or the seal wrote", tc.name, code, out, e)
+		out, e, code := runSource(t, &Ctx{Run: run, Now: func() time.Time { return now }}, append([]string{"charter", sub}, tc.args...)...)
+		if code != tc.code || out != tc.out || e != strings.NewReplacer("<run>", run, "<sub>", sub).Replace(tc.e) || sealFiles(t, run) != before {
+			t.Errorf("%s %s: code %d, stdout %q, stderr %q, or it wrote", sub, tc.name, code, out, e)
 		}
 		lease := now.Add(12 * time.Hour) // a usage error or another holder renews nothing
 		if tc.code == exit.Usage || tc.code == exit.Held {
@@ -270,4 +273,39 @@ func TestSealChecksInOrder(t *testing.T) {
 		}
 		checkLease(t, run, "brain", lease)
 	}
+}
+
+// Amend needs a seal, else exit 2 and no write. After the seal, each amend appends its words, clock, and
+// the hash of the charter.json that charter.md shows, logs one row, keeps the seal, and prints nothing.
+func TestAmend(t *testing.T) {
+	run := newSealableRun(t)
+	d, before := store.Dir{Root: run}, sealFiles(t, run)
+	if _, e, code := runSource(t, &Ctx{Run: run}, "charter", "amend", "--words", "w1", "--holder", "h1"); code != exit.Refused || e != "monet-source: charter not sealed: seal it before an amend\n" || sealFiles(t, run) != before {
+		t.Fatalf("before the seal: code %d, stderr %q, or the amend wrote", code, e)
+	}
+	sealed, _ := os.ReadFile(d.Charter())
+	if _, e, code := runSource(t, &Ctx{Run: run}, "charter", "seal", "--words", "w1", "--holder", "h1"); code != exit.OK {
+		t.Fatalf("seal: code %d, stderr %q", code, e)
+	}
+	data, err := os.ReadFile(writeCharter(t, run, `"One explainer page."`, `"Two explainer pages."`))
+	if _, e, code := runSource(t, &Ctx{Run: run}, "charter", "render", "--holder", "h1"); err != nil || code != exit.OK || words.Append(d.Words(), words.Entry{ID: "w2", At: "2026-11-01T12:30:00Z", Text: "Amend it."}) != nil {
+		t.Fatalf("render: code %d, stderr %q, read err %v, or the append of w2 failed", code, e, err)
+	}
+	amended, now := charter.Hash(data), testNow.Add(time.Hour)
+	for _, id := range []string{"w2", "w1"} {
+		if out, e, code := runSource(t, &Ctx{Run: run, Now: func() time.Time { return now }}, "charter", "amend", "--words", id, "--holder", "h1"); code != exit.OK || out != "" || e != "" {
+			t.Fatalf("amend %s: code %d, stdout %q, stderr %q", id, code, out, e)
+		}
+	}
+	entry := func(id string) string {
+		return "    {\n      \"words\": \"" + id + "\",\n      \"at\": \"2026-11-01T13:00:00Z\",\n      \"hash\": \"" + amended + "\"\n    }"
+	}
+	want := "{\n  \"version\": 1,\n  \"slug\": \"demo\",\n  \"created\": \"2026-11-01T12:00:00Z\",\n  \"phase\": \"research\",\n" +
+		"  \"sealed\": {\n    \"words\": \"w1\",\n    \"at\": \"2026-11-01T12:00:00Z\",\n    \"hash\": \"" + charter.Hash(sealed) + "\"\n  },\n" +
+		"  \"amends\": [\n" + entry("w2") + ",\n" + entry("w1") + "\n  ]\n}\n-- log.tsv\nat\tline\n2026-11-01T12:00:00Z\tcharter sealed with words w1\n" +
+		"2026-11-01T13:00:00Z\tcharter amended with words w2\n2026-11-01T13:00:00Z\tcharter amended with words w1\n"
+	if got := sealFiles(t, run); got != want {
+		t.Fatalf("got\n%s\nwant\n%s", got, want)
+	}
+	checkLease(t, run, "brain", now.Add(12*time.Hour))
 }

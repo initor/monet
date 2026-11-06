@@ -16,6 +16,7 @@ import (
 // charter is a subcommands group, so each charter step adds its own word.
 func init() {
 	commands["charter"] = subcommands("charter", map[string]func(c *Ctx, args []string) error{
+		"amend":  charterAmend,
 		"lint":   charterLint,
 		"render": charterRender,
 		"seal":   charterSeal,
@@ -109,11 +110,33 @@ func cleanCharter(c *Ctx, d store.Dir) ([]byte, *charter.Charter, error) {
 	return data, ch, nil
 }
 
-// charterSeal renews brain, then needs a clean lint, the entry --words in owner-words.md,
-// a charter.md that ends with the hash of charter.json, and a run with no seal, in that
-// order. It stores the seal, sets the first phase, and logs one row. A refusal writes nothing.
+// charterSeal stores the seal and sets the first phase. A sealed run gives exit 2.
 func charterSeal(c *Ctx, args []string) error {
-	fs := newFlagSet("charter seal")
+	return confirmCharter(c, "seal", args, func(s *state.State, seal state.Seal, ch *charter.Charter) error {
+		if s.Sealed != nil {
+			return exit.New(exit.Refused, "charter already sealed with words %s", s.Sealed.Words)
+		}
+		s.Sealed, s.Phase = &seal, ch.Phases[0]
+		return nil
+	})
+}
+
+// charterAmend appends an amend to Amends. A run with no seal gives exit 2.
+func charterAmend(c *Ctx, args []string) error {
+	return confirmCharter(c, "amend", args, func(s *state.State, seal state.Seal, _ *charter.Charter) error {
+		if s.Sealed == nil {
+			return exit.New(exit.Refused, "charter not sealed: seal it before an amend")
+		}
+		s.Amends = append(s.Amends, seal)
+		return nil
+	})
+}
+
+// confirmCharter renews brain, then needs a clean lint, the entry --words in owner-words.md, a
+// charter.md that ends with the hash of charter.json, and a state that apply takes, in that order.
+// Then it logs one row "charter <name>ed with words <id>". A refusal writes nothing.
+func confirmCharter(c *Ctx, name string, args []string, apply func(s *state.State, seal state.Seal, ch *charter.Charter) error) error {
+	fs := newFlagSet("charter " + name)
 	id := fs.String("words", "", "the id of the owner words that confirm charter.md")
 	holder := fs.String("holder", "", "the brain lease holder")
 	pos, err := parseFlags(fs, args)
@@ -121,7 +144,7 @@ func charterSeal(c *Ctx, args []string) error {
 		return err
 	}
 	if len(pos) != 0 || *id == "" {
-		return exit.New(exit.Usage, "usage: monet-source charter seal --words <id> --holder <session>")
+		return exit.New(exit.Usage, "usage: monet-source charter %s --words <id> --holder <session>", name)
 	}
 	if err := requireLease(c, "brain", *holder); err != nil {
 		return err
@@ -144,13 +167,9 @@ func charterSeal(c *Ctx, args []string) error {
 	}
 	now := c.Now()
 	if err := state.Update(d, func(s *state.State) error {
-		if s.Sealed != nil {
-			return exit.New(exit.Refused, "charter already sealed with words %s", s.Sealed.Words)
-		}
-		s.Sealed, s.Phase = &state.Seal{Words: *id, At: now, Hash: hash}, ch.Phases[0]
-		return nil
+		return apply(s, state.Seal{Words: *id, At: now, Hash: hash}, ch)
 	}); err != nil {
 		return err
 	}
-	return store.AppendTSV(d.Log(), logHeader, []string{now.UTC().Format(time.RFC3339Nano), "charter sealed with words " + *id})
+	return store.AppendTSV(d.Log(), logHeader, []string{now.UTC().Format(time.RFC3339Nano), "charter " + name + "ed with words " + *id})
 }
