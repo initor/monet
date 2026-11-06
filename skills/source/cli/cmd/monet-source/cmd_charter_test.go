@@ -213,7 +213,7 @@ func TestSealSetsFirstPhase(t *testing.T) {
 		t.Fatalf("got\n%s\nwant\n%s", got, want)
 	}
 	checkLease(t, run, "brain", now.Add(12*time.Hour))
-	if out, e, code := runSource(t, &Ctx{Run: run}, "status"); code != exit.OK || !strings.Contains(out, "\nphase research\ncharter sealed with words w2\nlease brain h1 ") {
+	if out, e, code := runSource(t, &Ctx{Run: run}, "status"); code != exit.OK || !strings.Contains(out, "\nphase research\nround none\nwaiting none\ncharter sealed with words w2\nlease brain h1 ") {
 		t.Fatalf("status: code %d, stdout %q, stderr %q", code, out, e)
 	}
 }
