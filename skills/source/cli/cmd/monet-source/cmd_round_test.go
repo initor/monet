@@ -454,3 +454,154 @@ func TestCapDraftsEachPersona(t *testing.T) {
 		t.Fatalf("items %+v; want %+v", items, want)
 	}
 }
+
+// secondCheckFlow blocks round 1 with the blocker F1 and the major F2, answers F1 with fixed by v2,
+// submits v2, and opens round 2. It returns the stdout of the round 2 open.
+func secondCheckFlow(t *testing.T, run string) string {
+	t.Helper()
+	submitFile(t, run, "a.md", "one\n")
+	openRound(t, run)
+	writeVerdict(t, run, 1, "reviewer", "block", round.Finding{ID: "F1", Severity: "blocker", Problem: "No rename.", Evidence: "store.go:44", Ask: "Cite it."},
+		round.Finding{ID: "F2", Severity: "major", Problem: "Slow."})
+	closeRound(t, run, 1, "FIX")
+	if code, e := respond(t, run, "d1", `{"answers": [{"finding": "F1", "answer": "fixed", "text": "fixed by v2"}]}`); code != exit.OK {
+		t.Fatalf("respond: code %d, stderr %q", code, e)
+	}
+	submitFile(t, run, "a.md", "two\n")
+	out, e, code := runSource(t, &Ctx{Run: run}, "round", "open", "--holder", "h1")
+	if code != exit.OK {
+		t.Fatalf("round 2 open: code %d, stderr %q", code, e)
+	}
+	return out
+}
+
+// A check at a count of 1 runs at max with the blocker findings of the earlier verdict and the text of
+// its response.md (R16). The major F2 stays out, and the first check of the phase has neither section.
+func TestSecondCheckBrief(t *testing.T) {
+	run := newLoopRun(t)
+	d := store.Dir{Root: run}
+	out := secondCheckFlow(t, run)
+	brief, verdict := round.Path(run, 2, "briefs", "2-reviewer.md"), round.Path(run, 2, "verdicts", "2-reviewer.json")
+	if want := "check 2-reviewer reviewer max " + brief + " " + verdict + "\n"; out != want {
+		t.Fatalf("round 2 open: stdout %q; want %q", out, want)
+	}
+	f1 := round.Finding{ID: "F1", Severity: "blocker", Problem: "No rename.", Evidence: "store.go:44", Ask: "Cite it."}
+	want := round.Brief(round.BriefInput{Check: "2-reviewer", Persona: "reviewer", Effort: "max", Charter: readOr(t, d.CharterMD()),
+		PersonaBrief: readOr(t, filepath.Join(d.Personas(), "reviewer.md")), Verdict: verdict, Sources: []string{"skills/source/cli"},
+		Versions: []string{filepath.Join(run, "artifacts", "research", "v2")}, Blockers: []round.Finding{f1}, Response: readOr(t, round.Path(run, 1, "response.md"))})
+	text, first := readOr(t, brief), readOr(t, round.Path(run, 1, "briefs", "1-reviewer.md"))
+	if text != want || !strings.Contains(text, "### F1 (blocker)") || !strings.Contains(text, "fixed by v2") || strings.Contains(text, "F2") {
+		t.Fatalf("round 2 brief\n%s\nwant\n%s", text, want)
+	}
+	if strings.Contains(first, "## Your blocker findings") || strings.Contains(first, "## The answer of the developer") || strings.Contains(first, "fixed by v2") {
+		t.Fatalf("round 1 brief holds a second check section:\n%s", first)
+	}
+}
+
+// No file under rounds/ holds the text of a note or of the developer transcript (source.md:361).
+func TestBriefsKeepNotesOut(t *testing.T) {
+	run := newLoopRun(t)
+	if err := os.MkdirAll(filepath.Join(run, "notes"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for p, body := range map[string]string{filepath.Join(run, "notes", "plan.md"): "NOTE-MARK\n", filepath.Join(run, "dev", "transcript.jsonl"): "{\"m\": \"TRANSCRIPT-MARK\"}\n"} {
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	secondCheckFlow(t, run)
+	files := roundFiles(t, run)
+	if !strings.Contains(files, "fixed by v2") || strings.Contains(files, "NOTE-MARK") || strings.Contains(files, "TRANSCRIPT-MARK") {
+		t.Fatalf("rounds/ files:\n%s", files)
+	}
+}
+
+// A second check after a block with no response.md gets the blocker findings and an empty answer.
+func TestSecondCheckBriefNoResponse(t *testing.T) {
+	run := newLoopRun(t)
+	fixRound(t, run, 1)
+	submitFile(t, run, "a.md", "v2\n")
+	openRound(t, run)
+	text := readOr(t, round.Path(run, 2, "briefs", "2-reviewer.md"))
+	if want := "## Your blocker findings\n\n### F1 (blocker)\nProblem: \nEvidence: \nAsk: \n\n## The answer of the developer\n\n\n"; !strings.HasSuffix(text, want) {
+		t.Fatalf("round 2 brief\n%s\nwant the suffix\n%s", text, want)
+	}
+}
+
+// The second check takes the newest earlier round of its phase that is not final and where its result
+// was block, and the response.md of that round: not a newer missing, final, or design round, nor round 1.
+func TestSecondCheckBriefPicksRound(t *testing.T) {
+	run := newLoopRun(t)
+	d := store.Dir{Root: run}
+	set := func(f func(s *state.State)) {
+		if err := state.Update(d, func(s *state.State) error { f(s); return nil }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for n, tc := range []struct {
+		phase, verdict, response, outcome string
+		drafts                            []string
+	}{
+		{"research", "block", "answer one", "FIX", nil}, {"research", "block", "answer two", "ACCEPT", []string{"item D1 draft for reviewer"}},
+		{"research", "", "", "FIX", nil}, {"research", "final", "", "ACCEPT", []string{"item D2 draft for reviewer"}}, {"design", "block", "", "FIX", nil},
+	} {
+		set(func(s *state.State) { s.Phase = tc.phase })
+		submitFile(t, run, "a.md", fmt.Sprintf("v%d\n", n+1))
+		openRound(t, run)
+		if tc.verdict == "final" {
+			r, err := round.Load(run, n+1)
+			if r.Final = true; err != nil || round.Save(run, r) != nil {
+				t.Fatalf("mark round %d final: %v", n+1, err)
+			}
+		}
+		if tc.verdict != "" {
+			writeVerdict(t, run, n+1, "reviewer", "block", round.Finding{ID: fmt.Sprintf("G%d", n+1), Severity: "blocker"})
+		}
+		closeRound(t, run, n+1, tc.outcome, tc.drafts...)
+		if tc.response != "" {
+			if code, e := respond(t, run, "d1", `{"answers": [{"finding": "F1", "answer": "fixed", "text": "`+tc.response+`"}]}`); code != exit.OK {
+				t.Fatalf("respond %d: code %d, stderr %q", n+1, code, e)
+			}
+		}
+	}
+	set(func(s *state.State) { s.Phase, s.Counts["research"]["reviewer"] = "research", 1 })
+	submitFile(t, run, "a.md", "v6\n")
+	openRound(t, run)
+	text := readOr(t, round.Path(run, 6, "briefs", "6-reviewer.md"))
+	if !strings.Contains(text, "### G2 (blocker)") || !strings.Contains(text, "answer two") || strings.Count(text, "### G") != 1 || strings.Contains(text, "answer one") {
+		t.Fatalf("round 6 brief\n%s\nwant G2 and answer two only", text)
+	}
+}
+
+// In design with reader made blocking, reader blocks at round 1 and reviewer at round 2, so at round 3 each
+// check at a count of 1 gets the findings of its own block. Reader blocks again at round 3, and at round 4
+// its check at a count of 2 gets neither second check section (R16).
+func TestSecondCheckBriefPerPersona(t *testing.T) {
+	run := newLoopRun(t)
+	writeCharter(t, run, `"weight": "advisory"`, `"weight": "blocking"`)
+	if err := state.Update(store.Dir{Root: run}, func(s *state.State) error { s.Phase = "design"; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	for n, tc := range [][]string{{"reader", "A1", "FIX"}, {"reviewer", "B2", "FIX"}, {"reader", "A3", "ACCEPT", "item D1 draft for reader"}} {
+		submitFile(t, run, "a.md", fmt.Sprintf("v%d\n", n+1))
+		openRound(t, run)
+		for _, p := range []string{"reviewer", "reader"} {
+			if p == tc[0] {
+				writeVerdict(t, run, n+1, p, "block", round.Finding{ID: tc[1], Severity: "blocker"})
+			} else {
+				writeVerdict(t, run, n+1, p, "accept")
+			}
+		}
+		closeRound(t, run, n+1, tc[2], tc[3:]...)
+	}
+	submitFile(t, run, "a.md", "v4\n")
+	openRound(t, run)
+	brief := func(n int, p string) string {
+		return readOr(t, round.Path(run, n, "briefs", fmt.Sprintf("%d-%s.md", n, p)))
+	}
+	reader3, reviewer3, reader4 := brief(3, "reader"), brief(3, "reviewer"), brief(4, "reader")
+	if !strings.Contains(reader3, "### A1 (blocker)") || strings.Contains(reader3, "### B2") || !strings.Contains(reviewer3, "### B2 (blocker)") || strings.Contains(reviewer3, "### A1") ||
+		strings.Contains(reader4, "## Your blocker findings") || strings.Contains(reader4, "## The answer of the developer") {
+		t.Fatalf("round 3 reader brief\n%s\nround 3 reviewer brief\n%s\nround 4 reader brief\n%s", reader3, reviewer3, reader4)
+	}
+}

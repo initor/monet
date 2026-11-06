@@ -91,8 +91,14 @@ func openChecks(c *Ctx, d store.Dir, s *state.State, ch *charter.Charter, r *rou
 		id := fmt.Sprintf("%d-%s", r.N, p.ID)
 		ck := round.Check{ID: id, Persona: p.ID, Weight: p.Weight, Effort: round.Effort(s.Counts[r.Phase][p.ID], r.Final),
 			Brief: round.Path(c.Run, r.N, "briefs", id+".md"), Verdict: round.Path(c.Run, r.N, "verdicts", id+".json")}
-		brief := round.Brief(round.BriefInput{Check: id, Persona: p.ID, Effort: ck.Effort, Charter: string(md), PersonaBrief: string(persona),
-			Verdict: ck.Verdict, Sources: p.Sources, Versions: r.Versions})
+		in := round.BriefInput{Check: id, Persona: p.ID, Effort: ck.Effort, Charter: string(md), PersonaBrief: string(persona),
+			Verdict: ck.Verdict, Sources: p.Sources, Versions: r.Versions}
+		if s.Counts[r.Phase][p.ID] == 1 {
+			if in.Blockers, in.Response, err = lastBlock(c.Run, r, p.ID); err != nil {
+				return err
+			}
+		}
+		brief := round.Brief(in)
 		if err := store.WriteFileAtomic(ck.Brief, []byte(brief), 0o644); err != nil {
 			return err
 		}
@@ -109,6 +115,37 @@ func openChecks(c *Ctx, d store.Dir, s *state.State, ch *charter.Charter, r *rou
 	s.Round, s.RoundOpen, s.Checked[r.Phase] = r.N, true, r.Version
 	_, err = fmt.Fprint(c.Stdout, lines.String())
 	return err
+}
+
+// lastBlock returns the blocker findings of persona's verdict and the response.md text (empty when
+// absent) of the newest round before r of r's phase, not final, where persona's result was block (R16).
+func lastBlock(run string, r *round.Round, persona string) ([]round.Finding, string, error) {
+	for n := r.N - 1; n > 0; n-- {
+		prev, err := round.Load(run, n)
+		if err != nil {
+			return nil, "", err
+		}
+		i := slices.IndexFunc(prev.Checks, func(ck round.Check) bool { return ck.Persona == persona && ck.Result == "block" })
+		if prev.Final || prev.Phase != r.Phase || i < 0 {
+			continue
+		}
+		v, err := round.ParseVerdict(prev.Checks[i].Verdict, prev.Checks[i].ID, persona)
+		if err != nil {
+			return nil, "", err
+		}
+		resp, err := os.ReadFile(round.Path(run, n, "response.md"))
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return nil, "", err
+		}
+		var out []round.Finding
+		for _, f := range v.Findings {
+			if f.Severity == "blocker" {
+				out = append(out, f)
+			}
+		}
+		return out, string(resp), nil
+	}
+	return nil, "", nil
 }
 
 // roundClose renews brain, then under the state mutex needs an open round (exit 2), sets each check result
