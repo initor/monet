@@ -11,6 +11,7 @@ import (
 
 	"source/internal/charter"
 	"source/internal/exit"
+	"source/internal/item"
 	"source/internal/round"
 	"source/internal/state"
 	"source/internal/store"
@@ -111,8 +112,9 @@ func openChecks(c *Ctx, d store.Dir, s *state.State, ch *charter.Charter, r *rou
 }
 
 // roundClose renews brain, then under the state mutex needs an open round (exit 2), sets each check result
-// from its verdict file (R18), counts each block of a blocking persona, writes findings.md, and sets the
-// outcome and, for an ACCEPT of a round that is not final, Accepted. It records FINDINGS and prints the outcome.
+// from its verdict file (R18), counts each block of a blocking persona, and at a count of 2 or more saves a
+// draft item that holds the check (R19). It writes findings.md, sets the outcome and, for an ACCEPT of a round
+// that is not final, Accepted. It records FINDINGS, then prints the outcome and one line per draft.
 func roundClose(c *Ctx, args []string) error {
 	fs := newFlagSet("round close")
 	holder := fs.String("holder", "", "the brain lease holder")
@@ -126,6 +128,7 @@ func roundClose(c *Ctx, args []string) error {
 	}
 	d := store.Dir{Root: c.Run}
 	var r round.Round
+	var drafts strings.Builder
 	err := state.Update(d, func(s *state.State) (err error) {
 		if !s.RoundOpen {
 			return exit.New(exit.Refused, "round close: no round is open")
@@ -148,7 +151,20 @@ func roundClose(c *Ctx, args []string) error {
 				if s.Counts[r.Phase] == nil {
 					s.Counts[r.Phase] = map[string]int{}
 				}
-				s.Counts[r.Phase][ck.Persona]++
+				if s.Counts[r.Phase][ck.Persona]++; s.Counts[r.Phase][ck.Persona] >= 2 {
+					s.Items++
+					it := item.Item{ID: fmt.Sprintf("D%d", s.Items), Phase: r.Phase, Persona: ck.Persona, Round: r.N, Status: "draft"}
+					for _, f := range v.Findings {
+						if f.Severity == "blocker" {
+							it.Findings = append(it.Findings, f.ID)
+						}
+					}
+					if err := item.Save(d, it.ID, it); err != nil {
+						return err
+					}
+					ck.Item = it.ID
+					fmt.Fprintf(&drafts, "item %s draft for %s\n", it.ID, ck.Persona)
+				}
 			}
 			entries[i] = round.Entry{Persona: ck.Persona, Weight: ck.Weight, Result: ck.Result, Findings: v.Findings}
 		}
@@ -166,7 +182,7 @@ func roundClose(c *Ctx, args []string) error {
 	})
 	if err == nil {
 		if err = record(c, d, fmt.Sprintf("FINDINGS %d %s", r.N, r.Outcome)); err == nil {
-			_, err = fmt.Fprintln(c.Stdout, r.Outcome)
+			_, err = fmt.Fprint(c.Stdout, r.Outcome+"\n"+drafts.String())
 		}
 	}
 	return err
