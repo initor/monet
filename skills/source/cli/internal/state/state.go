@@ -16,6 +16,15 @@ type State struct {
 	Slug    string    `json:"slug"`
 	Created time.Time `json:"created"`
 	Phase   string    `json:"phase"`
+	Sealed  *Seal     `json:"sealed,omitempty"`
+}
+
+// Seal is the confirmation of the charter: the id of the owner words, when the
+// seal was made, and the hash of charter.json that charter.md shows.
+type Seal struct {
+	Words string    `json:"words"`
+	At    time.Time `json:"at"`
+	Hash  string    `json:"hash"`
 }
 
 // Load decodes state.json strictly. A missing file means init has not run.

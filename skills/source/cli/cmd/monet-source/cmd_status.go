@@ -23,7 +23,11 @@ func cmdStatus(c *Ctx, args []string) error {
 	if err != nil {
 		return err
 	}
-	out := "run " + s.Slug + " at " + c.Run + "\nphase " + firstSet(s.Phase, "kickoff") + "\ncharter not sealed\n"
+	sealed := "not sealed"
+	if s.Sealed != nil {
+		sealed = "sealed with words " + s.Sealed.Words
+	}
+	out := "run " + s.Slug + " at " + c.Run + "\nphase " + firstSet(s.Phase, "kickoff") + "\ncharter " + sealed + "\n"
 	for _, name := range []string{"brain", "dev"} {
 		held := "free"
 		if l, ok, err := lock.Read(d.Locks(), name); err != nil {
