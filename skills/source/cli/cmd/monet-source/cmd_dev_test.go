@@ -1,11 +1,14 @@
 package main
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"source/internal/events"
 	"source/internal/exit"
+	"source/internal/lock"
 	"source/internal/state"
 	"source/internal/store"
 )
@@ -18,8 +21,8 @@ type devStep struct {
 	lease             time.Time
 }
 
-// runDev runs steps in order on one run made by init. No step prints to stdout.
-func runDev(t *testing.T, steps []devStep) {
+// runDev runs steps in order on one run made by init, and returns the run. No step prints to stdout.
+func runDev(t *testing.T, steps []devStep) string {
 	run := newRun(t, "demo")
 	if _, e, code := runSource(t, &Ctx{Run: run}, "init", "--slug", "demo", "--holder", "h1"); code != exit.OK {
 		t.Fatalf("init: code %d, stderr %q", code, e)
@@ -35,6 +38,7 @@ func runDev(t *testing.T, steps []devStep) {
 			t.Errorf("%q: dev %q, last beat %v, err %v; want %q at +%v", st.args, s.Dev, s.LastBeat, err, st.dev, st.beat)
 		}
 	}
+	return run
 }
 
 // hello takes the dev lease. Another live holder is exit 4, a bad call exit 64.
@@ -55,5 +59,32 @@ func TestDevBeat(t *testing.T) {
 		{"hello --holder d1", "", "d1", exit.OK, 0, 0, testNow.Add(12 * time.Hour)},
 		{"beat --holder d1", "", "d1", exit.OK, time.Hour, time.Hour, testNow.Add(13 * time.Hour)},
 		{"beat --holder d2", "lock held: dev is not held by d2", "d1", exit.Held, 2 * time.Hour, time.Hour, testNow.Add(13 * time.Hour)},
+	})
+}
+
+// takeover moves the live dev lease of --from to --holder and records DEV_RELAYED.
+// A lease that --from does not hold live is exit 4, a bad call exit 64.
+func TestDevTakeover(t *testing.T) {
+	const usage = "usage: monet-source dev takeover --from <old session> --holder <session>"
+	at12 := testNow.Add(12 * time.Hour)
+	run := runDev(t, []devStep{
+		{"hello --holder d1", "", "d1", exit.OK, 0, 0, at12},
+		{"takeover --from d1 --holder d2", "", "d2", exit.OK, 0, 0, at12},
+		{"takeover --from d1 --holder d3", "lock held: dev is not held by d1", "d2", exit.Held, time.Hour, 0, at12},
+		{"takeover --from d2 --holder d3", "lock held: dev is not held by d2", "d2", exit.Held, 13 * time.Hour, 0, at12},
+		{"takeover --holder d3", usage, "d2", exit.Usage, time.Hour, 0, at12},
+		{"takeover --from d2", usage, "d2", exit.Usage, time.Hour, 0, at12},
+		{"takeover --from d2 --holder d3 x", usage, "d2", exit.Usage, time.Hour, 0, at12},
+		{"takeover --from d2 --holder d3 --bogus", usage, "d2", exit.Usage, time.Hour, 0, at12},
+	})
+	l, _, lerr := lock.Read(store.Dir{Root: run}.Locks(), "dev")
+	got, _, err := events.For(store.Dir{Root: run}, "brain", 0)
+	if lerr != nil || l.Holder != "d2" || err != nil || !reflect.DeepEqual(got, []string{"DEV_RELAYED d1 d2"}) {
+		t.Errorf("lease %+v (%v), brain events %q (%v); want d2 and [DEV_RELAYED d1 d2]", l, lerr, got, err)
+	}
+	// A takeover at +1h sets the lease, Dev, and LastBeat from that clock.
+	runDev(t, []devStep{
+		{"hello --holder d1", "", "d1", exit.OK, 0, 0, at12},
+		{"takeover --from d1 --holder d2", "", "d2", exit.OK, time.Hour, time.Hour, testNow.Add(13 * time.Hour)},
 	})
 }
