@@ -11,6 +11,7 @@ import (
 	"source/internal/exit"
 	"source/internal/lock"
 	"source/internal/store"
+	"source/internal/words"
 )
 
 // writeCharter writes the charter fixture, after the replacements in edits,
@@ -114,5 +115,159 @@ func TestCharterRenderCommand(t *testing.T) {
 	}
 	if doc, err := os.ReadFile("../../../../../docs/design/source.md"); err != nil || !strings.Contains(string(doc), "| `charter lint`, `render`, ") {
 		t.Fatalf("design 5.9: the charter row names no render (err %v)", err)
+	}
+}
+
+// newSealableRun makes a run with init, the fixture charter, a rendered
+// charter.md, and the owner words w1. The holder h1 has brain.
+func newSealableRun(t *testing.T) string {
+	t.Helper()
+	run := newRun(t, "demo")
+	if _, e, code := runSource(t, &Ctx{Run: run}, "init", "--slug", "demo", "--holder", "h1"); code != exit.OK {
+		t.Fatalf("init: code %d, stderr %q", code, e)
+	}
+	writeCharter(t, run)
+	if _, e, code := runSource(t, &Ctx{Run: run}, "charter", "render", "--holder", "h1"); code != exit.OK {
+		t.Fatalf("render: code %d, stderr %q", code, e)
+	}
+	if err := words.Append(store.Dir{Root: run}.Words(), words.Entry{ID: "w1", At: "2026-11-01T12:00:00Z", Text: "Yes, seal it."}); err != nil {
+		t.Fatal(err)
+	}
+	return run
+}
+
+// sealFiles returns state.json and log.tsv, the files that a seal writes.
+func sealFiles(t *testing.T, run string) string {
+	t.Helper()
+	d := store.Dir{Root: run}
+	s, err := os.ReadFile(d.State())
+	if err != nil {
+		t.Fatal(err)
+	}
+	l, _ := os.ReadFile(d.Log()) // a run with no seal has no log.tsv
+	return string(s) + "-- log.tsv\n" + string(l)
+}
+
+// A charter.json that still lints clean but changed after the render gives exit 3 and writes nothing.
+func TestSealRefusesChangedCharter(t *testing.T) {
+	run := newSealableRun(t) // init, the fixture charter, a rendered charter.md, and the entry w1
+	path := filepath.Join(run, "charter.json")
+	c, err := charter.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Goal += " (changed)" // the charter still lints clean, so only the hash check can refuse
+	if err := store.WriteJSON(path, c); err != nil {
+		t.Fatal(err)
+	}
+	before := sealFiles(t, run)
+	_, errOut, code := runSource(t, &Ctx{Run: run}, "charter", "seal", "--words", "w1", "--holder", "h1")
+	if code != exit.Conflict || !strings.Contains(errOut, "changed after charter.md was rendered") || sealFiles(t, run) != before {
+		t.Fatalf("code %d, stderr %q, or the seal wrote", code, errOut)
+	}
+}
+
+// An id with no entry in owner-words.md gives exit 2 and writes nothing.
+func TestSealNeedsWords(t *testing.T) {
+	run := newSealableRun(t)
+	before := sealFiles(t, run)
+	if _, e, code := runSource(t, &Ctx{Run: run}, "charter", "seal", "--words", "w9", "--holder", "h1"); code != exit.Refused || e != "monet-source: owner words: no entry w9\n" || sealFiles(t, run) != before {
+		t.Fatalf("code %d, stderr %q, or the seal wrote", code, e)
+	}
+}
+
+// A second seal, with the same or other words, gives exit 2 and keeps the first seal and its one log row.
+func TestSealOnce(t *testing.T) {
+	run := newSealableRun(t)
+	if err := words.Append(store.Dir{Root: run}.Words(), words.Entry{ID: "w2", At: "2026-11-01T12:30:00Z", Text: "Seal it again."}); err != nil {
+		t.Fatal(err)
+	}
+	if _, e, code := runSource(t, &Ctx{Run: run}, "charter", "seal", "--words", "w1", "--holder", "h1"); code != exit.OK {
+		t.Fatalf("first: code %d, stderr %q", code, e)
+	}
+	before := sealFiles(t, run)
+	for _, id := range []string{"w1", "w2"} {
+		if _, e, code := runSource(t, &Ctx{Run: run}, "charter", "seal", "--words", id, "--holder", "h1"); code != exit.Refused || e != "monet-source: charter already sealed with words w1\n" || sealFiles(t, run) != before {
+			t.Fatalf("%s: code %d, stderr %q, or the seal wrote", id, code, e)
+		}
+	}
+}
+
+// A seal stores the words, the clock, and the hash of charter.json, sets the first phase, logs one
+// row with a UTC clock, renews brain, and prints nothing. Then status prints the seal.
+// It seals with w2, not the first entry w1, so every place that names the words uses the given id.
+func TestSealSetsFirstPhase(t *testing.T) {
+	run := newSealableRun(t)
+	data, err := os.ReadFile(store.Dir{Root: run}.Charter())
+	if err != nil || words.Append(store.Dir{Root: run}.Words(), words.Entry{ID: "w2", At: "2026-11-01T12:30:00Z", Text: "Seal it."}) != nil {
+		t.Fatalf("read charter.json: %v, or the append of w2 failed", err)
+	}
+	now := testNow.Add(time.Hour + 5).In(time.FixedZone("PST", -8*3600))
+	if out, e, code := runSource(t, &Ctx{Run: run, Now: func() time.Time { return now }}, "charter", "seal", "--words", "w2", "--holder", "h1"); code != exit.OK || out != "" || e != "" {
+		t.Fatalf("code %d, stdout %q, stderr %q", code, out, e)
+	}
+	want := "{\n  \"version\": 1,\n  \"slug\": \"demo\",\n  \"created\": \"2026-11-01T12:00:00Z\",\n  \"phase\": \"research\",\n" +
+		"  \"sealed\": {\n    \"words\": \"w2\",\n    \"at\": \"2026-11-01T05:00:00.000000005-08:00\",\n    \"hash\": \"" + charter.Hash(data) + "\"\n  }\n}\n" +
+		"-- log.tsv\nat\tline\n2026-11-01T13:00:00.000000005Z\tcharter sealed with words w2\n"
+	if got := sealFiles(t, run); got != want {
+		t.Fatalf("got\n%s\nwant\n%s", got, want)
+	}
+	checkLease(t, run, "brain", now.Add(12*time.Hour))
+	if out, e, code := runSource(t, &Ctx{Run: run}, "status"); code != exit.OK || !strings.Contains(out, "\nphase research\ncharter sealed with words w2\nlease brain h1 ") {
+		t.Fatalf("status: code %d, stdout %q, stderr %q", code, out, e)
+	}
+}
+
+// Seal checks its usage, then renews brain, then refuses in the order lint, words, hash, and state:
+// a row that breaks two checks gets the refusal of the earlier one. No refusal writes state or log.
+func TestSealChecksInOrder(t *testing.T) {
+	advisory, changed := []string{`"weight": "blocking"`, `"weight": "advisory"`}, []string{`"One explainer page."`, `"Two explainer pages."`}
+	usage := "monet-source: usage: monet-source charter seal --words <id> --holder <session>\n"
+	for _, tc := range []struct {
+		name   string
+		setup  func(run string)
+		args   []string
+		code   int
+		out, e string // <run> in e stands for the run dir
+	}{
+		{"no words", nil, []string{"--holder", "h1"}, exit.Usage, "", usage},
+		{"argument", nil, []string{"x", "--words", "w1", "--holder", "h1"}, exit.Usage, "", usage},
+		{"no holder", nil, []string{"--words", "w1"}, exit.Usage, "", "monet-source: --holder <session> is required: the brain lease holder\n"},
+		{"lease before lint", func(run string) { writeCharter(t, run, advisory...) }, []string{"--words", "w1", "--holder", "h2"}, exit.Held, "", "monet-source: lock held: brain is not held by h2\n"},
+		{"no charter.json", func(run string) { os.Remove(filepath.Join(run, "charter.json")) }, []string{"--words", "w9", "--holder", "h1"}, exit.Refused, "", "monet-source: open <run>/charter.json: no such file or directory\n"},
+		{"repo", func(run string) { writeCharter(t, run, `"version": 1,`, `"version": 1, "repo": "x",`) }, []string{"--words", "w9", "--holder", "h1"}, exit.Refused, "", "monet-source: charter: repo comes with step 2 (call 24)\n"},
+		{"lint before words", func(run string) { writeCharter(t, run, advisory...) }, []string{"--words", "w9", "--holder", "h1"}, exit.Refused, "charter: personas: no blocking persona, so no persona can accept (call 4)\n", ""},
+		{"words before hash", func(run string) { writeCharter(t, run, changed...) }, []string{"--words", "w9", "--holder", "h1"}, exit.Refused, "", "monet-source: owner words: no entry w9\n"},
+		{"no charter.md", func(run string) { os.Remove(filepath.Join(run, "charter.md")) }, []string{"--words", "w1", "--holder", "h1"}, exit.Conflict, "", "monet-source: open <run>/charter.md: no such file or directory\n"},
+		{"text after the hash line", func(run string) { // charter.md must END with the hash line
+			f, err := os.OpenFile(filepath.Join(run, "charter.md"), os.O_APPEND|os.O_WRONLY, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := f.WriteString("An edit after the render.\n"); err != nil || f.Close() != nil {
+				t.Fatalf("append to charter.md: %v", err)
+			}
+		}, []string{"--words", "w1", "--holder", "h1"}, exit.Conflict, "", "monet-source: charter.json changed after charter.md was rendered: render it and get the yes of the owner again\n"},
+		{"hash before state", func(run string) {
+			if _, e, code := runSource(t, &Ctx{Run: run}, "charter", "seal", "--words", "w1", "--holder", "h1"); code != exit.OK {
+				t.Fatalf("first seal: code %d, stderr %q", code, e)
+			}
+			writeCharter(t, run, changed...)
+		}, []string{"--words", "w1", "--holder", "h1"}, exit.Conflict, "", "monet-source: charter.json changed after charter.md was rendered: render it and get the yes of the owner again\n"},
+	} {
+		run := newSealableRun(t)
+		if tc.setup != nil {
+			tc.setup(run)
+		}
+		before, now := sealFiles(t, run), testNow.Add(time.Hour)
+		out, e, code := runSource(t, &Ctx{Run: run, Now: func() time.Time { return now }}, append([]string{"charter", "seal"}, tc.args...)...)
+		if code != tc.code || out != tc.out || e != strings.ReplaceAll(tc.e, "<run>", run) || sealFiles(t, run) != before {
+			t.Errorf("%s: code %d, stdout %q, stderr %q, or the seal wrote", tc.name, code, out, e)
+		}
+		lease := now.Add(12 * time.Hour) // a usage error or another holder renews nothing
+		if tc.code == exit.Usage || tc.code == exit.Held {
+			lease = testNow.Add(12 * time.Hour)
+		}
+		checkLease(t, run, "brain", lease)
 	}
 }
