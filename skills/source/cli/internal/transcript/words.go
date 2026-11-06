@@ -2,9 +2,45 @@ package transcript
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
+	"regexp"
 	"strings"
 )
+
+// command matches a text that starts, after blanks, with the tag of a slash command.
+var command = regexp.MustCompile("^[\t\n\v\f\r ]*<(command-message|command-name)>")
+
+// Words is one message that the owner typed, with the id of the newest earlier
+// kept message under the same parent, which it replaces.
+type Words struct {
+	ID, At, Supersedes, Text string
+}
+
+// OwnerWords lists the messages that the owner typed in path, in file order, without
+// the texts that start with marker or with a slash command, and the ones with no id.
+// fromHuman counts every typed message, kept or not (relay.mjs words).
+func OwnerWords(path, marker string) (msgs []Words, fromHuman int, err error) {
+	byParent := map[string]string{}
+	err = Each(path, func(e Entry) {
+		text, ok := fromUser(e)
+		if !ok {
+			return
+		}
+		fromHuman++
+		id := cmp.Or(e.UUID, e.PromptID, e.Timestamp)
+		if command.MatchString(text) || strings.HasPrefix(text, marker) || id == "" {
+			return
+		}
+		w := Words{ID: id, At: cmp.Or(e.Timestamp, "unknown"), Text: text}
+		if p := e.ParentUUID; p != "" {
+			w.Supersedes = byParent[p]
+			byParent[p] = id
+		}
+		msgs = append(msgs, w)
+	})
+	return msgs, fromHuman, err
+}
 
 // textOf gives a JSON string as it is, or the text blocks of a content array
 // joined with a blank line. An array with a tool_result block, or with no text

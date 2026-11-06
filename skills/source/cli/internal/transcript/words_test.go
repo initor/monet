@@ -2,7 +2,13 @@ package transcript
 
 import (
 	"encoding/json"
+	"fmt"
+	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
+
+	"source/internal/testkit"
 )
 
 // decode marshals m and unmarshals it into an Entry.
@@ -85,5 +91,104 @@ func TestTextOf(t *testing.T) {
 		if got, ok := textOf(json.RawMessage(c.raw)); ok != c.ok || got != c.want {
 			t.Errorf("%s: got %q %v, want %q %v", c.raw, got, ok, c.want, c.ok)
 		}
+	}
+}
+
+// oneByteEdits returns s, each deletion of one byte, and each substitution or
+// insertion of one byte from 0x20 to 0x7e (a copy of the helper of package round).
+func oneByteEdits(s string) []string {
+	out := []string{s}
+	for i := range len(s) + 1 {
+		out = append(out, s[:i]+s[min(i+1, len(s)):])
+		for b := byte(0x20); b < 0x7f; b++ {
+			out = append(out, s[:i]+string(b)+s[i:], s[:i]+string(b)+s[min(i+1, len(s)):])
+		}
+	}
+	return out
+}
+
+// wordsDiff describes the first message where got and want differ, or gives "".
+func wordsDiff(got, want []Words) string {
+	for i := range max(len(got), len(want)) {
+		var g, w Words
+		if i < len(got) {
+			g = got[i]
+		}
+		if i < len(want) {
+			w = want[i]
+		}
+		if i >= len(got) || i >= len(want) || g != w {
+			return fmt.Sprintf("message %d (got %d, want %d): got %+v, want %+v", i, len(got), len(want), g, w)
+		}
+	}
+	return ""
+}
+
+func TestWordsSkipsMarkerAndCommands(t *testing.T) {
+	var entries []map[string]any
+	var want []Words
+	edits := slices.Concat(oneByteEdits("source relay kickoff: x"), oneByteEdits("<command-name>/x"), oneByteEdits("<command-message>/x"),
+		// Kept: a tag on a later line, a tag after a non-ASCII blank (NBSP), an empty text, and another tag.
+		// Skipped: a tag after a long run of blanks.
+		[]string{"a\n<command-name>/x", "a\n<command-message>/x", string(rune(0xa0)) + "<command-name>/x", "", "<command-args>x",
+			strings.Repeat(" ", 64) + "<command-name>/x"})
+	for _, edit := range edits {
+		for _, prefix := range []string{"", " ", "\t\n", "\v\f\r"} {
+			text, id := prefix+edit, fmt.Sprintf("u%d", len(entries))
+			entries = append(entries, testkit.Typed(id, "", text))
+			trimmed := strings.TrimLeft(text, " \t\n\v\f\r")
+			if !strings.HasPrefix(text, "source relay kickoff:") && !strings.HasPrefix(trimmed, "<command-name>") && !strings.HasPrefix(trimmed, "<command-message>") {
+				want = append(want, Words{ID: id, At: "2026-01-02T03:04:05.000Z", Text: text})
+			}
+		}
+	}
+	msgs, fromHuman, err := OwnerWords(testkit.Transcript(t, t.TempDir(), "s1", entries...), "source relay kickoff:")
+	if err != nil || fromHuman != len(entries) {
+		t.Fatalf("got err %v and fromHuman %d, want nil and %d", err, fromHuman, len(entries))
+	}
+	if d := wordsDiff(msgs, want); d != "" {
+		t.Fatal(d)
+	}
+	// The marker is the parameter, not a fixed literal.
+	marked := testkit.Transcript(t, t.TempDir(), "s1", testkit.Typed("u1", "", "source relay kickoff: x"), testkit.Typed("u2", "", "gang relay kickoff: x"))
+	msgs, fromHuman, err = OwnerWords(marked, "gang relay kickoff:")
+	if d := wordsDiff(msgs, []Words{{"u1", "2026-01-02T03:04:05.000Z", "", "source relay kickoff: x"}}); err != nil || fromHuman != 2 || d != "" {
+		t.Fatalf("marker gang relay kickoff: got err %v, fromHuman %d (want 2), %s", err, fromHuman, d)
+	}
+}
+
+func TestWordsSupersedes(t *testing.T) {
+	const at = "2026-01-02T03:04:05.000Z"
+	noID, byPrompt, byTime := testkit.Typed("", "p1", "g"), testkit.Typed("", "", "h"), testkit.Typed("", "", "i")
+	both, noTime := testkit.Typed("u6", "", "j"), testkit.Typed("u7", "", "k")
+	byPrompt["promptId"], both["promptId"] = "pr1", "pr2"
+	delete(noID, "timestamp")
+	delete(noTime, "timestamp")
+	// Chain keys from promptId (pr9) and from the timestamp (p8), and a promptId with no timestamp (pr8).
+	byPromptInChain, byTimeInChain, promptNoTime := testkit.Typed("", "p9", "l"), testkit.Typed("", "p8", "n"), testkit.Typed("", "", "q")
+	byPromptInChain["promptId"], promptNoTime["promptId"] = "pr9", "pr8"
+	delete(promptNoTime, "timestamp")
+	// Queued messages join the pq chain of q1: q2 (no timestamp, empty text) replaces q1, and u10 replaces q2.
+	q2 := testkit.Queued("q2", "", "human")
+	delete(q2, "timestamp")
+	// The skipped u5 and noID sit in the p1 chain, so neither may become the message that the next one replaces.
+	entries := []map[string]any{testkit.Typed("u1", "p1", "a"), testkit.Typed("u5", "p1", "<command-name>/x"), testkit.Typed("u2", "p1", "b"),
+		noID, testkit.Typed("u3", "p1", "c"), testkit.Typed("u4", "p2", "d"), testkit.Queued("q1", "e", "human"),
+		testkit.Assistant(1, 0, 0), byPrompt, byTime, both, noTime,
+		byPromptInChain, testkit.Typed("u9", "p9", "m"), byTimeInChain, testkit.Typed("u8", "p8", "o"), promptNoTime,
+		q2, testkit.Typed("u10", "pq", "r")}
+	want := []Words{{"u1", at, "", "a"}, {"u2", at, "u1", "b"}, {"u3", at, "u2", "c"}, {"u4", at, "", "d"},
+		{"q1", "2026-01-02T03:05:00.000Z", "", "e"}, {"pr1", at, "", "h"}, {at, at, "", "i"}, {"u6", at, "", "j"},
+		{"u7", "unknown", "", "k"}, {"pr9", at, "", "l"}, {"u9", at, "pr9", "m"}, {at, at, "", "n"}, {"u8", at, at, "o"},
+		{"pr8", "unknown", "", "q"}, {"q2", "unknown", "q1", ""}, {"u10", at, "q2", "r"}}
+	msgs, fromHuman, err := OwnerWords(testkit.Transcript(t, t.TempDir(), "s1", entries...), "source relay kickoff:")
+	if err != nil || fromHuman != len(entries)-1 {
+		t.Fatalf("got err %v and fromHuman %d, want nil and %d", err, fromHuman, len(entries)-1)
+	}
+	if d := wordsDiff(msgs, want); d != "" {
+		t.Fatal(d)
+	}
+	if _, _, err := OwnerWords(filepath.Join(t.TempDir(), "none.jsonl"), "source relay kickoff:"); err == nil {
+		t.Fatal("a missing transcript gave no error")
 	}
 }
