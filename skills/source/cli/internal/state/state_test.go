@@ -4,8 +4,10 @@ import (
 	"cmp"
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"source/internal/store"
 )
@@ -66,5 +68,37 @@ func TestLoadKeepsPermissionError(t *testing.T) {
 	}
 	if _, err := Load(d); !os.IsPermission(err) {
 		t.Fatalf("err %v, want the permission error of the read: only a missing file is no run state", err)
+	}
+}
+
+var loopNames = []string{"dev", "last_beat", "versions", "checked", "accepted", "round", "round_open", "counts", "picks", "items", "walls", "moves"} // typed out, so a renamed tag fails
+
+func TestStateLoopFieldsRoundTrip(t *testing.T) {
+	d := store.Dir{Root: t.TempDir()}
+	at := time.Date(2026, 11, 5, 1, 0, 0, 0, time.UTC)
+	in := State{Version: 1, Slug: "demo", Dev: "d1", LastBeat: &at, Versions: map[string]int{"research": 2},
+		Checked: map[string]int{"research": 2}, Accepted: map[string]int{"research": 1}, Round: 3, RoundOpen: true,
+		Counts: map[string]map[string]int{"research": {"reviewer": 1}}, Picks: map[string][]string{"design": {"x"}},
+		Items: 1, Walls: 2, Moves: 4}
+	err := store.WriteJSON(d.State(), in)
+	if got, lerr := Load(d); err != nil || lerr != nil || !reflect.DeepEqual(got, in) {
+		t.Fatalf("got %+v, write err %v, load err %v", got, err, lerr)
+	}
+	data, _ := os.ReadFile(d.State())
+	for _, name := range loopNames {
+		if !strings.Contains(string(data), `"`+name+`":`) {
+			t.Errorf("state.json %s has no field %q", data, name)
+		}
+	}
+}
+
+func TestStateLoopFieldsOmitted(t *testing.T) {
+	d := store.Dir{Root: t.TempDir()}
+	err := store.WriteJSON(d.State(), State{Version: 1, Slug: "demo"})
+	data, rerr := os.ReadFile(d.State())
+	for _, name := range loopNames {
+		if err != nil || rerr != nil || strings.Contains(string(data), `"`+name+`"`) {
+			t.Errorf("state.json %s holds %q (err %v, %v): each loop field needs omitempty", data, name, err, rerr)
+		}
 	}
 }

@@ -22,6 +22,19 @@ type State struct {
 	// BriefCards maps it to the hash of the JSON of the card that the brief expands.
 	Briefs     map[string]string `json:"briefs,omitempty"`
 	BriefCards map[string]string `json:"brief_cards,omitempty"`
+	// The loop: the dev session and beat, versions and blocks per phase, rounds, picks, id counters, moves.
+	Dev       string                    `json:"dev,omitempty"`
+	LastBeat  *time.Time                `json:"last_beat,omitempty"`
+	Versions  map[string]int            `json:"versions,omitempty"`
+	Checked   map[string]int            `json:"checked,omitempty"`
+	Accepted  map[string]int            `json:"accepted,omitempty"`
+	Round     int                       `json:"round,omitempty"`
+	RoundOpen bool                      `json:"round_open,omitempty"`
+	Counts    map[string]map[string]int `json:"counts,omitempty"`
+	Picks     map[string][]string       `json:"picks,omitempty"`
+	Items     int                       `json:"items,omitempty"`
+	Walls     int                       `json:"walls,omitempty"`
+	Moves     int                       `json:"moves,omitempty"`
 }
 
 // Seal is the confirmation of the charter: the id of the owner words, when the
