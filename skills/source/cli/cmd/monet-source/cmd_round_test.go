@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"source/internal/charter"
+	"source/internal/events"
 	"source/internal/exit"
 	"source/internal/round"
 	"source/internal/state"
@@ -186,5 +187,167 @@ func TestRoundOpenDesign(t *testing.T) {
 	s, serr := state.Load(d)
 	if code != exit.OK || out != lines || e != "" || err != nil || !reflect.DeepEqual(r, want) || serr != nil || !reflect.DeepEqual(s.Checked, map[string]int{"design": 1}) {
 		t.Fatalf("code %d, stdout %q, stderr %q, round.json %+v (err %v), checked %v (err %v); want lines %q, round %+v", code, out, e, r, err, s.Checked, serr, lines, want)
+	}
+}
+
+// openRound opens a round on the newest version as h1 and needs exit 0.
+func openRound(t *testing.T, run string) {
+	t.Helper()
+	if _, e, code := runSource(t, &Ctx{Run: run}, "round", "open", "--holder", "h1"); code != exit.OK {
+		t.Fatalf("round open: code %d, stderr %q", code, e)
+	}
+}
+
+// closeRound closes round n as h1, needs exit 0, outcome on stdout and in round.json, and a closed
+// round, and returns the state, round.json, and findings.md after the close.
+func closeRound(t *testing.T, run string, n int, outcome string) (state.State, round.Round, string) {
+	t.Helper()
+	out, e, code := runSource(t, &Ctx{Run: run}, "round", "close", "--holder", "h1")
+	s, err := state.Load(store.Dir{Root: run})
+	r, rerr := round.Load(run, n)
+	if code != exit.OK || out != outcome+"\n" || e != "" || err != nil || rerr != nil || s.RoundOpen || r.Outcome != outcome {
+		t.Fatalf("round close %d: code %d, stdout %q, stderr %q, open %v, outcome %q (errs %v, %v); want 0 and %s", n, code, out, e, s.RoundOpen, r.Outcome, err, rerr, outcome)
+	}
+	return s, r, readOr(t, round.Path(run, n, "findings.md"))
+}
+
+// An accept gives ACCEPT, sets Accepted to the round version (not the newer v2), counts nothing, and
+// records FINDINGS for dev. A final round that accepts leaves Accepted as it was.
+func TestRoundCloseAccept(t *testing.T) {
+	run := newLoopRun(t)
+	d := store.Dir{Root: run}
+	submitFile(t, run, "a.md", "one\n")
+	openRound(t, run)
+	submitFile(t, run, "a.md", "two\n")
+	writeVerdict(t, run, 1, "reviewer", "accept")
+	s, r, md := closeRound(t, run, 1, "ACCEPT")
+	lines, _, err := events.For(d, "dev", 0)
+	if r.Checks[0].Result != "accept" || md != "# Round 1 findings\n\n## reviewer (blocking): accept\n" || !reflect.DeepEqual(s.Accepted, map[string]int{"research": 1}) ||
+		len(s.Counts) != 0 || err != nil || !reflect.DeepEqual(lines, []string{"FINDINGS 1 ACCEPT"}) || !strings.HasSuffix(readOr(t, d.Log()), "\tFINDINGS 1 ACCEPT\n") {
+		t.Fatalf("result %q, findings.md %q, accepted %v, counts %v, dev events %q (err %v)", r.Checks[0].Result, md, s.Accepted, s.Counts, lines, err)
+	}
+	openRound(t, run)
+	r, err = round.Load(run, 2)
+	if r.Final = true; err != nil || round.Save(run, r) != nil {
+		t.Fatalf("mark round 2 final: load err %v, or the save failed", err)
+	}
+	writeVerdict(t, run, 2, "reviewer", "accept")
+	if s, _, _ = closeRound(t, run, 2, "ACCEPT"); !reflect.DeepEqual(s.Accepted, map[string]int{"research": 1}) {
+		t.Fatalf("accepted after a final round %v; want research 1", s.Accepted)
+	}
+}
+
+// A block with one blocker gives FIX, counts 1 for the blocking persona of the round phase, sets no
+// Accepted, and copies the finding byte for byte. A block of the advisory reader counts nothing.
+func TestRoundCloseBlockCounts(t *testing.T) {
+	run := newLoopRun(t)
+	f := round.Finding{ID: "F1", Severity: "blocker", Problem: "The page says `fsync`.\n\n- It never runs.", Evidence: "store.go:44", Ask: "Cite the *rename*."}
+	sec := "## reviewer (blocking): block\n\n### F1 (blocker)\nProblem: The page says `fsync`.\n\n- It never runs.\nEvidence: store.go:44\nAsk: Cite the *rename*.\n"
+	submitFile(t, run, "a.md", "one\n")
+	openRound(t, run)
+	writeVerdict(t, run, 1, "reviewer", "block", f)
+	s, r, md := closeRound(t, run, 1, "FIX")
+	if r.Checks[0].Result != "block" || md != "# Round 1 findings\n\n"+sec || !reflect.DeepEqual(s.Counts, map[string]map[string]int{"research": {"reviewer": 1}}) || s.Accepted != nil {
+		t.Fatalf("result %q, findings.md %q, counts %v, accepted %v", r.Checks[0].Result, md, s.Counts, s.Accepted)
+	}
+	if err := state.Update(store.Dir{Root: run}, func(s *state.State) error { s.Phase = "design"; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	submitFile(t, run, "a.md", "two\n")
+	openRound(t, run)
+	writeVerdict(t, run, 2, "reviewer", "block", f)
+	writeVerdict(t, run, 2, "reader", "block", f)
+	s, _, md = closeRound(t, run, 2, "FIX")
+	if want := map[string]map[string]int{"research": {"reviewer": 1}, "design": {"reviewer": 1}}; !reflect.DeepEqual(s.Counts, want) ||
+		md != "# Round 2 findings\n\n"+sec+"\n"+strings.Replace(sec, "reviewer (blocking)", "reader (advisory)", 1) {
+		t.Fatalf("design: counts %v, findings.md %q; want %v", s.Counts, md, want)
+	}
+}
+
+// A missing verdict file gives the result missing, and a block verdict of check 9-reviewer at the
+// path of 1-reviewer is invalid (R18). Each gives FIX with no count and no Accepted.
+func TestRoundCloseMissingVerdictIsFix(t *testing.T) {
+	for _, tc := range []struct {
+		write  bool
+		result string
+	}{{false, "missing"}, {true, "invalid: check 9-reviewer: want 1-reviewer"}} {
+		run := newLoopRun(t)
+		submitFile(t, run, "a.md", "one\n")
+		openRound(t, run)
+		v := round.Verdict{Persona: "reviewer", Check: "9-reviewer", Verdict: "block", Findings: []round.Finding{{ID: "F1", Severity: "blocker"}}}
+		if tc.write && store.WriteJSON(round.Path(run, 1, "verdicts", "1-reviewer.json"), v) != nil {
+			t.Fatal("write the verdict of 9-reviewer")
+		}
+		s, r, md := closeRound(t, run, 1, "FIX")
+		if res := r.Checks[0].Result; res != tc.result || md != "# Round 1 findings\n\n## reviewer (blocking): "+res+"\n" || len(s.Counts) != 0 || s.Accepted != nil {
+			t.Errorf("result %q, findings.md %q, counts %v, accepted %v; want %q", res, md, s.Counts, s.Accepted, tc.result)
+		}
+	}
+}
+
+// round close checks usage, then renews brain, then needs an open round: none yet, or one that is
+// closed, gives 2. No refusal writes state.json, a file under rounds/, or an event.
+func TestRoundCloseNeedsOpenRound(t *testing.T) {
+	run := newLoopRun(t)
+	d := store.Dir{Root: run}
+	submitFile(t, run, "a.md", "one\n")
+	closed := func() {
+		openRound(t, run)
+		writeVerdict(t, run, 1, "reviewer", "accept")
+		closeRound(t, run, 1, "ACCEPT")
+	}
+	for i, tc := range []struct {
+		setup func()
+		args  []string
+		code  int
+		e     string // stderr after "monet-source: "
+	}{
+		{nil, []string{"--holder", "h1"}, exit.Refused, "round close: no round is open"},
+		{nil, []string{"--holder", "h2"}, exit.Held, "lock held: brain is not held by h2"},
+		{nil, []string{"x", "--holder", "h1"}, exit.Usage, "usage: monet-source round close --holder <session>"},
+		{closed, []string{"--holder", "h1"}, exit.Refused, "round close: no round is open"},
+	} {
+		if tc.setup != nil {
+			tc.setup()
+		}
+		before, files, evs := readOr(t, d.State()), roundFiles(t, run), readOr(t, d.Events())
+		_, e, code := runSource(t, &Ctx{Run: run}, append([]string{"round", "close"}, tc.args...)...)
+		if code != tc.code || e != "monet-source: "+tc.e+"\n" || readOr(t, d.State()) != before || roundFiles(t, run) != files || readOr(t, d.Events()) != evs {
+			t.Errorf("row %d: code %d, stderr %q, or a write; want %d, %q", i, code, e, tc.code, tc.e)
+		}
+	}
+}
+
+// Each block adds 1 to the count of its persona, and an ACCEPT keeps the Accepted entries of the
+// other phases. Both key by the round phase, also when the state phase moves while the round is open.
+// FINDINGS names the round number (round 1 checks v2) and the outcome of each round.
+func TestRoundCloseAcrossRounds(t *testing.T) {
+	run := newLoopRun(t)
+	d := store.Dir{Root: run}
+	phase := func(p string) {
+		if err := state.Update(d, func(s *state.State) error { s.Phase = p; return nil }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	findings := map[string][]round.Finding{"block": {{ID: "F1", Severity: "blocker"}}}
+	submitFile(t, run, "a.md", "one\n")
+	for i, tc := range [][2]string{{"block", "FIX"}, {"block", "FIX"}, {"accept", "ACCEPT"}} {
+		phase("research")
+		submitFile(t, run, "a.md", fmt.Sprintf("research %d\n", i))
+		openRound(t, run)
+		writeVerdict(t, run, i+1, "reviewer", tc[0], findings[tc[0]]...)
+		phase("design")
+		closeRound(t, run, i+1, tc[1])
+	}
+	submitFile(t, run, "a.md", "design\n")
+	openRound(t, run)
+	writeVerdict(t, run, 4, "reviewer", "accept")
+	writeVerdict(t, run, 4, "reader", "accept")
+	s, _, _ := closeRound(t, run, 4, "ACCEPT")
+	lines, _, err := events.For(d, "dev", 0)
+	want := []string{"FINDINGS 1 FIX", "FINDINGS 2 FIX", "FINDINGS 3 ACCEPT", "FINDINGS 4 ACCEPT"}
+	if !reflect.DeepEqual(s.Counts, map[string]map[string]int{"research": {"reviewer": 2}}) ||
+		!reflect.DeepEqual(s.Accepted, map[string]int{"research": 4, "design": 1}) || err != nil || !reflect.DeepEqual(lines, want) {
+		t.Fatalf("counts %v, accepted %v, dev events %q (err %v); want research reviewer 2, research 4 and design 1, %q", s.Counts, s.Accepted, lines, err, want)
 	}
 }
