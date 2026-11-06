@@ -18,6 +18,10 @@ type State struct {
 	Phase   string    `json:"phase"`
 	Sealed  *Seal     `json:"sealed,omitempty"`
 	Amends  []Seal    `json:"amends,omitempty"` // one entry for each charter amend, oldest first
+	// Briefs maps a persona id to the hash of its brief in <run>/personas/<id>.md, and
+	// BriefCards maps it to the hash of the JSON of the card that the brief expands.
+	Briefs     map[string]string `json:"briefs,omitempty"`
+	BriefCards map[string]string `json:"brief_cards,omitempty"`
 }
 
 // Seal is the confirmation of the charter: the id of the owner words, when the

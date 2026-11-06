@@ -1,8 +1,10 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -121,15 +123,26 @@ func charterSeal(c *Ctx, args []string) error {
 	})
 }
 
-// charterAmend appends an amend to Amends. A run with no seal gives exit 2.
+// charterAmend appends an amend to Amends. A run with no seal gives exit 2. It drops the brief
+// hash of each card whose JSON changed, and only after a clean amend it removes their brief
+// files, so a failed amend keeps each brief with its hash.
 func charterAmend(c *Ctx, args []string) error {
-	return confirmCharter(c, "amend", args, func(s *state.State, seal state.Seal, _ *charter.Charter) error {
+	var dropped []string
+	if err := confirmCharter(c, "amend", args, func(s *state.State, seal state.Seal, ch *charter.Charter) error {
 		if s.Sealed == nil {
 			return exit.New(exit.Refused, "charter not sealed: seal it before an amend")
 		}
-		s.Amends = append(s.Amends, seal)
+		s.Amends, dropped = append(s.Amends, seal), dropChangedBriefs(s, ch)
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
+	for _, id := range dropped {
+		if err := os.Remove(filepath.Join(store.Dir{Root: c.Run}.Personas(), id+".md")); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
+	return nil
 }
 
 // confirmCharter renews brain, then needs a clean lint, the entry --words in owner-words.md, a
