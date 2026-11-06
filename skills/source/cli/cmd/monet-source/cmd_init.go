@@ -22,7 +22,7 @@ var slugRE = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 // runFolders are the folders that init makes in <run>.
 var runFolders = []string{"locks", "relay", "personas", "artifacts", "rounds", "items", "handoff", "notes", "dev", "watch", "bin"}
 
-// cmdInit checks the slug and that <run> has no state.json, takes brain for
+// cmdInit checks the slug, the run home (runHome), and that <run> has no state.json, takes brain for
 // 12 hours, then makes the run folders and writes state.json. A refused init
 // (exit 64, 2, or 4) changes nothing. A failed mkdir or write (exit 1) keeps
 // the lease and writes no state.json, so the holder can run init again.
@@ -39,6 +39,9 @@ func cmdInit(c *Ctx, args []string) error {
 	}
 	if base := filepath.Base(c.Run); !slugRE.MatchString(*slug) || *slug != base {
 		return exit.New(exit.Usage, "init: slug %q must match %s and equal the run folder name %q", *slug, slugRE, base)
+	}
+	if _, err := runHome(c.Run); err != nil {
+		return err
 	}
 	d := store.Dir{Root: c.Run}
 	if _, err := os.Lstat(d.State()); err == nil {

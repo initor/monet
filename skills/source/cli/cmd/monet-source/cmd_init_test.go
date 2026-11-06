@@ -18,11 +18,11 @@ import (
 // initUsage fails a test.
 const wantInitUsage = "usage: monet-source init --slug <slug> --holder <session>"
 
-// newRun makes the folder <temp>/<name> and returns its real path.
+// newRun makes the folder <temp>/.planning/source/<name> and returns its real path.
 func newRun(t *testing.T, name string) string {
 	t.Helper()
-	run := filepath.Join(realTempDir(t), name)
-	if err := os.Mkdir(run, 0o755); err != nil {
+	run := filepath.Join(realTempDir(t), ".planning", "source", name)
+	if err := os.MkdirAll(run, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	return run
@@ -122,6 +122,30 @@ func TestInitRefusesSecond(t *testing.T) {
 	}
 }
 
+// A run that is not at <home>/.planning/source/<slug> is exit 2 and writes
+// nothing. The slug check comes first, and the home check comes before the
+// state check.
+func TestInitRefusesHomeShape(t *testing.T) {
+	run := filepath.Join(realTempDir(t), "demo")
+	if err := os.Mkdir(run, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	want := "monet-source: run " + run + " is not at <home>/.planning/source/<slug>\n"
+	_, e, code := runSource(t, &Ctx{Run: run}, "init", "--slug", "demo", "--holder", "h1")
+	if got := listRun(t, run); code != exit.Refused || e != want || got != "" {
+		t.Errorf("code %d, stderr %q, run holds %q", code, e, got)
+	}
+	if _, e, code := runSource(t, &Ctx{Run: run}, "init", "--slug", "other", "--holder", "h1"); code != exit.Usage {
+		t.Errorf("bad slug: code %d, stderr %q", code, e)
+	}
+	if err := os.Mkdir(store.Dir{Root: run}.State(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, e, code := runSource(t, &Ctx{Run: run}, "init", "--slug", "demo", "--holder", "h1"); code != exit.Refused || e != want || listRun(t, run) != "state.json/" {
+		t.Errorf("with state: code %d, stderr %q, run holds %q", code, e, listRun(t, run))
+	}
+}
+
 // When the state check, the lease, a folder, or the state.json write fails,
 // init is exit 1 and leaves no state.json, and the holder can run init again.
 func TestInitFailsWithoutState(t *testing.T) {
@@ -151,9 +175,9 @@ func TestInitFailsWithoutState(t *testing.T) {
 		t.Errorf("corrupt lease: code %d, stderr %q, run holds %q", code, e, listRun(t, corrupt))
 	}
 	// A state.json path past PATH_MAX (locks still fits) fails the Lstat: exit 1, no lease.
-	long := filepath.Join(realTempDir(t), "demo")
+	long := filepath.Join(realTempDir(t), ".planning", "source", "demo")
 	for _, err := os.Lstat(long + "/state.json"); os.IsNotExist(err); _, err = os.Lstat(long + "/state.json") {
-		long = filepath.Join(filepath.Dir(long), "pppp", "demo")
+		long = filepath.Join(filepath.Dir(filepath.Dir(filepath.Dir(long))), "pppp", ".planning", "source", "demo")
 	}
 	if err := os.MkdirAll(long, 0o755); err != nil {
 		t.Fatal(err)
