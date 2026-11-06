@@ -105,6 +105,26 @@ func Renew(dir, name, holder string, ttl time.Duration, now time.Time) error {
 	})
 }
 
+// Takeover gives the lease that from holds to the holder to, until now+ttl.
+// Unless the lease file names from and now is before its expiry, it returns
+// ErrHeld and the file stays as it was. A missing file reads as a zero lease,
+// which always fails that check.
+func Takeover(dir, name, from, to string, ttl time.Duration, now time.Time) error {
+	if err := validate(name, to, ttl); err != nil {
+		return err
+	}
+	return WithMutex(filepath.Join(dir, name+".mutex"), func() error {
+		cur, _, err := Read(dir, name)
+		if err != nil {
+			return err
+		}
+		if cur.Holder != from || !now.Before(cur.Expires) {
+			return fmt.Errorf("%w: %s is not held by %s", ErrHeld, name, from)
+		}
+		return write(dir, Lease{Name: name, Holder: to, Expires: now.Add(ttl)})
+	})
+}
+
 // Release removes the lease. Releasing a free lock is a no-op. Another
 // holder gets ErrHeld and the lease stays.
 func Release(dir, name, holder string) error {

@@ -155,7 +155,7 @@ func TestReadRefuses(t *testing.T) {
 }
 
 // TestLeaseRules walks one lease through a take, a renew by acquire, a
-// takeover at expiry, a lost renew, and release. After each step Read gives
+// new take at expiry, a lost renew, and release. After each step Read gives
 // the holder and the expiry (as an offset from t0) that the row names.
 func TestLeaseRules(t *testing.T) {
 	d, t0, hr, m := t.TempDir(), testNow, time.Hour, time.Minute
@@ -181,8 +181,10 @@ func TestLeaseRules(t *testing.T) {
 		{"step 3", acq("h1", 30*m, 90*m), nil, "", "h1", 90 * m},
 		{"step 4", acq("h2", 90*m, 150*m), nil, "", "h2", 150 * m},
 		{"step 5", func() error { return Renew(d, "brain", "h1", hr, t0.Add(91*m)) }, ErrHeld, "", "h2", 150 * m},
+		{"takeover by h1", func() error { return Takeover(d, "brain", "h1", "h3", hr, t0.Add(92*m)) }, ErrHeld, "brain is not held by h1", "h2", 150 * m},
 		{"renew by h2", func() error { return Renew(d, "brain", "h2", hr, t0.Add(100*m)) }, nil, "", "h2", 160 * m},
 		{"step 6", func() error { return Release(d, "brain", "h1") }, ErrHeld, "", "h2", 160 * m},
+		{"takeover h2 to h2", func() error { return Takeover(d, "brain", "h2", "h2", 2*hr, t0.Add(101*m)) }, nil, "", "h2", 221 * m},
 		{"step 7 first release", func() error { return Release(d, "brain", "h2") }, nil, "", "", 0},
 		{"step 7 second release", func() error { return Release(d, "brain", "h2") }, nil, "", "", 0},
 	} {
@@ -214,6 +216,9 @@ func TestLeaseValidation(t *testing.T) {
 		"renew zero ttl":       func() error { return Renew(d, "brain", "h1", 0, testNow) },
 		"release bad name":     func() error { return Release(d, "a/b", "h1") },
 		"release empty holder": func() error { return Release(d, "brain", "") },
+		"takeover bad name":    func() error { return Takeover(d, "a/b", "h1", "h2", hr, testNow) },
+		"takeover empty to":    func() error { return Takeover(d, "brain", "h1", "", hr, testNow) },
+		"takeover zero ttl":    func() error { return Takeover(d, "brain", "h1", "h2", 0, testNow) },
 	} {
 		if err := call(); err == nil || errors.Is(err, ErrHeld) {
 			t.Errorf("%s: err %v, want a validation error", name, err)
@@ -229,7 +234,7 @@ func TestLeaseValidation(t *testing.T) {
 }
 
 // A lease file that fails the strict decode is an error for Acquire, Renew,
-// and Release, not ErrHeld, and the file stays as it was.
+// Release, and Takeover, not ErrHeld, and the file stays as it was.
 func TestLeaseReadErrors(t *testing.T) {
 	d, hr := t.TempDir(), time.Hour
 	p := filepath.Join(d, "brain.json")
@@ -238,6 +243,7 @@ func TestLeaseReadErrors(t *testing.T) {
 		"acquire": func() error { _, err := Acquire(d, "brain", "h2", hr, testNow); return err },
 		"renew":   func() error { return Renew(d, "brain", "h1", hr, testNow) },
 		"release": func() error { return Release(d, "brain", "h1") },
+		"handoff": func() error { return Takeover(d, "brain", "h1", "h2", hr, testNow) },
 	} {
 		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
 			t.Fatal(err)
@@ -247,6 +253,73 @@ func TestLeaseReadErrors(t *testing.T) {
 		}
 		if b, err := os.ReadFile(p); err != nil || string(b) != body {
 			t.Errorf("%s: lease file changed (err %v)", name, err)
+		}
+	}
+}
+
+// A takeover moves the lease from d1 only while d1 holds it unexpired. Each
+// row starts on a fresh dir, with or without Acquire(d, "dev", "d1", 1h, t0),
+// and Read then gives the holder and the expiry (as an offset from t0) that
+// the row names. Every refusal leaves the dir as it was.
+func TestTakeoverNeedsLiveOldHolder(t *testing.T) {
+	t0, hr, m := testNow, time.Hour, time.Minute
+	for _, tc := range []struct {
+		row      string
+		acquire  bool
+		from, to string
+		at       time.Duration
+		held     bool
+		want     string
+		holder   string
+		exp      time.Duration
+		files    int
+	}{
+		{"row 1", true, "d1", "d2", 30 * m, false, "", "d2", 90 * m, 1},
+		{"row 1b", true, "d1", "d2", hr - time.Nanosecond, false, "", "d2", 2*hr - time.Nanosecond, 1},
+		{"row 2", true, "d1", "d2", hr, true, "lock held: dev is not held by d1", "d1", hr, 1},
+		{"row 3", true, "d3", "d2", 0, true, "lock held: dev is not held by d3", "d1", hr, 1},
+		{"row 2b", true, "d1", "d1", hr, true, "lock held: dev is not held by d1", "d1", hr, 1},
+		{"row 3b", true, "d3", "d1", 30 * m, true, "lock held: dev is not held by d3", "d1", hr, 1},
+		{"row 3c", true, "d3", "d3", 0, true, "lock held: dev is not held by d3", "d1", hr, 1},
+		{"row 4", false, "d1", "d2", 0, true, "lock held: dev is not held by d1", "", 0, 0},
+		{"row 5", false, "d1", "", 0, false, "lock holder is empty", "", 0, 0},
+	} {
+		d := t.TempDir()
+		if tc.acquire {
+			if _, err := Acquire(d, "dev", "d1", hr, t0); err != nil {
+				t.Fatal(err)
+			}
+		}
+		err := Takeover(d, "dev", tc.from, tc.to, hr, t0.Add(tc.at))
+		got := ""
+		if err != nil {
+			got = err.Error()
+		}
+		if got != tc.want || errors.Is(err, ErrHeld) != tc.held {
+			t.Errorf("%s: err %v, want %q (ErrHeld %v)", tc.row, err, tc.want, tc.held)
+		}
+		l, ok, rerr := Read(d, "dev")
+		if rerr != nil || ok != (tc.holder != "") || l.Holder != tc.holder || (ok && !l.Expires.Equal(t0.Add(tc.exp))) {
+			t.Errorf("%s: Read = %+v, %v, %v, want %q until t0+%s", tc.row, l, ok, rerr, tc.holder, tc.exp)
+		}
+		if ents, err := os.ReadDir(d); err != nil || len(ents) != tc.files {
+			t.Errorf("%s: dir holds %d entries (err %v), want %d", tc.row, len(ents), err, tc.files)
+		}
+	}
+}
+
+// Takeover runs under the mutex of the lease: for brain and for dev, a
+// 9.5-second-old <name>.mutex holds it until that mutex turns stale.
+func TestTakeoverWaitsForMutex(t *testing.T) {
+	d := t.TempDir()
+	for _, name := range []string{"brain", "dev"} {
+		if _, err := Acquire(d, name, "d1", time.Hour, testNow); err != nil {
+			t.Fatal(err)
+		}
+		ageMutex(t, filepath.Join(d, name+".mutex"), 9500*time.Millisecond)
+		start := time.Now()
+		if err := Takeover(d, name, "d1", "d2", time.Hour, testNow); err != nil || time.Since(start) < 200*time.Millisecond {
+			t.Fatalf("%s: err %v after %s, want nil after the mutex turns stale", name, err, time.Since(start))
 		}
 	}
 }
