@@ -44,6 +44,20 @@ type packetWaiting struct {
 	Walls []packetWall `json:"walls"`
 }
 
+// packetDecision is one row of decisions.tsv.
+type packetDecision struct {
+	At       string `json:"at"`
+	By       string `json:"by"`
+	Decision string `json:"decision"`
+	Reason   string `json:"reason"`
+}
+
+// packetLine is one row of log.tsv.
+type packetLine struct {
+	At   string `json:"at"`
+	Line string `json:"line"`
+}
+
 // packet is the JSON object that report prints for the page (R27).
 type packet struct {
 	Slug        string                    `json:"slug"`
@@ -55,8 +69,8 @@ type packet struct {
 	Counts      map[string]map[string]int `json:"counts"`
 	Changed     string                    `json:"changed"`
 	Waiting     packetWaiting             `json:"waiting"`
-	Decisions   []any                     `json:"decisions"`
-	Log         []any                     `json:"log"`
+	Decisions   []packetDecision          `json:"decisions"`
+	Log         []packetLine              `json:"log"`
 	LogNext     int                       `json:"log_next"`
 	Diagram     string                    `json:"diagram"`
 	LastWrite   *time.Time                `json:"last_write"`
@@ -64,8 +78,9 @@ type packet struct {
 	Verdicts    []any                     `json:"verdicts,omitempty"`
 }
 
-// buildPacket reads the charter, the state, the newest round, and the waiting items and walls of the run in d.
-// The round is nil before the first round, and the diagram is none.
+// buildPacket reads the charter, the state, the decisions, the new log rows, the newest round, and the waiting items
+// and walls of the run in d. The log starts at report_row, log_next is the log row count, and changed is the at of
+// the last log row (R28). The round is nil before the first round, and the diagram is none.
 func buildPacket(d store.Dir) (packet, error) {
 	ch, err := charter.Load(d.Charter())
 	if err != nil {
@@ -77,6 +92,24 @@ func buildPacket(d store.Dir) (packet, error) {
 	}
 	p := packet{Slug: s.Slug, Page: ch.Page, Goal: ch.Goal, Deliverable: ch.Deliverable, Phase: firstSet(s.Phase, "kickoff"),
 		Counts: s.Counts, Diagram: "none", LastWrite: s.LastReport}
+	decs, err := store.ReadTSV(d.Path("decisions.tsv"), decisionHeader)
+	if err != nil {
+		return packet{}, err
+	}
+	rows, err := store.ReadTSV(d.Log(), logHeader)
+	if err != nil {
+		return packet{}, err
+	}
+	p.Decisions, p.Log, p.LogNext = make([]packetDecision, 0, len(decs)), make([]packetLine, 0, len(rows)), len(rows)
+	for _, r := range decs {
+		p.Decisions = append(p.Decisions, packetDecision{r[0], r[1], r[2], r[3]})
+	}
+	for _, r := range rows[min(s.ReportRow, len(rows)):] {
+		p.Log = append(p.Log, packetLine{r[0], r[1]})
+	}
+	if len(rows) > 0 {
+		p.Changed = rows[len(rows)-1][0]
+	}
 	if s.Round > 0 {
 		r, err := round.Load(d.Root, s.Round)
 		if err != nil {
