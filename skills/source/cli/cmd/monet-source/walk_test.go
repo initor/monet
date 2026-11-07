@@ -11,6 +11,7 @@ import (
 	"source/internal/exit"
 	"source/internal/round"
 	"source/internal/store"
+	"source/internal/testkit"
 	"source/internal/words"
 )
 
@@ -19,10 +20,10 @@ import (
 // give its exit code, and events.tsv must hold the whole walk in order (source.md:363).
 func TestWalkRun(t *testing.T) {
 	run := newSealableRun(t)
-	d := store.Dir{Root: run}
+	d, skill := store.Dir{Root: run}, testkit.Skill(t)
 	step := func(want int, stdin string, args ...string) string {
 		t.Helper()
-		out, e, code := runSource(t, &Ctx{Run: run, SkillDir: "/s", Stdin: strings.NewReader(stdin)}, args...)
+		out, e, code := runSource(t, &Ctx{Run: run, SkillDir: skill, Stdin: strings.NewReader(stdin)}, args...)
 		if code != want {
 			t.Fatalf("%q: code %d, stdout %q, stderr %q; want %d", args, code, out, e, want)
 		}

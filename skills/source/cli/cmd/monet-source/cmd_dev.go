@@ -6,6 +6,7 @@ import (
 
 	"source/internal/exit"
 	"source/internal/lock"
+	"source/internal/relay"
 	"source/internal/state"
 	"source/internal/store"
 )
@@ -15,9 +16,11 @@ func init() { commands["dev"] = subcommands("dev", devSubs) }
 // devSubs maps each dev subcommand to its handler. Later dev commands add to it.
 var devSubs = map[string]func(c *Ctx, args []string) error{"hello": devHello, "beat": devBeat, "takeover": devTakeover, "start": devStart}
 
-// devStart needs a skill dir, renews brain, and needs a seal. Then it makes <run>/dev when
-// missing, writes the kickoff <run>/handoff/dev-<stamp>.md (R4), and prints the command that
-// starts the developer. It runs nothing (call 14).
+// devStart needs a skill dir, renews brain, needs a seal, and reads the relay steps of the skill
+// (exit 2). Then it makes <run>/dev when missing, copies the steps to <run>/relay/dev.md, writes
+// the config of <run>/dev over any old one (R5, R9), writes the kickoff
+// <run>/handoff/dev-<stamp>.md (R4), and prints the command that starts the developer. It runs
+// nothing (call 14).
 func devStart(c *Ctx, args []string) error {
 	fs := newFlagSet("dev start")
 	holder := fs.String("holder", "", "the brain lease holder")
@@ -39,7 +42,16 @@ func devStart(c *Ctx, args []string) error {
 	if s.Sealed == nil {
 		return exit.New(exit.Refused, "dev start: seal the charter first")
 	}
+	steps, err := relaySteps("dev start", skill)
+	if err != nil {
+		return err
+	}
+	devSteps := d.Path("relay", "dev.md")
 	if err := os.MkdirAll(d.Path("dev"), 0o755); err != nil {
+		return err
+	} else if err := store.WriteFileAtomic(devSteps, steps, 0o644); err != nil {
+		return err
+	} else if err := relay.WriteConfig(d.Path("dev"), devSteps); err != nil {
 		return err
 	}
 	kick := d.Path("handoff", "dev-"+c.Now().UTC().Format("20060102T150405Z")+".md")

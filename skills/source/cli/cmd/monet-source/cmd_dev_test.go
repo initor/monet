@@ -11,8 +11,10 @@ import (
 	"source/internal/events"
 	"source/internal/exit"
 	"source/internal/lock"
+	"source/internal/relay"
 	"source/internal/state"
 	"source/internal/store"
+	"source/internal/testkit"
 )
 
 // devStep is one dev call at testNow+at and the lease, Dev, and LastBeat (-1 for none) after it.
@@ -78,7 +80,8 @@ func TestDevStart(t *testing.T) {
 	t.Setenv("PATH", bin+":/usr/bin:/bin")
 	run := newSealableRun(t)
 	t.Setenv("SOURCE_SKILL", "") // newRun set it for init
-	d, c := store.Dir{Root: run}, &Ctx{Run: run, SkillDir: "/s"}
+	s1, s2 := testkit.Skill(t), testkit.Skill(t)
+	d, c := store.Dir{Root: run}, &Ctx{Run: run, SkillDir: s1}
 	if out, e, code := runSource(t, c, "dev", "start", "--holder", "h1"); code != exit.Refused || out != "" || e != "monet-source: dev start: seal the charter first\n" {
 		t.Fatalf("before the seal: code %d, stdout %q, stderr %q", code, out, e)
 	}
@@ -115,22 +118,31 @@ func TestDevStart(t *testing.T) {
 		t.Fatalf("failed write: code %d, stdout %q, stderr %q; want %d, no stdout", code, out, e, exit.User)
 	}
 	// A read-only old kickoff is replaced, which only an atomic write (rename) can do.
-	if err := os.RemoveAll(kick0); err != nil || os.WriteFile(kick0, []byte("old\n"), 0o444) != nil || os.Remove(d.Path("dev")) != nil {
+	if err := os.RemoveAll(kick0); err != nil || os.WriteFile(kick0, []byte("old\n"), 0o444) != nil || os.RemoveAll(d.Path("dev")) != nil {
 		t.Fatalf("setup of the old kickoff and dev/ failed: %v", err)
 	}
 	pst := func() time.Time { return testNow.Add(time.Minute).In(time.FixedZone("PST", -8*3600)) }
 	for _, tc := range []struct {
 		now                func() time.Time
 		stamp, slug, skill string
-	}{{nil, "20261101T120000Z", "demo", "/s"}, {pst, "20261101T120100Z", "other", "/t"}} { // the first remakes dev/, the second keeps it
+	}{{nil, "20261101T120000Z", "demo", s1}, {pst, "20261101T120100Z", "other", s2}} { // the first remakes dev/, the second keeps it
 		if err := state.Update(d, func(s *state.State) error { s.Slug = tc.slug; return nil }); err != nil {
 			t.Fatal(err)
+		}
+		if tc.skill == s2 { // an old config in dev/ is replaced
+			if err := os.WriteFile(relay.ConfigPath(d.Path("dev")), []byte(`{"procedure": "x"}`), 0o644); err != nil {
+				t.Fatal(err)
+			}
 		}
 		kick := d.Path("handoff", "dev-"+tc.stamp+".md")
 		out, e, code := runSource(t, &Ctx{Run: run, SkillDir: tc.skill, Now: tc.now}, "dev", "start", "--holder", "h1")
 		got, err := os.ReadFile(kick)
 		if fi, serr := os.Stat(d.Path("dev")); code != exit.OK || e != "" || out != devStartCommand(tc.slug, run, kick)+"\n" || err != nil || string(got) != devKickoff(tc.slug, run, tc.skill) || serr != nil || !fi.IsDir() {
 			t.Fatalf("%s: code %d, stdout %q, stderr %q, kickoff %q (err %v), dev/ err %v", tc.stamp, code, out, e, got, err, serr)
+		}
+		steps, err := os.ReadFile(d.Path("relay", "dev.md"))
+		if cfg, found, cerr := relay.ReadConfig(d.Path("dev")); err != nil || string(steps) != testkit.RelayText || cerr != nil || !found || cfg.Procedure != d.Path("relay", "dev.md") {
+			t.Fatalf("%s: relay/dev.md %q (err %v), config %+v found %v (err %v)", tc.stamp, steps, err, cfg, found, cerr)
 		}
 	}
 	checkLease(t, run, "brain", testNow.Add(time.Minute+12*time.Hour))
@@ -164,4 +176,26 @@ func TestDevTakeover(t *testing.T) {
 		{"hello --holder d1", "", "d1", exit.OK, 0, 0, at12},
 		{"takeover --from d1 --holder d2", "", "d2", exit.OK, time.Hour, time.Hour, testNow.Add(13 * time.Hour)},
 	})
+}
+
+// start with a skill dir that has no reference/relay.md is exit 2 after the seal check, and it writes no kickoff and no dev config.
+func TestDevStartNeedsRelaySteps(t *testing.T) {
+	run, skill := newSealableRun(t), realTempDir(t)
+	if _, e, code := runSource(t, &Ctx{Run: run, SkillDir: skill}, "dev", "start", "--holder", "h1"); e != "monet-source: dev start: seal the charter first\n" {
+		t.Fatalf("before the seal: code %d, stderr %q", code, e)
+	}
+	if _, e, code := runSource(t, &Ctx{Run: run}, "charter", "seal", "--words", "w1", "--holder", "h1"); code != exit.OK {
+		t.Fatalf("seal: code %d, stderr %q", code, e)
+	}
+	d := store.Dir{Root: run}
+	want := "monet-source: dev start: " + filepath.Join(skill, "reference", "relay.md") + ": no such file or directory\n"
+	if out, e, code := runSource(t, &Ctx{Run: run, SkillDir: skill}, "dev", "start", "--holder", "h1"); code != exit.Refused || out != "" || e != want {
+		t.Fatalf("code %d, stdout %q, stderr %q; want %d with %q", code, out, e, exit.Refused, want)
+	}
+	if got := listRun(t, d.Path("handoff")); got != "" {
+		t.Errorf("handoff/ holds %q; want nothing", got)
+	}
+	if _, err := os.Lstat(d.Path("dev", ".claude")); !os.IsNotExist(err) {
+		t.Errorf("dev/.claude lstat: %v; want it absent", err)
+	}
 }
