@@ -40,8 +40,9 @@ func relaySteps(cmd, skill string) ([]byte, error) {
 
 // cmdInit checks the slug, runHome, the relay steps of the skill, and that <run> has no state.json,
 // takes brain for 12 hours, makes the run folders, copies the steps to relay/brain.md, writes the
-// config of <home> unless it names another procedure or cannot be read (R7), and writes state.json
-// last. A refusal (exit 64, 2, or 4) changes nothing, and a failed write (exit 1) leaves no state.json.
+// config of <home> unless it names another procedure or cannot be read (R7), adds the run lines to
+// the local git exclude of <home> (R8), and writes state.json last. A refusal (exit 64, 2, or 4)
+// changes nothing, and a failed write (exit 1) leaves no state.json.
 func cmdInit(c *Ctx, args []string) error {
 	flags := newFlagSet("init")
 	slug := flags.String("slug", "", "the run slug, the base name of <run>")
@@ -91,6 +92,9 @@ func cmdInit(c *Ctx, args []string) error {
 		if err := relay.WriteConfig(home, brain); err != nil {
 			return err
 		}
+	}
+	if err := excludeRun(home); err != nil {
+		return err
 	}
 	return store.WriteJSON(d.State(), state.State{Version: 1, Slug: *slug, Created: now})
 }
