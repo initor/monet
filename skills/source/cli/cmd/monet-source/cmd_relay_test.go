@@ -6,11 +6,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"source/internal/exit"
 	"source/internal/testkit"
+	"source/internal/words"
 )
 
 // relay mute sets muted in the hook state of this session, keeps its other
@@ -233,5 +236,127 @@ func TestInHandoff(t *testing.T) {
 		if got, err := inHandoff(run, p); err == nil {
 			t.Errorf("%s passes as %q", p, got)
 		}
+	}
+}
+
+// ownerTranscript points the session s1 at a new config dir and writes its
+// transcript of entries.
+func ownerTranscript(t *testing.T, entries ...map[string]any) {
+	t.Helper()
+	config := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", config)
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "s1")
+	testkit.Transcript(t, config, "s1", entries...)
+}
+
+// relay words copies the typed messages of the session, without the relay
+// kickoff and the slash command, into owner-words.md with the edit u3 naming
+// u2, and prints the counts and the new ids. A second run adds nothing and
+// keeps the file byte for byte. It takes no lease, and it reads and appends
+// under <run>/locks/words.mutex.
+func TestRelayWordsCopies(t *testing.T) {
+	run, at := newRun(t, "demo"), "2026-01-02T03:04:05.000Z"
+	file, mutex, old := filepath.Join(run, "owner-words.md"), filepath.Join(run, "locks", "words.mutex"), appendWord
+	appendWord = func(p string, e words.Entry) error {
+		if _, err := os.Stat(mutex); err != nil {
+			return fmt.Errorf("append of %s outside the words mutex: %w", e.ID, err)
+		}
+		return words.Append(p, e)
+	}
+	defer func() { appendWord = old }()
+	msgs := []map[string]any{testkit.Typed("u1", "p0", "Go on."),
+		testkit.Typed("k1", "p1", "source relay kickoff: brain of run demo, from session x (s0)."),
+		testkit.Typed("c1", "p1", "<command-name>/clear</command-name>"), testkit.Typed("u2", "p1", "Use v1."), testkit.Typed("u3", "p1", "Use v2.")}
+	ownerTranscript(t, msgs...)
+	if out, e, code := runSource(t, &Ctx{Run: run}, "relay", "words"); code != exit.OK || out != "owner-words: 3 new, 3 in "+file+"\nu1\nu2\nu3\n" || e != "" {
+		t.Fatalf("first run: code %d, stdout %q, stderr %q", code, out, e)
+	}
+	want := []words.Entry{{ID: "u1", At: at, Text: "Go on."}, {ID: "u2", At: at, Text: "Use v1."}, {ID: "u3", At: at, Supersedes: "u2", Text: "Use v2."}}
+	before, err := os.ReadFile(file)
+	if got, rerr := words.Read(file); err != nil || rerr != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("words.Read = %+v, err %v %v", got, err, rerr)
+	}
+	if out, e, code := runSource(t, &Ctx{Run: run}, "relay", "words"); code != exit.OK || out != "owner-words: 0 new, 3 in "+file+"\n" || e != "" {
+		t.Errorf("second run: code %d, stdout %q, stderr %q", code, out, e)
+	}
+	if after, _ := os.ReadFile(file); string(after) != string(before) {
+		t.Errorf("the second run changed the file to %q", after)
+	}
+	// u4 lands in the file while the test holds the mutex, so the run that waits for it reads u4 and adds u5 once.
+	ownerTranscript(t, append(msgs, testkit.Typed("u4", "p2", "Ship it."), testkit.Typed("u5", "p3", "Done."), testkit.Typed("u5", "p3", "Done."))...)
+	done := make(chan string, 1)
+	writeText(t, mutex, "1\n")
+	go func() {
+		out, e, code := runSource(t, &Ctx{Run: run}, "relay", "words")
+		done <- fmt.Sprintf("%d %q %q", code, out, e)
+	}()
+	time.Sleep(200 * time.Millisecond)
+	err = words.Append(file, words.Entry{ID: "u4", At: at, Text: "Ship it."})
+	if rerr := os.Remove(mutex); err != nil || rerr != nil {
+		t.Fatalf("append u4 while the mutex is held: %v, remove: %v", err, rerr)
+	}
+	if got, want := <-done, fmt.Sprintf("0 %q \"\"", "owner-words: 1 new, 5 in "+file+"\nu5\n"); got != want {
+		t.Errorf("the run behind the mutex gives %s, want %s", got, want)
+	}
+	if got := listRun(t, run) + " | " + listRun(t, filepath.Join(run, "locks")); got != "locks/ owner-words.md | " {
+		t.Errorf("run holds %q", got)
+	}
+}
+
+// relay words gives 1 when the transcript holds no typed message and the file
+// no entry, 2 for a missing transcript or an entry that words.Check refuses
+// (before any append), and 64 for an extra word or flag, and then writes no
+// file. A directory transcript, a broken file or a failed append gives 1 and
+// keeps the file. A typed kickoff alone, or a file with an entry, is not a
+// wrong transcript, and a new message then lands through the default append.
+func TestRelayWordsRefuses(t *testing.T) {
+	run, pre := newRun(t, "demo"), "monet-source: "
+	file, gone := filepath.Join(run, "owner-words.md"), filepath.Join(run, "gone.jsonl")
+	for _, tc := range []struct {
+		entries     []map[string]any
+		args        []string
+		code        int
+		out, stderr string
+	}{
+		{[]map[string]any{testkit.Assistant(1, 0, 0), testkit.Queued("q1", "hi", "agent")}, nil, exit.User, "",
+			pre + "relay: no message from the user in the transcript, so it is the wrong transcript or its format changed\n"},
+		{[]map[string]any{testkit.Typed("u1", "p0", "Go on."), testkit.Typed("a b", "p1", "Use v1.")}, nil, exit.Refused, "",
+			pre + `relay words: entry a b: owner words: bad id "a b"` + "\n"},
+		{nil, []string{"--transcript", gone}, exit.Refused, "", pre + "relay words: no transcript at " + gone + "\n"},
+		{nil, []string{"--transcript", run}, exit.User, "", pre + "read " + run + ": is a directory\n"},
+		{nil, []string{"x"}, exit.Usage, "", pre + "usage: monet-source relay words [--transcript <path>]\n"},
+		{nil, []string{"--holder=x"}, exit.Usage, "", pre + "usage: monet-source relay words [--transcript <path>]\n"},
+		{[]map[string]any{testkit.Typed("k1", "p0", "source relay kickoff: dev of run demo, from session x (d0).")}, nil, exit.OK,
+			"owner-words: 0 new, 0 in " + file + "\n", ""},
+	} {
+		ownerTranscript(t, tc.entries...)
+		out, e, code := runSource(t, &Ctx{Run: run}, append([]string{"relay", "words"}, tc.args...)...)
+		if _, err := os.Stat(file); code != tc.code || out != tc.out || e != tc.stderr || !os.IsNotExist(err) {
+			t.Errorf("%q: code %d, stdout %q, stderr %q, file err %v", tc.args, code, out, e, err)
+		}
+	}
+	for _, tc := range []struct {
+		text, stderr string
+		entry        map[string]any
+	}{{"<!-- owner-words uuid=bad at -->\n", "line 1: bad header", testkit.Assistant(1, 0, 0)},
+		{"<!-- owner-words uuid=u0 at=x -->\nhi", "does not end in a newline", testkit.Typed("u1", "p0", "Go on.")}} {
+		writeText(t, file, tc.text)
+		ownerTranscript(t, tc.entry)
+		out, e, code := runSource(t, &Ctx{Run: run}, "relay", "words")
+		if after, _ := os.ReadFile(file); code != exit.User || out != "" || e != pre+"owner words: "+file+" "+tc.stderr+"\n" || string(after) != tc.text {
+			t.Errorf("file %q: code %d, stdout %q, stderr %q, file %q", tc.text, code, out, e, after)
+		}
+	}
+	if err := errors.Join(os.Remove(file), words.Append(file, words.Entry{ID: "u0", At: "x", Text: "hi"})); err != nil {
+		t.Fatal(err)
+	}
+	ownerTranscript(t, testkit.Assistant(1, 0, 0))
+	if out, e, code := runSource(t, &Ctx{Run: run}, "relay", "words"); code != exit.OK || out != "owner-words: 0 new, 1 in "+file+"\n" || e != "" {
+		t.Errorf("a file with an entry: code %d, stdout %q, stderr %q", code, out, e)
+	}
+	ownerTranscript(t, testkit.Typed("u9", "p0", "Go on."))
+	out, e, code := runSource(t, &Ctx{Run: run}, "relay", "words")
+	if got, err := words.Read(file); code != exit.OK || out != "owner-words: 1 new, 2 in "+file+"\nu9\n" || e != "" || err != nil || len(got) != 2 || got[1] != (words.Entry{ID: "u9", At: "2026-01-02T03:04:05.000Z", Text: "Go on."}) {
+		t.Errorf("the default append: code %d, stdout %q, stderr %q, words %+v, err %v", code, out, e, got, err)
 	}
 }
