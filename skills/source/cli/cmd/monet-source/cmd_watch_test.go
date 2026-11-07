@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -205,5 +207,145 @@ func TestWatchLoopBacksOff(t *testing.T) {
 	slept, stopAt = nil, 1
 	if r := loop("--interval", "5s"); r != (stopWatch{}) || !reflect.DeepEqual(slept, []time.Duration{5 * time.Second}) || reflect.ValueOf(old).Pointer() != reflect.ValueOf(time.Sleep).Pointer() {
 		t.Fatalf("--interval 5s: end %v, slept %v", r, slept)
+	}
+}
+
+// A watch that runs for hours with no page write and no beat records REPORT_DUE and DEV_SILENT in its first late
+// pass, once each in events.tsv and log.tsv, and only brain prints them. A pass of either role checks the clocks,
+// and a page write starts a new REPORT_DUE key.
+func TestWatchTimeEvents(t *testing.T) {
+	run := newLoopRun(t)
+	d := store.Dir{Root: run}
+	runAt := func(dt time.Duration, args ...string) string {
+		t.Helper()
+		now := testNow.Add(dt)
+		out, e, code := runSource(t, &Ctx{Run: run, Now: func() time.Time { return now }}, args...)
+		if code != exit.OK {
+			t.Fatalf("%q at +%v: code %d, stderr %q", args, dt, code, e)
+		}
+		return out
+	}
+	// lines reads the lines of events.tsv and of log.tsv.
+	lines := func() (evs, logs []string) {
+		t.Helper()
+		er, err1 := store.ReadTSV(d.Events(), events.Header)
+		lr, err2 := store.ReadTSV(d.Log(), logHeader)
+		if err1 != nil || err2 != nil {
+			t.Fatal(err1, err2)
+		}
+		for _, r := range er {
+			evs = append(evs, r[0])
+		}
+		for _, r := range lr {
+			logs = append(logs, r[1])
+		}
+		return evs, logs
+	}
+	brain, dev := []string{"watch", "--role", "brain", "--once"}, []string{"watch", "--role", "dev", "--once"}
+	due, silent, due2 := "REPORT_DUE 2026-11-01T12:00:00Z", "DEV_SILENT d1 2026-11-01T12:00:00Z", "REPORT_DUE 2026-11-01T16:21:00Z"
+	_, logs0 := lines()
+	if got := runAt(59*time.Minute+59*time.Second, brain...); got != "" {
+		t.Fatalf("brain pass at +59m59s printed %q", got)
+	}
+	if evs, _ := lines(); len(evs) != 0 {
+		t.Fatalf("brain pass at +59m59s recorded %q", evs)
+	}
+	for k := 61; k <= 260; k++ {
+		want := ""
+		if k == 61 {
+			want = due + "\n" + silent + "\n"
+		}
+		if got := runAt(time.Duration(k)*time.Minute, brain...); got != want {
+			t.Fatalf("brain pass at +%dm printed %q, want %q", k, got, want)
+		}
+	}
+	if evs, logs := lines(); !reflect.DeepEqual(evs, []string{due, silent}) || !reflect.DeepEqual(logs, slices.Concat(logs0, []string{due, silent})) {
+		t.Fatalf("after 200 passes: events %q, log %q", evs, logs)
+	}
+	_, logs := lines()
+	runAt(261*time.Minute, "report", "done", "--at", testNow.Add(261*time.Minute).Format(time.RFC3339), "--row", strconv.Itoa(len(logs)), "--holder", "h1")
+	if got := runAt(321*time.Minute, dev...); got != "" {
+		t.Fatalf("dev pass printed %q", got)
+	}
+	if evs, _ := lines(); !reflect.DeepEqual(evs, []string{due, silent, due2}) {
+		t.Fatalf("the dev pass left events %q, want the new REPORT_DUE recorded", evs)
+	}
+	if got := runAt(321*time.Minute, brain...); got != due2+"\n" {
+		t.Fatalf("brain pass after report done printed %q", got)
+	}
+	if evs, logs := lines(); !reflect.DeepEqual(evs, []string{due, silent, due2}) || !reflect.DeepEqual(logs, slices.Concat(logs0, []string{due, silent, due2})) {
+		t.Fatalf("after report done: events %q, log %q", evs, logs)
+	}
+	w3, row := 330*time.Minute+30*time.Second+7, strconv.Itoa(len(logs0)+3)
+	runAt(w3, "report", "done", "--at", testNow.Add(w3).Format(time.RFC3339Nano), "--row", row, "--holder", "h1")
+	if got := runAt(w3+time.Hour-1, brain...); got != "" {
+		t.Fatalf("brain pass 1 ns before the third clock printed %q", got)
+	}
+	if got := runAt(w3+time.Hour, brain...); got != "REPORT_DUE 2026-11-01T17:30:30.000000007Z\n" {
+		t.Fatalf("brain pass on the third clock printed %q", got)
+	}
+	if store.WriteFileAtomic(d.State(), []byte(`{"version": 1, "slug": "demo", "phase": "delivered", "sealed": {"words": "w1", "at": "2026-11-01T12:00:00Z", "hash": "h"}, "dev": "d1", "last_beat": "2026-11-01T20:00:00Z"}`), 0o644) != nil || runAt(10*time.Hour, brain...) != "" {
+		t.Fatal("a brain pass 2 hours after a beat of a delivered run printed a time event")
+	}
+}
+
+// A pass fails when a due event cannot reach events.tsv or log.tsv, and when state.json does not decode.
+func TestWatchTimeEventFailures(t *testing.T) {
+	run := newLoopRun(t)
+	d := store.Dir{Root: run}
+	late := func() time.Time { return testNow.Add(2 * time.Hour) }
+	emitAll(t, d, "VERSION research v1")
+	if err := os.Chmod(d.Events(), 0o444); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(d.Events(), 0o644) })
+	if out, e, code := runSource(t, &Ctx{Run: run, Now: late}, "watch", "--role", "brain", "--once"); code != exit.User || out != "" || !strings.Contains(e, "events.tsv") {
+		t.Fatalf("read-only events.tsv: code %d, stdout %q, stderr %q", code, out, e)
+	}
+	if err := os.Chmod(d.Events(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(d.Log(), 0o444); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(d.Log(), 0o644) })
+	if out, e, code := runSource(t, &Ctx{Run: run, Now: late}, "watch", "--role", "brain", "--once"); code != exit.User || out != "" || !strings.Contains(e, "log.tsv") {
+		t.Fatalf("read-only log.tsv: code %d, stdout %q, stderr %q", code, out, e)
+	}
+	if err := store.WriteFileAtomic(d.State(), []byte(`{"x": 1}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if out, e, code := runSource(t, &Ctx{Run: run, Now: late}, "watch", "--role", "dev", "--once"); code != exit.User || out != "" || !strings.Contains(e, "unknown field") {
+		t.Fatalf("bad state.json: code %d, stdout %q, stderr %q", code, out, e)
+	}
+}
+
+// A beat after the seal comes due later: the pass at +91m records DEV_SILENT of that beat, although REPORT_DUE of
+// the seal is already in events.tsv.
+func TestWatchDevSilentAfterReportDue(t *testing.T) {
+	run := newLoopRun(t)
+	at := func(dt time.Duration, args ...string) string {
+		t.Helper()
+		now := testNow.Add(dt)
+		out, e, code := runSource(t, &Ctx{Run: run, Now: func() time.Time { return now }}, args...)
+		if code != exit.OK {
+			t.Fatalf("%q at +%v: code %d, stderr %q", args, dt, code, e)
+		}
+		return out
+	}
+	brain := []string{"watch", "--role", "brain", "--once"}
+	at(30*time.Minute, "dev", "beat", "--holder", "d1")
+	if got := at(61*time.Minute, brain...); got != "REPORT_DUE 2026-11-01T12:00:00Z\n" {
+		t.Fatalf("pass at +61m printed %q", got)
+	}
+	if got := at(91*time.Minute, brain...); got != "DEV_SILENT d1 2026-11-01T12:30:00Z\n" {
+		t.Fatalf("pass at +91m printed %q", got)
+	}
+}
+
+// On a run made by init and dev hello alone, with no charter.json and no log.tsv, a pass 60 minutes later records DEV_SILENT.
+func TestWatchDevSilentBeforeTheSeal(t *testing.T) {
+	if out, e, code := runSource(t, &Ctx{Run: runDev(t, []devStep{{args: "hello --holder d1", dev: "d1", lease: testNow.Add(leaseTTL)}}), Now: func() time.Time { return testNow.Add(time.Hour) }}, "watch", "--role", "brain", "--once"); code != exit.OK || out != "DEV_SILENT d1 2026-11-01T12:00:00Z\n" {
+		t.Fatalf("init and dev hello, then watch at +60m: code %d, stdout %q, stderr %q", code, out, e)
 	}
 }
