@@ -2,20 +2,89 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"source/internal/exit"
+	"source/internal/lock"
 	"source/internal/relay"
 	"source/internal/state"
 	"source/internal/store"
+	"source/internal/transcript"
+	"source/internal/words"
 )
 
 func init() { commands["relay"] = subcommands("relay", relaySubs) }
 
 // relaySubs maps each relay subcommand to its handler.
-var relaySubs = map[string]func(c *Ctx, args []string) error{"mute": relayMute, "prompt": relayPrompt}
+var relaySubs = map[string]func(c *Ctx, args []string) error{"mute": relayMute, "prompt": relayPrompt, "words": relayWords}
+
+const relayWordsUsage = "usage: monet-source relay words [--transcript <path>]"
+
+// appendWord appends one entry to owner-words.md. Tests replace it.
+var appendWord = words.Append
+
+// relayWords copies the typed messages of the session transcript that
+// owner-words.md lacks into it, reading and appending under the words mutex,
+// and prints the new and total counts and each new id (R17, R18, R20). It
+// takes no lease (R1).
+func relayWords(c *Ctx, args []string) error {
+	fs := newFlagSet("relay words")
+	tr := fs.String("transcript", "", "")
+	if err := fs.Parse(args); err != nil || fs.NArg() != 0 {
+		return exit.New(exit.Usage, "%s", relayWordsUsage)
+	}
+	d := store.Dir{Root: c.Run}
+	var fresh []words.Entry
+	var total int
+	err := lock.WithMutex(d.Path("locks", "words.mutex"), func() error {
+		have, err := words.Read(d.Words())
+		if err != nil {
+			return err
+		}
+		p, err := transcript.Find(*tr, relay.SessionID())
+		if err != nil {
+			return exit.New(exit.Refused, "relay words: %v", err)
+		}
+		msgs, fromHuman, err := transcript.OwnerWords(p, kickoffMarker)
+		if err != nil {
+			return err
+		}
+		if fromHuman == 0 && len(have) == 0 {
+			return exit.New(exit.User, "relay: no message from the user in the transcript, so it is the wrong transcript or its format changed")
+		}
+		seen := map[string]bool{}
+		for _, e := range have {
+			seen[e.ID] = true
+		}
+		for _, m := range msgs {
+			if e := words.Entry(m); !seen[e.ID] {
+				if err := words.Check(e); err != nil {
+					return exit.New(exit.Refused, "relay words: entry %s: %v", e.ID, err)
+				}
+				seen[e.ID], fresh = true, append(fresh, e)
+			}
+		}
+		for _, e := range fresh {
+			if err := appendWord(d.Words(), e); err != nil {
+				return err
+			}
+		}
+		total = len(have) + len(fresh)
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	out := fmt.Sprintf("owner-words: %d new, %d in %s\n", len(fresh), total, d.Words())
+	for _, e := range fresh {
+		out += e.ID + "\n"
+	}
+	_, err = io.WriteString(c.Stdout, out)
+	return err
+}
 
 const relayPromptUsage = "usage: monet-source relay prompt --role brain|dev --handoff <path> --holder <session> [--mode <mode>] [--transcript <path>]"
 
