@@ -68,7 +68,6 @@ func TestDevBeat(t *testing.T) {
 // writes the kickoff atomically at a UTC stamp, and prints its start command. No refusal writes a
 // kickoff, a failed write prints no command, and no call runs the command.
 func TestDevStart(t *testing.T) {
-	t.Setenv("SOURCE_SKILL", "")
 	old := skillDir
 	t.Cleanup(func() { skillDir = old })
 	skillDir = ""
@@ -78,6 +77,7 @@ func TestDevStart(t *testing.T) {
 	}
 	t.Setenv("PATH", bin+":/usr/bin:/bin")
 	run := newSealableRun(t)
+	t.Setenv("SOURCE_SKILL", "") // newRun set it for init
 	d, c := store.Dir{Root: run}, &Ctx{Run: run, SkillDir: "/s"}
 	if out, e, code := runSource(t, c, "dev", "start", "--holder", "h1"); code != exit.Refused || out != "" || e != "monet-source: dev start: seal the charter first\n" {
 		t.Fatalf("before the seal: code %d, stdout %q, stderr %q", code, out, e)
