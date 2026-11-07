@@ -13,10 +13,13 @@ func init() { commands["report"] = cmdReport }
 
 const reportUsage = "usage: monet-source report [done --at <time> --row <n> --holder <session>]"
 
+// reportDoneWord is the inline subcommand of report that records a page write.
+const reportDoneWord = "done"
+
 // cmdReport prints the packet of the run as JSON with a two-space indent and takes no lease (R1).
 // A buildPacket error is exit 2, "report done" records a page write, and any other argument is exit 64.
 func cmdReport(c *Ctx, args []string) error {
-	if len(args) > 0 && args[0] == "done" {
+	if len(args) > 0 && args[0] == reportDoneWord {
 		return reportDone(c, args[1:])
 	} else if len(args) > 0 {
 		return exit.New(exit.Usage, "%s", reportUsage)
