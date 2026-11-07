@@ -324,8 +324,8 @@ func TestRelayWordsRefuses(t *testing.T) {
 			pre + `relay words: entry a b: owner words: bad id "a b"` + "\n"},
 		{nil, []string{"--transcript", gone}, exit.Refused, "", pre + "relay words: no transcript at " + gone + "\n"},
 		{nil, []string{"--transcript", run}, exit.User, "", pre + "read " + run + ": is a directory\n"},
-		{nil, []string{"x"}, exit.Usage, "", pre + "usage: monet-source relay words [--transcript <path>]\n"},
-		{nil, []string{"--holder=x"}, exit.Usage, "", pre + "usage: monet-source relay words [--transcript <path>]\n"},
+		{nil, []string{"x"}, exit.Usage, "", pre + "usage: monet-source relay words [--transcript <path> | --comment <id> --at <time>]\n"},
+		{nil, []string{"--holder=x"}, exit.Usage, "", pre + "usage: monet-source relay words [--transcript <path> | --comment <id> --at <time>]\n"},
 		{[]map[string]any{testkit.Typed("k1", "p0", "source relay kickoff: dev of run demo, from session x (d0).")}, nil, exit.OK,
 			"owner-words: 0 new, 0 in " + file + "\n", ""},
 	} {
@@ -358,5 +358,53 @@ func TestRelayWordsRefuses(t *testing.T) {
 	out, e, code := runSource(t, &Ctx{Run: run}, "relay", "words")
 	if got, err := words.Read(file); code != exit.OK || out != "owner-words: 1 new, 2 in "+file+"\nu9\n" || e != "" || err != nil || len(got) != 2 || got[1] != (words.Entry{ID: "u9", At: "2026-01-02T03:04:05.000Z", Text: "Go on."}) {
 		t.Errorf("the default append: code %d, stdout %q, stderr %q, words %+v, err %v", code, out, e, got, err)
+	}
+}
+
+// relay words --comment appends the stdin text, with its trailing newlines cut,
+// as the entry of the page comment, once, and reads no transcript. A bad time
+// or a missing or extra flag gives 64, and a blank text or an id that
+// words.Check refuses gives 2, and then the file does not change.
+func TestRelayWordsComment(t *testing.T) {
+	run, at, pre := newRun(t, "demo"), "2026-11-01T12:30:00Z", "monet-source: "
+	file, usage := filepath.Join(run, "owner-words.md"), pre+"usage: monet-source relay words [--transcript <path> | --comment <id> --at <time>]\n"
+	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir()) // the session s1 has no transcript
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "s1")
+	call := func(stdin string, args ...string) (string, string, int) {
+		return runSource(t, &Ctx{Run: run, Stdin: strings.NewReader(stdin)}, append([]string{"relay", "words"}, args...)...)
+	}
+	for _, tc := range []struct{ id, stdin, out, text string }{
+		{"c-17", "Keep the v1 layout.\n\n", "owner-words: 1 new, 1 in " + file + "\nc-17\n", "Keep the v1 layout."},
+		{"c-17", "Keep the v1 layout.\n\n", "owner-words: 0 new, 1 in " + file + "\n", "Keep the v1 layout."},
+		{"c-19", "  Two lines.\nEnd. \n", "owner-words: 1 new, 2 in " + file + "\nc-19\n", "  Two lines.\nEnd. "},
+	} {
+		before, _ := os.ReadFile(file)
+		out, e, code := call(tc.stdin, "--comment", tc.id, "--at", at)
+		after, _ := os.ReadFile(file)
+		got, err := words.Get(file, tc.id)
+		// The file changes exactly when the call adds an entry.
+		if code != exit.OK || out != tc.out || e != "" || err != nil || got != (words.Entry{ID: tc.id, At: at, Text: tc.text}) ||
+			strings.Contains(out, " 0 new") != (string(after) == string(before)) {
+			t.Errorf("%s: code %d, stdout %q, stderr %q, entry %+v, err %v, file %q", tc.id, code, out, e, got, err, after)
+		}
+	}
+	before, _ := os.ReadFile(file)
+	for _, tc := range []struct {
+		stdin string
+		args  []string
+		code  int
+		err   string
+	}{
+		{"x", []string{"--comment", "c-18", "--at", "yesterday"}, exit.Usage, usage},
+		{" \n", []string{"--comment", "c-18", "--at", at}, exit.Refused, pre + "relay words: the comment text is blank\n"},
+		{"x", []string{"--comment", "c 17", "--at", at}, exit.Refused, pre + `relay words: entry c 17: owner words: bad id "c 17"` + "\n"},
+		{"x", []string{"--comment", "c-18"}, exit.Usage, usage},
+		{"x", []string{"--at", at}, exit.Usage, usage},
+		{"x", []string{"--comment", "c-18", "--at", at, "--transcript", file}, exit.Usage, usage},
+	} {
+		out, e, code := call(tc.stdin, tc.args...)
+		if after, _ := os.ReadFile(file); code != tc.code || out != "" || e != tc.err || string(after) != string(before) {
+			t.Errorf("%q: code %d, stdout %q, stderr %q, file %q", tc.args, code, out, e, after)
+		}
 	}
 }
