@@ -35,6 +35,10 @@ type Ctx struct {
 // cmd_<name>.go file registers itself from init.
 var commands = map[string]func(c *Ctx, args []string) error{}
 
+// groups maps the first word of each multi-word command to its subcommands.
+// subcommands fills it, so the command list test can read every path.
+var groups = map[string]map[string]func(c *Ctx, args []string) error{}
+
 const usageLine = "usage: monet-source [--run <run dir>] [--skill <skill dir>] <command> [args]"
 
 func main() {
@@ -157,8 +161,10 @@ func parseFlags(fs *flag.FlagSet, args []string) ([]string, error) {
 }
 
 // subcommands returns a handler that dispatches on its first argument to
-// subs, for multi-word commands such as "charter seal" or "dev start".
+// subs, for multi-word commands such as "charter seal" or "dev start". It
+// records subs in groups under name.
 func subcommands(name string, subs map[string]func(c *Ctx, args []string) error) func(c *Ctx, args []string) error {
+	groups[name] = subs
 	return func(c *Ctx, args []string) error {
 		names := make([]string, 0, len(subs))
 		for n := range subs {

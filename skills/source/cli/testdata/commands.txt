@@ -1,0 +1,35 @@
+accept
+charter amend
+charter lint
+charter render
+charter seal
+context
+decision add
+deliver
+dev beat
+dev hello
+dev start
+dev takeover
+init
+item open
+item rule
+lock acquire
+lock release
+lock renew
+persona set
+phase back
+phase next
+preflight
+relay mute
+relay prompt
+relay words
+report
+report done
+respond
+round close
+round open
+status
+submit
+wall clear
+wall open
+watch
