@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"source/internal/exit"
 	"source/internal/lock"
@@ -21,7 +22,7 @@ func init() { commands["relay"] = subcommands("relay", relaySubs) }
 // relaySubs maps each relay subcommand to its handler.
 var relaySubs = map[string]func(c *Ctx, args []string) error{"mute": relayMute, "prompt": relayPrompt, "words": relayWords}
 
-const relayWordsUsage = "usage: monet-source relay words [--transcript <path>]"
+const relayWordsUsage = "usage: monet-source relay words [--transcript <path> | --comment <id> --at <time>]"
 
 // appendWord appends one entry to owner-words.md. Tests replace it.
 var appendWord = words.Append
@@ -29,12 +30,26 @@ var appendWord = words.Append
 // relayWords copies the typed messages of the session transcript that
 // owner-words.md lacks into it, reading and appending under the words mutex,
 // and prints the new and total counts and each new id (R17, R18, R20). It
-// takes no lease (R1).
+// takes no lease (R1). With --comment it copies the stdin text instead (R19).
 func relayWords(c *Ctx, args []string) error {
 	fs := newFlagSet("relay words")
-	tr := fs.String("transcript", "", "")
-	if err := fs.Parse(args); err != nil || fs.NArg() != 0 {
+	tr, id, at := fs.String("transcript", "", ""), fs.String("comment", "", ""), fs.String("at", "", "")
+	if err := fs.Parse(args); err != nil || fs.NArg() != 0 || (*id == "") != (*at == "") || *id != "" && *tr != "" {
 		return exit.New(exit.Usage, "%s", relayWordsUsage)
+	}
+	var comment transcript.Words
+	if *id != "" {
+		if _, err := time.Parse(time.RFC3339, *at); err != nil {
+			return exit.New(exit.Usage, "%s", relayWordsUsage)
+		}
+		text, err := io.ReadAll(c.Stdin)
+		if err != nil {
+			return err
+		}
+		comment = transcript.Words{ID: *id, At: *at, Text: strings.TrimRight(string(text), "\n")}
+		if strings.TrimSpace(comment.Text) == "" {
+			return exit.New(exit.Refused, "relay words: the comment text is blank")
+		}
 	}
 	d := store.Dir{Root: c.Run}
 	var fresh []words.Entry
@@ -44,13 +59,15 @@ func relayWords(c *Ctx, args []string) error {
 		if err != nil {
 			return err
 		}
-		p, err := transcript.Find(*tr, relay.SessionID())
-		if err != nil {
-			return exit.New(exit.Refused, "relay words: %v", err)
-		}
-		msgs, fromHuman, err := transcript.OwnerWords(p, kickoffMarker)
-		if err != nil {
-			return err
+		msgs, fromHuman := []transcript.Words{comment}, 1 // a page comment is a message of the user
+		if *id == "" {
+			p, err := transcript.Find(*tr, relay.SessionID())
+			if err != nil {
+				return exit.New(exit.Refused, "relay words: %v", err)
+			}
+			if msgs, fromHuman, err = transcript.OwnerWords(p, kickoffMarker); err != nil {
+				return err
+			}
 		}
 		if fromHuman == 0 && len(have) == 0 {
 			return exit.New(exit.User, "relay: no message from the user in the transcript, so it is the wrong transcript or its format changed")
