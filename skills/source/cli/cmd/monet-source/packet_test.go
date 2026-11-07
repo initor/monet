@@ -2,11 +2,16 @@ package main
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"reflect"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"source/internal/artifact"
 	"source/internal/exit"
 	"source/internal/round"
 	"source/internal/state"
@@ -147,4 +152,99 @@ func TestPacketLog(t *testing.T) {
 		t.Fatal(err)
 	}
 	check(3, 4, last, []packetLine{{last, "WALL W1"}})
+}
+
+// hasMermaid agrees with a line-prefix reference for every one-byte edit of the fence, on a line of its own,
+// between two lines, and after text on its line.
+func TestHasMermaidLine(t *testing.T) {
+	fence, p := "```mermaid", filepath.Join(t.TempDir(), "a.md")
+	for _, l := range oneByteEdits(fence) {
+		for _, body := range []string{l + "\n", "x\n" + l + "\ny\n", "x " + l + "\n"} {
+			if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			want := slices.ContainsFunc(strings.Split(body, "\n"), func(s string) bool { return strings.HasPrefix(s, fence) })
+			if got, err := hasMermaid(p); err != nil || got != want {
+				t.Fatalf("%q: got %v, err %v", body, got, err)
+			}
+		}
+	}
+	if err := os.WriteFile(p, []byte("x\n"+fence), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := hasMermaid(p); err != nil || !got {
+		t.Errorf("fence on a last line with no newline: got %v, err %v; want true", got, err)
+	}
+	if err := os.WriteFile(p, []byte(strings.Repeat("a", 1<<17)+"\n"+fence+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := hasMermaid(p); err != nil || !got {
+		t.Errorf("fence after a 128 KiB line: got %v, err %v; want true", got, err)
+	}
+	if _, err := hasMermaid(filepath.Join(t.TempDir(), "none.md")); err == nil {
+		t.Error("missing file: got no error")
+	}
+}
+
+// newestDiagram gives none with no version, the first diagram file in manifest order of the version with the
+// newest at, and none when that version has no diagram, whatever the older versions hold. buildPacket names it.
+func TestPacketDiagram(t *testing.T) {
+	run, src := t.TempDir(), t.TempDir()
+	file := func(name, body string) string {
+		p := filepath.Join(src, name)
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	plain, diagram := "no diagram\n", "x\n```mermaid\ngraph LR\n```\n"
+	step := func(phase string, v int, at time.Time, paths []string, want string) {
+		t.Helper()
+		if paths != nil {
+			if _, err := artifact.Freeze(filepath.Join(run, "artifacts", phase, "v"+strconv.Itoa(v)), phase, v, at, paths); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if got, err := newestDiagram(run); err != nil || got != want {
+			t.Errorf("after %s v%d: got %q, err %v; want %q", phase, v, got, err, want)
+		}
+	}
+	step("research", 0, testNow, nil, "none")
+	step("research", 1, testNow, []string{file("a.md", plain), file("b.md", diagram)}, filepath.Join(run, "artifacts", "research", "v1", "b.md"))
+	step("design", 1, testNow.Add(time.Hour), []string{file("c.md", plain)}, "none")
+	step("research", 2, testNow.Add(2*time.Hour), []string{file("e.md", diagram), file("d.md", diagram)}, filepath.Join(run, "artifacts", "research", "v2", "e.md"))
+
+	loop := newLoopRun(t)
+	submitFile(t, loop, "a.md", diagram)
+	if p, err := buildPacket(store.Dir{Root: loop}); err != nil || p.Diagram != filepath.Join(loop, "artifacts", "research", "v1", "a.md") {
+		t.Errorf("packet diagram %q, err %v; want research v1 a.md", p.Diagram, err)
+	}
+}
+
+// After a final ACCEPT of reviewer, the packet has no delivered or verdicts; after deliver, delivered holds the
+// two version folders of the final round and verdicts the persona and result of its check.
+func TestPacketDelivered(t *testing.T) {
+	run := newAcceptanceRun(t)
+	d := store.Dir{Root: run}
+	if _, e, code := runSource(t, &Ctx{Run: run}, "accept", "--holder", "h1"); code != exit.OK {
+		t.Fatalf("accept: code %d, stderr %q", code, e)
+	}
+	writeVerdict(t, run, 3, "reviewer", "accept")
+	closeRound(t, run, 3, "ACCEPT")
+	p, err := buildPacket(d)
+	data, _ := json.Marshal(p)
+	if err != nil || strings.Contains(string(data), `"delivered"`) || strings.Contains(string(data), `"verdicts"`) {
+		t.Fatalf("before deliver: %s, err %v; want no delivered or verdicts", data, err)
+	}
+	if _, e, code := runSource(t, &Ctx{Run: run}, "deliver", "--holder", "h1"); code != exit.OK {
+		t.Fatalf("deliver: code %d, stderr %q", code, e)
+	}
+	p, err = buildPacket(d)
+	versions := []string{filepath.Join(run, "artifacts", "research", "v1"), filepath.Join(run, "artifacts", "design", "v1")}
+	if err != nil || !reflect.DeepEqual(p.Delivered, versions) || !reflect.DeepEqual(p.Verdicts, []packetVerdict{{"reviewer", "accept"}}) {
+		t.Fatalf("after deliver: delivered %q, verdicts %+v, err %v; want %q and [{reviewer accept}]", p.Delivered, p.Verdicts, err, versions)
+	}
+	if got := strings.Join(jsonNames(packetVerdict{}), " "); got != "persona result" {
+		t.Errorf("packetVerdict names %q; want %q", got, "persona result")
+	}
 }
