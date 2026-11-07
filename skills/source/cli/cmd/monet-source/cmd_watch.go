@@ -58,11 +58,14 @@ func cmdWatch(c *Ctx, args []string) error {
 	}
 }
 
-// watchPass prints each event line of role after its cursor and flushes it,
-// then stores the new cursor. A failed write or flush keeps the old cursor, so
-// the next pass prints that line again instead of skipping it.
+// watchPass records the due time events (recordDue), prints each event line of role
+// after its cursor and flushes it, then stores the new cursor. A failed write or flush
+// keeps the old cursor, so the next pass prints that line again instead of skipping it.
 func watchPass(c *Ctx, role string) error {
 	d := store.Dir{Root: c.Run}
+	if err := recordDue(c, d); err != nil {
+		return err
+	}
 	path := filepath.Join(d.Watch(), role+".json")
 	var cur watchCursor
 	if err := store.DecodeStrict(path, &cur); err != nil && !errors.Is(err, os.ErrNotExist) {

@@ -3,15 +3,18 @@ package main
 import (
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
+	"source/internal/exit"
 	"source/internal/state"
+	"source/internal/store"
 )
 
 // dueEvents gives REPORT_DUE from the last page write or else the seal, then DEV_SILENT from the last beat, each
 // once 60 minutes have passed. REPORT_DUE needs the seal, DEV_SILENT needs a beat, and neither comes after delivery.
-// Each time is RFC 3339 UTC nanoseconds.
+// Each time is RFC 3339 UTC nanoseconds, and one watch pass on a run that holds the state prints the same lines.
 func TestDueEvents(t *testing.T) {
 	at := func(dt time.Duration) *time.Time { u := testNow.Add(dt); return &u }
 	m, seal := time.Minute, &state.Seal{Words: "w1", At: testNow}
@@ -107,6 +110,11 @@ func TestDueEvents(t *testing.T) {
 	} {
 		if got := dueEvents(tc.s, testNow.Add(tc.now)); !slices.Equal(got, tc.want) {
 			t.Errorf("%s at +%v: got %q, want %q", tc.name, tc.now, got, tc.want)
+		}
+		if d := (store.Dir{Root: t.TempDir()}); store.WriteJSON(d.State(), tc.s) != nil {
+			t.Fatalf("%s: write state.json", tc.name)
+		} else if out, e, code := runSource(t, &Ctx{Run: d.Root, Now: func() time.Time { return testNow.Add(tc.now) }}, "watch", "--role", "brain", "--once"); code != exit.OK || out != strings.Join(append(tc.want, ""), "\n") {
+			t.Errorf("%s at +%v: watch printed %q, code %d, stderr %q", tc.name, tc.now, out, code, e)
 		}
 	}
 }
