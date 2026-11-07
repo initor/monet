@@ -12,15 +12,18 @@ import (
 	"source/internal/lock"
 	"source/internal/state"
 	"source/internal/store"
+	"source/internal/testkit"
 )
 
 // wantInitUsage is the init usage line, typed out so that a change to
 // initUsage fails a test.
 const wantInitUsage = "usage: monet-source init --slug <slug> --holder <session>"
 
-// newRun makes the folder <temp>/.planning/source/<name> and returns its real path.
+// newRun makes the folder <temp>/.planning/source/<name>, sets SOURCE_SKILL to a
+// new testkit.Skill, and returns the real path of the folder.
 func newRun(t *testing.T, name string) string {
 	t.Helper()
+	t.Setenv("SOURCE_SKILL", testkit.Skill(t))
 	run := filepath.Join(realTempDir(t), ".planning", "source", name)
 	if err := os.MkdirAll(run, 0o755); err != nil {
 		t.Fatal(err)
@@ -124,8 +127,9 @@ func TestInitRefusesSecond(t *testing.T) {
 
 // A run that is not at <home>/.planning/source/<slug> is exit 2 and writes
 // nothing. The slug check comes first, and the home check comes before the
-// state check.
+// skill checks (SOURCE_SKILL is empty) and the state check.
 func TestInitRefusesHomeShape(t *testing.T) {
+	t.Setenv("SOURCE_SKILL", "")
 	run := filepath.Join(realTempDir(t), "demo")
 	if err := os.Mkdir(run, 0o755); err != nil {
 		t.Fatal(err)
@@ -146,15 +150,17 @@ func TestInitRefusesHomeShape(t *testing.T) {
 	}
 }
 
-// When the state check, the lease, a folder, or the state.json write fails,
-// init is exit 1 and leaves no state.json, and the holder can run init again.
+// When the state check, the lease, a folder, the relay copy, the config of
+// <home>, or the state.json write fails, init is exit 1 and leaves no
+// state.json, and the holder can run init again.
 func TestInitFailsWithoutState(t *testing.T) {
 	blocked := newRun(t, "demo")
 	if err := os.WriteFile(filepath.Join(blocked, "bin"), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, e, code := runSource(t, &Ctx{Run: blocked}, "init", "--slug", "demo", "--holder", "h1"); code != exit.User || !strings.Contains(e, "not a directory") || strings.Contains(listRun(t, blocked), "state.json") {
-		t.Errorf("file at bin: code %d, stderr %q, run holds %q", code, e, listRun(t, blocked))
+	// The relay copy comes after the folders, so a failed folder leaves relay/ empty.
+	if _, e, code := runSource(t, &Ctx{Run: blocked}, "init", "--slug", "demo", "--holder", "h1"); code != exit.User || !strings.Contains(e, "not a directory") || strings.Contains(listRun(t, blocked), "state.json") || listRun(t, filepath.Join(blocked, "relay")) != "" {
+		t.Errorf("file at bin: code %d, stderr %q, run holds %q, relay holds %q", code, e, listRun(t, blocked), listRun(t, filepath.Join(blocked, "relay")))
 	}
 	if err := os.Remove(filepath.Join(blocked, "bin")); err != nil {
 		t.Fatal(err)
@@ -162,6 +168,22 @@ func TestInitFailsWithoutState(t *testing.T) {
 	_, _, code2 := runSource(t, &Ctx{Run: blocked}, "init", "--slug", "demo", "--holder", "h2")
 	if _, e, code := runSource(t, &Ctx{Run: blocked}, "init", "--slug", "demo", "--holder", "h1"); code2 != exit.Held || code != exit.OK {
 		t.Errorf("init again: h2 code %d, h1 code %d, stderr %q", code2, code, e)
+	}
+	// A folder at relay/brain.md or a dangling symlink at <home>/.claude fails
+	// the relay copy or the config write, and no config names the copy.
+	for _, block := range []func(run string) error{
+		func(run string) error { return os.MkdirAll(filepath.Join(run, "relay", "brain.md", "x"), 0o755) },
+		func(run string) error { return os.Symlink("gone", filepath.Join(run, "../../..", ".claude")) },
+	} {
+		run := newRun(t, "demo")
+		if err := block(run); err != nil {
+			t.Fatal(err)
+		}
+		_, e, code := runSource(t, &Ctx{Run: run}, "init", "--slug", "demo", "--holder", "h1")
+		_, config, _ := relayFiles(run)
+		if _, cerr := os.Lstat(config); code != exit.User || e == "" || strings.Contains(listRun(t, run), "state.json") || !os.IsNotExist(cerr) {
+			t.Errorf("failed relay write: code %d, stderr %q, run holds %q, config lstat %v", code, e, listRun(t, run), cerr)
+		}
 	}
 	// A lease that does not decode is exit 1, not exit 4 (held).
 	corrupt := newRun(t, "demo")
@@ -257,6 +279,125 @@ func TestInitSlugMustMatchDir(t *testing.T) {
 			l, _, lerr := lock.Read(d.Locks(), "brain")
 			if err != nil || s.Slug != tc.dir || !s.Created.Equal(odd) || lerr != nil || l.Holder != tc.args[3] || !l.Expires.Equal(odd.Add(12*time.Hour)) {
 				t.Errorf("%s: state %+v (%v), lease %+v (%v)", tc.dir, s, err, l, lerr)
+			}
+		}
+	}
+}
+
+// relayFiles returns <run>/relay/brain.md, the config path of <home>, and the
+// config bytes that name only that copy (R5).
+func relayFiles(run string) (brain, config, r5 string) {
+	brain = filepath.Join(run, "relay", "brain.md")
+	return brain, filepath.Join(run, "../../..", ".claude", "handoff-relay.json"), "{\n  \"procedure\": \"" + brain + "\"\n}\n"
+}
+
+// init copies reference/relay.md of the skill to <run>/relay/brain.md and
+// writes the config of <home> that names that copy.
+func TestInitWritesRelayConfig(t *testing.T) {
+	run := newRun(t, "demo")
+	if _, e, code := runSource(t, &Ctx{Run: run}, "init", "--slug", "demo", "--holder", "h1"); code != exit.OK || e != "" {
+		t.Fatalf("init: code %d, stderr %q", code, e)
+	}
+	brain, config, r5 := relayFiles(run)
+	got, err := os.ReadFile(brain)
+	cfg, cerr := os.ReadFile(config)
+	if err != nil || string(got) != testkit.RelayText || cerr != nil || string(cfg) != r5 {
+		t.Errorf("brain.md %q (%v), config %q (%v), want %q", got, err, cfg, cerr, r5)
+	}
+	// The copy holds the bytes of the skill file, whatever they are.
+	run, steps := newRun(t, "demo"), "# Other steps\n\nNot the test text.\n"
+	if err := os.WriteFile(filepath.Join(os.Getenv("SOURCE_SKILL"), "reference", "relay.md"), []byte(steps), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, e, code := runSource(t, &Ctx{Run: run}, "init", "--slug", "demo", "--holder", "h1"); code != exit.OK || e != "" {
+		t.Fatalf("other steps: code %d, stderr %q", code, e)
+	}
+	if got, err := os.ReadFile(filepath.Join(run, "relay", "brain.md")); err != nil || string(got) != steps {
+		t.Errorf("other steps: brain.md %q (%v), want %q", got, err, steps)
+	}
+}
+
+// init keeps a config of <home> that names another procedure or does not
+// parse, byte for byte, and rewrites one that names <run>/relay/brain.md to
+// the file of R5. A folder at the config path cannot be read, so it stays.
+func TestInitKeepsOtherRelayConfig(t *testing.T) {
+	for _, tc := range []struct {
+		body string
+		keep bool
+	}{
+		{`{"procedure": ".planning/gang/x/run/relay.md"}`, true},
+		{`{"procedure": "OTHER"}`, true}, // the copy of another run in the same home
+		{"{", true},
+		{`{"procedure": "BRAIN", "threshold_pct": 70}`, false},
+	} {
+		run := newRun(t, "demo")
+		brain, config, r5 := relayFiles(run)
+		other := filepath.Join(filepath.Dir(run), "other", "relay", "brain.md")
+		body, want := strings.NewReplacer("BRAIN", brain, "OTHER", other).Replace(tc.body), r5
+		if tc.keep {
+			want = body
+		}
+		if err := os.MkdirAll(filepath.Dir(config), 0o755); err != nil || os.WriteFile(config, []byte(body), 0o644) != nil {
+			t.Fatalf("write %s: %v", config, err)
+		}
+		_, e, code := runSource(t, &Ctx{Run: run}, "init", "--slug", "demo", "--holder", "h1")
+		if got, err := os.ReadFile(config); code != exit.OK || e != "" || err != nil || string(got) != want {
+			t.Errorf("%s: code %d, stderr %q, config %q (%v), want %q", tc.body, code, e, got, err, want)
+		}
+		checkCopied(t, run)
+	}
+	run := newRun(t, "demo")
+	_, config, _ := relayFiles(run)
+	if err := os.MkdirAll(config, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_, e, code := runSource(t, &Ctx{Run: run}, "init", "--slug", "demo", "--holder", "h1")
+	if fi, err := os.Stat(config); code != exit.OK || e != "" || err != nil || !fi.IsDir() {
+		t.Errorf("folder config: code %d, stderr %q, stat %v", code, e, err)
+	}
+	checkCopied(t, run)
+}
+
+// checkCopied fails t unless <run>/relay/brain.md holds testkit.RelayText and
+// state.json exists: init copies the steps and writes state.json also when it
+// keeps the config of <home>.
+func checkCopied(t *testing.T, run string) {
+	t.Helper()
+	brain, _, _ := relayFiles(run)
+	got, err := os.ReadFile(brain)
+	if _, serr := os.Stat(store.Dir{Root: run}.State()); err != nil || string(got) != testkit.RelayText || serr != nil {
+		t.Errorf("%s: brain.md %q (%v), state.json %v", run, got, err, serr)
+	}
+}
+
+// With no skill dir (exit 64), or a reference/relay.md that is missing or
+// cannot be read (exit 2), init writes nothing, and it checks both before the
+// state check.
+func TestInitNeedsRelaySteps(t *testing.T) {
+	old := skillDir
+	t.Cleanup(func() { skillDir = old })
+	skillDir = ""
+	bare, folder := realTempDir(t), realTempDir(t)
+	if err := os.MkdirAll(filepath.Join(folder, "reference", "relay.md"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		skill, stderr string
+		code          int
+	}{
+		{bare, "monet-source: init: " + filepath.Join(bare, "reference", "relay.md") + ": no such file or directory\n", exit.Refused},
+		{folder, "monet-source: init: " + filepath.Join(folder, "reference", "relay.md") + ": is a directory\n", exit.Refused},
+		{"", "monet-source: no skill dir: pass --skill or set SOURCE_SKILL\n", exit.Usage},
+	} {
+		for _, list := range []string{"", "state.json/"} {
+			run := newRun(t, "demo")
+			t.Setenv("SOURCE_SKILL", tc.skill)
+			if err := os.MkdirAll(filepath.Join(run, list), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			_, e, code := runSource(t, &Ctx{Run: run}, "init", "--slug", "demo", "--holder", "h1")
+			if _, err := os.Lstat(filepath.Join(run, "../../..", ".claude")); code != tc.code || e != tc.stderr || listRun(t, run) != list || !os.IsNotExist(err) {
+				t.Errorf("skill %q, run holds %q: code %d, stderr %q, <home>/.claude %v", tc.skill, list, code, e, err)
 			}
 		}
 	}

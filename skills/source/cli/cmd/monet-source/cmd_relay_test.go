@@ -149,8 +149,8 @@ func TestRelayPrompt(t *testing.T) {
 // handoff (2), and a bad role, no handoff, an extra word, or no skill dir
 // (64), and then writes no kickoff.
 func TestRelayPromptRefuses(t *testing.T) {
-	t.Setenv("SOURCE_SKILL", "")
 	run, _, skill := relayRun(t, `{"respawnFlags": ["--effort", "high"]}`)
+	t.Setenv("SOURCE_SKILL", "") // newRun set it for init
 	h, txt := filepath.Join(run, "handoff", "brain-1.md"), filepath.Join(run, "handoff", "a.txt")
 	usage := "monet-source: usage: monet-source relay prompt --role brain|dev --handoff <path> --holder <session> [--mode <mode>] [--transcript <path>]\n"
 	for _, tc := range []struct {
