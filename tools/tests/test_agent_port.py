@@ -42,12 +42,14 @@ TABLE = (
      "`monet:teach`"),
     ('"be more ambitious with X", "think higher, deeper or wider about X", "an out-of-the-box take on X"',
      "`monet:think` (typed only)"),
+    ('"a long research run with an outside reviewer", "run a design review loop on its own", "source"',
+     "`monet:source` (typed only)"),
     ('"drive a browser", "operate Slack/Docs for me", "take over a Chrome window"', "`monet:web-operator`"),
 )
 
 ROUTED = {"git-changes", "git-draft-commit", "git-draft-pr", "ship", "voice", "distill-voice",
           "review-code", "pr", "review-local", "paint", "hairline-create", "visual-design", "roadmap",
-          "gang", "handoff", "teach", "think", "web-operator"}
+          "gang", "handoff", "teach", "think", "source", "web-operator"}
 
 # Quoted phrases in the dispatch steps that hold I, me, or my, verbatim from the snapshot.
 STEP_PHRASES = (
@@ -114,12 +116,22 @@ class AgentPort(unittest.TestCase):
         self.assertEqual([(r[0], r[1]) for r in self.rows], list(TABLE))
         routed = {m.group(1) for row in self.rows for m in ROUTE.finditer(row[1])}
         self.assertEqual(routed, ROUTED)
+        self.assertIn('\n| "a long research run with an outside reviewer", "run a design review loop on its own", "source"'
+                      " | `monet:source` (typed only) | any | writes the run page only |\n", self.body)
         bare = [(line_of(self.body, m.start()), m.group()) for m in BARE.finditer(self.body)]
         self.assertEqual(bare, [])
         self.assertIn("`monet:cwd-context`", step(self.body, 0))
         self.assertIn("type `/monet:teach` in the main session", step(self.body, 10))
         self.assertIn("type `/monet:gang` in a session", step(self.body, 14))
         self.assertIn("type `/monet:think", step(self.body, 15))
+        self.assertIn("type `/monet:source kickoff", step(self.body, 16))
+        self.assertTrue(step(self.body, 16).startswith(
+            "16) Long runs: research, design, or report work that runs for hours (any posture):\n   - "))
+        self.assertEqual(step(self.body, 16).count("\n   - "), 1)
+        self.assertIn("`/monet:source kickoff [<file>] [--slug <slug>]` in a session started in the folder of the run."
+                      " It is typed only (`disable-model-invocation`)", step(self.body, 16))
+        self.assertTrue(step(self.body, 17).startswith("17) Safety defaults:\n"))
+        self.assertEqual(re.findall(r"(?m)^(\d+)\) ", self.body), [str(n) for n in range(19)])
 
     def test_moved_out_of_import(self):
         self.assertEqual(tracked("import/agents"), set())

@@ -32,6 +32,7 @@ Match the user's intent to a skill. The numbered dispatch steps below carry the 
 | "I'm at 80% context", "starting a new session", "draft a prompt to pick this up" | `monet:handoff` | any | writes one scratch file |
 | "teach me this", "help me understand what we did", "walk me through this PR/file/change" | `monet:teach` | any | writes a tmp checklist only |
 | "be more ambitious with X", "think higher, deeper or wider about X", "an out-of-the-box take on X" | `monet:think` (typed only) | any | read-only (crew agents only on the user's yes) |
+| "a long research run with an outside reviewer", "run a design review loop on its own", "source" | `monet:source` (typed only) | any | writes the run page only |
 | "drive a browser", "operate Slack/Docs for me", "take over a Chrome window" | `monet:web-operator` | any | yes (gates outward actions) |
 
 When invoked:
@@ -152,11 +153,14 @@ When invoked:
    - If the user asks to "be more ambitious" / "think higher, deeper or wider" / "give me an out-of-the-box take on X", don't run `monet:think` yourself: tell the user to type `/monet:think [--higher | --deeper | --wider] <task>`. It is typed only (`disable-model-invocation`), because "think" sits in so many prompts that auto-routing would misfire.
    - Picks one lens (altitude, depth, or range), lists the raw material, instruments, and judges the session can actually reach, and prints one card ending in a rewritten prompt. With `--wider`, it runs a small crew plus a red team as subagents, only on the user's yes. Writes and commits nothing.
 
-16) Safety defaults:
+16) Long runs: research, design, or report work that runs for hours (any posture):
+   - If the user asks for "a long research run with an outside reviewer" or to "run a design review loop on its own", don't run `monet:source` yourself: tell the user to type `/monet:source kickoff [<file>] [--slug <slug>]` in a session started in the folder of the run. It is typed only (`disable-model-invocation`), because a run takes hours and needs the user at the kickoff.
+
+17) Safety defaults:
    - Don't run destructive or irreversible commands without asking.
    - Don't run `git commit`, `git push`, or doc writes unless the user explicitly asks.
 
-16) Return a short "What changed / What to verify" checklist when you propose edits or a workflow.
+18) Return a short "What changed / What to verify" checklist when you propose edits or a workflow.
 
 ## Performance notes (optional)
 
