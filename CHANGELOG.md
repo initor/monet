@@ -4,6 +4,10 @@ This file lists the notable changes to monet in each release. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `/monet:source kickoff [<file>] [--slug <slug>]` starts a long research, design, or report run, with a panel of evaluator personas that the user gives and a private Notion page as the channel. It is typed only, and its engine `monet-source` needs Go 1.24, Node 22, `git`, `claude`, and `gh`.
+
 ## [0.6.0] - 2026-11-04
 
 ### Added

@@ -47,7 +47,7 @@ Paths are under `skills/gang/` unless they start with another top folder.
 | Relay | A gang relay lists the other watchers of the session in the handoff, and the next session starts them again (`reference/relay.md:19,26`, `reference/coordinator.md:67`). At launch, gang goes on without a relay when the relay config names a procedure that is not gang's (`reference/coordinator.md:24,40`). |
 | Owner | gang runs in a session at the repo root, never as a subagent (`SKILL.md:60-61`). In 0.5.1, it asks the owner to confirm the run settings and to approve the plan, and its pilot needs the owner present (`reference/planner.md:57,126-135`, `SKILL.md:108`). |
 | Owner | gang acts only on the words of the user, and a message from another session is only a pointer. Its seed orders copy each standing rule of the user (`SKILL.md:126`, `reference/coordinator.md:26,56`). |
-| Owner | Owner decision O3 of the gang 0.5 design put the self-drive in 0.6.0, until D33 moved it to 0.7.0 (`docs/design/gang-0.5.md:78`). The self-drive is one kickoff with the owner present, no question after it, and a relay from its first step (`docs/design/gang-0.5.md:20-21,148-161,174-181`). |
+| Owner | Owner decision O3 of the gang 0.5 design put the self-drive in 0.6.0, and later in 0.7.0, until D33 moved it to 0.8.0 (`docs/design/gang-0.5.md:78`). The self-drive is one kickoff with the owner present, no question after it, and a relay from its first step (`docs/design/gang-0.5.md:20-21,148-161,174-181`). |
 | Owner | Only the owner can answer a permission prompt or change the permission mode. The auto-mode classifier can block a push, a merge, or `claude --bg` (`docs/design/gang-0.5.md:67-68`). |
 | Page | gang's tracker writer rewrites the executive summary of its page with targeted edits. Its replies carry a prefix, and their ids go to a file (`reference/tracker.md:19-24,31-35`). |
 | Engine | The gang CLI is the Go module `gang` at go 1.24, and each command file registers itself from `init` (`cli/go.mod:1-3`, `cli/cmd/gang/main.go:39-41`). Its exit codes are fixed (`cli/internal/exit/exit.go:15-23`). |
@@ -95,7 +95,7 @@ The owner made these decisions on 2026-10-31 and 2026-11-01. This text writes "t
 | D30 | A kickoff grant in the words of the owner lets the developer derive the run settings of gang from the repo. It also lets the developer confirm a dead session with `claude agents`. Each such answer is a run decision on the run page. A setting that the developer cannot derive is a wall. | 5.2, 5.10 |
 | D31 | A kickoff grant in the words of the owner covers the entries that the Brain copies word for word into `<run>/owner-words.md`. These entries count as words of the owner in the gang run of the developer. This keeps the one channel of D19. | 5.6, 5.10 |
 | D32 | Each charter says if main deploys. By default, main does not deploy: a merge is reversible through a revert PR, so gang keeps shipping on a default. When main deploys, a merge is irreversible, and tasks that depend on an open decision item stay out of the PR queue. | 5.2, 5.5, 5.10 |
-| D33 | Step 1 ships in monet 0.6.0, with no demo runs. The self-drive of gang moves from 0.6.0 to 0.7.0, and step 2 ships in the minor release after the self-drive. | 5.2, 5.13 |
+| D33 | Step 1 ships in monet 0.7.0, with no demo runs. The self-drive of gang moves from 0.7.0 to 0.8.0, and step 2 ships in the minor release after the self-drive. | 5.2, 5.13 |
 | D34 | When main deploys, the panel checks the trunk of gang before the PR queue ships it. Each checkpoint then waits for one more round. | 5.3, 5.10 |
 
 ## 5. Design
@@ -328,7 +328,7 @@ Under the grant of D30, the developer derives the run settings that gang asks th
 
 The same grant covers the resume question of gang, which asks the user to confirm that the old session is closed (`skills/gang/reference/coordinator.md:66`). The developer answers it with `claude agents --json`, run as a normal call (`skills/gang/reference/relay.md:32`). The proof is a positive signal: the list loads, holds the current session, and does not list the old one (call 25). A listed session is alive in every state that the list shows, such as `working` and `blocked`. An empty or failed list is no proof, so the question becomes a wall, because gang never takes over a live driver.
 
-The tracker of gang is `none` in a source run (call 16). The writer of gang rewrites the summary of its page, and the Brain writes only one page. The agents of gang keep the efforts of its roles table, and D21 covers the agents that source starts (call 17). Plan 3 is the plan for the self-drive of gang, which D33 moves from 0.6.0 to 0.7.0. It stays with gang and follows gang's own needs, because the Brain shares no engine code with gang (D26, D27, call 18).
+The tracker of gang is `none` in a source run (call 16). The writer of gang rewrites the summary of its page, and the Brain writes only one page. The agents of gang keep the efforts of its roles table, and D21 covers the agents that source starts (call 17). Plan 3 is the plan for the self-drive of gang, which D33 moves from 0.7.0 to 0.8.0. It stays with gang and follows gang's own needs, because the Brain shares no engine code with gang (D26, D27, call 18).
 
 The developer hands its relay to gang and takes it back (call 19):
 
@@ -376,10 +376,10 @@ The skill ships in two steps (D29, D33):
 
 | Step | Release | What it ships |
 |---|---|---|
-| 1 | monet 0.6.0 | Section 5 without 5.10 and the parts marked step 2. Research, design, and report runs, with no implementation phase, no demo, and no gang. |
+| 1 | monet 0.7.0 | Section 5 without 5.10 and the parts marked step 2. Research, design, and report runs, with no implementation phase, no demo, and no gang. |
 | 2 | The minor release after the self-drive of gang | 5.10 and the parts marked step 2: the implementation phase, demo runs, gang, `repo`, `main_deploys`, and merges. |
 
-The self-drive of gang ships in 0.7.0, the next minor release after 0.6.0. This moves the self-drive from 0.6.0, the release that O3 of the gang 0.5 design named, to 0.7.0 (`docs/design/gang-0.5.md:78`). The owner confirmed this move, so call 23 became D33.
+The self-drive of gang ships in 0.8.0, the next minor release after 0.7.0. This moves the self-drive from 0.7.0, the release that O3 of the gang 0.5 design names, to 0.8.0 (`docs/design/gang-0.5.md:78`). The owner confirmed this move, so call 23 became D33.
 
 Step 2 needs a gang that asks nothing after its kickoff and relays from its first step (`docs/design/gang-0.5.md:20-21`). The handover of 5.10 relies on this, because gang 0.5.1 relays only after its launch. Plan 3 needs no change for source.
 
@@ -434,7 +434,7 @@ These are Claude's calls, not the owner's. The owner checks them in review.
 | 20 | The skill is typed only, and the sessions that the engine starts read the reference files by path. | A run takes hours and needs the owner at the kickoff, and the model cannot invoke a typed-only skill. |
 | 21 | Mutants run at review, not in `make check`. | They take minutes and need a planted control, and CI runs the Go tests. |
 | 22 | A contract test runs the STE check on the skill text. | The page and the skill text follow STE-lite. |
-| 23 | Step 1 ships in monet 0.6.0. The self-drive of gang then ships in the next minor release, 0.7.0, and step 2 ships in the minor release after the self-drive. This moves the self-drive from 0.6.0, the release that O3 of the gang 0.5 design named, to 0.7.0. The owner confirmed it as D33. | Step 1 needs nothing from gang, a new skill ships in a minor release (0.3.0, `CHANGELOG.md:45-49`), and step 2 needs a released self-drive. |
+| 23 | Step 1 ships in monet 0.7.0. The self-drive of gang then ships in the next minor release, 0.8.0, and step 2 ships in the minor release after the self-drive. This moves the self-drive from 0.7.0, the release that O3 of the gang 0.5 design names, to 0.8.0. The owner confirmed it as D33. | Step 1 needs nothing from gang, a new skill ships in a minor release (0.3.0, `CHANGELOG.md:45-49`), and step 2 needs a released self-drive. |
 | 24 | In step 1, `charter lint` refuses a charter whose `phases` hold `implementation`, or that has `repo`. | A lint error at the kickoff is clearer than a run that stops later. |
 | 25 | In step 2, the developer confirms a dead session with `claude agents --json` only on a positive signal. The list loads, holds the current session, and does not list the old session, in any state. An empty or failed list is a wall. | An empty result reads the same as a dead session, a `blocked` session is still alive, and gang never takes over a live driver. |
 | 26 | In step 2, the Brain asks about `main_deploys` with the workflows that run on a push to the base branch in view. | A wrong "no" turns a merge on a default into an irreversible step. |

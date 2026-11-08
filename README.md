@@ -118,6 +118,7 @@ Uninstall keeps your data dir. Your personas stay there until you remove them.
 - [Authoring a skill](docs/authoring.md): add or change a skill in the plugin layout.
 - [Architecture](docs/architecture.md): how the skills, the agent, the output style, and the data dir fit together.
 - [Gang design](docs/design/gang.md): how the gang skill runs a plan with a fleet of agents.
+- [Source design](docs/design/source.md): how the source skill runs a long job with an outside review panel.
 - [Roadmap and handoff design](docs/design/roadmap-handoff.md): the roadmap and handoff skills.
 - [Contributing](CONTRIBUTING.md): the rules for a pull request.
 - [Changelog](CHANGELOG.md): what each release changed.

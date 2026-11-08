@@ -141,7 +141,8 @@ class DevelopmentDoc(unittest.TestCase):
                 self.assertNotEqual(pos, -1, f"`{step}` is not named")
         self.assertEqual(positions, sorted(positions), "steps are out of Makefile order")
         for needle in ("needs only `make`, `git`, `python3`, and `claude`.",
-                       "skills/gang/cli", "$MONET_PRIVACY_PATTERNS",
+                       "skills/gang/cli", "`tools/test-source.sh`",
+                       "skills/source/cli", "$MONET_PRIVACY_PATTERNS",
                        "~/.config/monet/privacy-patterns", "one per line",
                        "never sit in the repo", "built-in patterns only"):
             with self.subTest(needle=needle):
@@ -153,6 +154,8 @@ class DevelopmentDoc(unittest.TestCase):
                  ("`make check`", "`go vet ./...`", "`go test ./...`", "simulator")]
         self.assertNotIn(-1, order, order)
         self.assertEqual(order, sorted(order), "make test steps are out of order")
+        self.assertIn("Last, it runs the gang simulator. After that, `tools/test-source.sh` "
+                      "runs `go vet ./...` and `go test ./...` for `skills/source/cli`.", body)
         gang = GANG_SKILL.read_text(encoding="utf-8")
         go = re.search(r"`go` ([0-9.]+) or later", gang).group(1)
         node = re.search(r"`node` ([0-9.]+) or later", gang).group(1)

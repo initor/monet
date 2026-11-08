@@ -45,7 +45,7 @@ The plugin ships one output style, `monet:ste-lite`. The file `output-styles/ste
 
 ## The hook
 
-The plugin ships one hook. `hooks/hooks.json` runs `hooks/handoff-relay.js` after each tool use, through the `hooks/run-node.sh` shim that finds `node`. The hook acts only in a project that has `.claude/handoff-relay.json`. When the context of the session reaches the threshold in that file, the hook tells the session to follow the procedure that the file names. `/monet:gang run` writes that file, so that its coordinator hands the run to a new background session.
+The plugin ships one hook. `hooks/hooks.json` runs `hooks/handoff-relay.js` after each tool use, through the `hooks/run-node.sh` shim that finds `node`. The hook acts only in a project that has `.claude/handoff-relay.json`. When the context of the session reaches the threshold in that file, the hook tells the session to follow the procedure that the file names. `/monet:gang run` writes that file, so that its coordinator hands the run to a new background session. `/monet:source` writes that file in the folder of its Brain session and in `<run>/dev`, so that each session of a run relays itself.
 
 ## userConfig
 
@@ -83,4 +83,4 @@ User data is not in the plugin dir, because Claude Code replaces the plugin cach
 
 ## Run scratch
 
-Six skills write run scratch under the target repo's `.planning/`: `gang`, `handoff`, `pr`, `review-local`, `teach`, and `visual-design`. The target repo is the one that the user works in, not this repo. Other output, such as a `paint` page or the `reviews.md` of `review-code`, goes where the user or the skill names it. Only user data goes to the data dir, and nothing writes inside the plugin dir.
+Six skills write run scratch under the target repo's `.planning/`: `gang`, `handoff`, `pr`, `review-local`, `teach`, and `visual-design`. The `source` skill writes each run to `.planning/source/<slug>/` in the folder where the owner starts the kickoff. The target repo is the one that the user works in, not this repo. Other output, such as a `paint` page or the `reviews.md` of `review-code`, goes where the user or the skill names it. Only user data goes to the data dir, and nothing writes inside the plugin dir.
