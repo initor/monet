@@ -54,6 +54,13 @@ class Changelog(unittest.TestCase):
             with self.subTest(needle=needle):
                 self.assertIn(needle, entry)
 
+    def test_source_release_lists_the_kickoff(self):
+        text = read(CHANGELOG)
+        entry = re.search(r"(?ms)^## \[0\.7\.0\] - \d{4}-\d{2}-\d{2}$(.*?)(?=^## |\Z)", text)
+        self.assertIsNotNone(entry, "no `## [0.7.0] - YYYY-MM-DD` heading")
+        self.assertRegex(entry.group(1), r"(?m)^### Added$")
+        self.assertIn("`/monet:source kickoff", entry.group(1))
+
     def test_prose_has_no_em_dash_or_semicolon(self):
         prose_is_clean(self, CHANGELOG)
 
