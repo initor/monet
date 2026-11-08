@@ -20,7 +20,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 import skillkit  # noqa: E402
 
 TEXT_FILES = ["reference/rules.md", "reference/relay.md", "reference/developer.md", "reference/evaluator.md",
-              "reference/reporter.md", "reference/kickoff.md"]
+              "reference/reporter.md", "reference/kickoff.md", "reference/brain.md"]
 ENGINE = re.compile(r"monet-source((?: [a-z]+){1,2})")
 # A persona card (R25): a JSON weight field, or a YAML weight line.
 CARD = re.compile(r'"weight"\s*:\s*"(blocking|advisory)"|^\s*weight:\s*(blocking|advisory)\s*$', re.MULTILINE)
@@ -291,6 +291,116 @@ class Kickoff(unittest.TestCase):
         for want in ("the seal, a clean preflight, and a clean pilot", "<skill>/reference/brain.md"):
             with self.subTest(want=want):
                 self.assertIn(want, start)
+
+
+def reference_names(src):
+    """The reference files that engine source src names (R27, owner ruling): each reference/<name>.md, the last
+    argument of filepath.Join(skill, "reference", ...), and the role files of relayKickoff, never a d.Path name."""
+    role = re.search(r"(?ms)^func relayKickoff\(.*?^}", src)
+    found = re.findall(r'reference/([a-z]+\.md)|"reference", "([a-z]+\.md)"', src)
+    return {a or b for a, b in found} | set(re.findall(r'"([a-z]+\.md)"', role.group(0) if role else ""))
+
+
+class Brain(unittest.TestCase):
+    def in_order(self, text, wants):
+        firsts = [text.find(want) for want in wants]
+        self.assertNotIn(-1, firsts, dict(zip(wants, firsts)))
+        self.assertEqual(firsts, sorted(firsts), dict(zip(wants, firsts)))
+
+    def test_brain_md_round(self):
+        part = section(read("reference/brain.md"), "A round")
+        self.in_order(part, ["round open", "one Agent call per `check` line, all in one message", "round close", "item open",
+                             "report > <run>/packet.json", "report done --at <time> --row <log_next>", "context --role brain"])
+        for want in ("`--pick <id,...>`", "<skill>/reference/rules.md", "<skill>/reference/evaluator.md", "<skill>/reference/reporter.md"):
+            with self.subTest(want=want):
+                self.assertIn(want, part)
+        prompts = [line for line in part.splitlines() if "Its prompt names" in line]
+        self.assertEqual([("<skill>/reference/rules.md" in line) for line in prompts], [True, True])
+        self.assertIn("and the packet path `<run>/packet.json`.", prompts[-1])
+        self.assertRegex(part, r"(?m)^\d+\. Only a `wrote <time>` result leads to `<run>/bin/monet-source report done --at <time> "
+                               r"--row <log_next> --holder <session>`\. Take `log_next` from that packet\.$")
+        self.assertRegex(part, r"(?m)^\d+\. On `ACCEPT` of the final round, follow \"Delivery\"\. On any other `ACCEPT`, "
+                               r"run `<run>/bin/monet-source phase next --holder <session>`\.")
+        self.assertRegex(part, r"(?m)^\d+\. On `FIX` of the final round, run `<run>/bin/monet-source phase back <phase> "
+                               r"--reason <reason> --holder <session>`")
+
+    def test_brain_md_events(self):
+        loop = section(read("reference/brain.md"), "Event loop")
+        routes = re.findall(r'"([A-Z_]+)": \{([^}]*)\}', (SKILL / "cli" / "internal" / "events" / "events.go").read_text(encoding="utf-8"))
+        brain = sorted(name for name, roles in routes if '"brain"' in roles)
+        self.assertEqual((len(brain), "VERSION" in brain, "FINDINGS" in brain), (10, True, False))
+        self.assertEqual(sorted(re.findall(r"(?m)^\| `([A-Z_]+)", loop)), brain)
+        for want in ("watch --role brain", "FINDINGS", "claude agents --json", *brain):
+            with self.subTest(want=want):
+                self.assertRegex(loop, rf"\b{re.escape(want)}\b")
+        self.assertRegex(loop, r"(?m)^\| `RESPONSE <n>` \|.* Start nothing,")
+        self.assertRegex(loop, r"(?m)^\| `PHASE <moves> <phase>` \| At `acceptance`, run `<run>/bin/monet-source accept --holder")
+
+    def test_brain_md_owner_channel(self):
+        text = read("reference/brain.md")
+        for want in ("[source <slug>]", "Never resolve a discussion.", "relay words --comment <id> --at <time>", "item rule",
+                     "--words <id>", "wall clear", "charter amend", "The Brain never does the work.",
+                     "the Brain talks with the owner only at a wall, an item, or delivery."):
+            with self.subTest(want=want):
+                self.assertIn(want, text)
+        self.assertEqual(re.findall(r"(?<!<skill>/reference/)\b(?:evaluator|reporter)\.md", text), [])
+        for want in ("- Each reply on the page starts with `[source <slug>]`.",
+                     "relay words --comment <id> --at <time> < <run>/comment.in.txt`"):
+            with self.subTest(want=want):
+                self.assertIn(want, section(text, "The owner and the page"))
+        walls = section(text, "Walls and items")
+        for want in ("- On the `WALL W<n>` event, send the owner one short message.",
+                     "run `<run>/bin/monet-source wall clear W<n> --words <id> --holder <session>`",
+                     "run `<run>/bin/monet-source item rule D<n> --pick default|other --words <id> --holder <session>`",
+                     "run `<run>/bin/monet-source charter amend --words <id> --holder <session>`"):
+            with self.subTest(want=want):
+                self.assertIn(want, walls)
+        self.assertEqual(walls.lower().count("send the owner"), 1)
+
+    def test_brain_md_heartbeat(self):
+        beat = section(read("reference/brain.md"), "Heartbeat")
+        for want in ("ScheduleWakeup", "at most 45 minutes", "preflight", "power", "lid"):
+            with self.subTest(want=want):
+                self.assertIn(want, beat)
+        wakes = [int(n) for n in re.findall(r"(?m)^\d+\. Call ScheduleWakeup for (\d+) minutes", beat)]
+        self.assertTrue(wakes and max(wakes) <= 45, wakes)
+        self.assertRegex(beat, r"(?m)^\d+\. A `FAIL power` or `FAIL lid` line .*Post that line on the page in a comment "
+                               r"that starts with `\[source <slug>\]`\.")
+
+    def test_brain_md_delivery(self):
+        for text in ("b a", "b"):
+            with self.subTest(control=text), self.assertRaises(AssertionError):
+                self.in_order(text, ["a", "b"])
+        self.in_order(section(read("reference/brain.md"), "Delivery"),
+                      ["bin/monet-source deliver --holder", "claude stop", "lock release dev", "lock release brain"])
+
+    def test_brain_md_resume(self):
+        self.in_order(section(read("reference/brain.md"), "Resume"),
+                      ["lock acquire brain", "relay words", "phase back <phase> --reason <reason>", "item rule"])
+
+    def test_brain_md_is_step_one(self):
+        text = read("reference/brain.md")
+        self.assertEqual(re.findall(r"(?m)^#{1,2} .*", text),
+                         ["# Brain", "## Event loop", "## A round", "## The owner and the page", "## Walls and items",
+                          "## Heartbeat", "## Delivery", "## Resume"])
+        self.assertIsNone(re.search(r"\bgang\b", text, re.IGNORECASE))
+        for banned in ("item hold", "ship wait", "SHIP_OK"):
+            with self.subTest(banned=banned):
+                self.assertNotIn(banned, text)
+
+    def test_engine_names_existing_reference_files(self):
+        sample = ('d.Path("relay", "dev.md")\nround.Path(run, n, "response.md")\n'
+                  'filepath.Join(skill, "reference", "relay.md") // <skill>/reference/rules.md\n'
+                  'func relayKickoff() {\n\tfile := "brain.md"\n}\nfunc other() { x := "x.md" }\n')
+        self.assertEqual(reference_names(sample), {"relay.md", "rules.md", "brain.md"})
+        names = set()
+        for path in sorted((SKILL / "cli" / "cmd" / "monet-source").glob("*.go")):
+            if not path.name.endswith("_test.go"):
+                names |= reference_names(path.read_text(encoding="utf-8"))
+        self.assertLessEqual({"brain.md", "developer.md", "relay.md", "rules.md"}, names)
+        for name in sorted(names):
+            with self.subTest(name=name):
+                self.assertTrue((REF / name).is_file(), name)
 
 
 if __name__ == "__main__":
