@@ -38,6 +38,7 @@ Beyond the loop:
 | Turn findings into a page you can share | `/monet:paint` |
 | Make a draft sound like you | `/monet:voice` |
 | Land a whole plan with a fleet of agents | `/monet:gang plan <spec-dir>` |
+| Run a long research or design job with an outside review panel | `/monet:source kickoff` |
 | Pick the work up in a fresh session | `/monet:handoff` |
 
 ## Skills
@@ -64,6 +65,7 @@ Type a skill as `/monet:<name>`, or ask in plain words and let Claude pick it. A
 | `/monet:review-local` | Use when the user wants to review uncommitted or branch changes before opening a PR ("review my changes", "check before I push", "pre-PR review"). |
 | `/monet:roadmap` | Use when the user asks to refresh, regenerate, or update a work stream's roadmap page, says "refresh the roadmap", or asks for a roadmap.html for a stream. |
 | `/monet:ship` | Use when the user wants to commit and open a PR in one step (asks to "ship", "land", "open a PR", or push-and-PR the current branch's uncommitted changes or commits ahead of main), or asks to "make a commit", which takes the commit-only path. |
+| `/monet:source` | Use when the user types /monet:source kickoff to start a long research, design, or report run with an outside panel of evaluator personas. |
 | `/monet:status` | Use when the user wants to inspect what monet can do or how it is wired ("monet status", "which skills does monet have", "show the monet agent config"). |
 | `/monet:teach` | Use when the user wants to deeply understand the work that was just done, or a target they name (a PR, a file or diff, a concept), through an incremental teaching loop: a running understanding checklist, restate-then-fill-gaps, eli5/eli14/intern explanations, and quizzing that doesn't stop until they've demonstrated mastery. |
 | `/monet:think` | Use when the user types /monet:think to make a task more ambitious ("be more ambitious", "think higher, deeper or wider", "an out-of-the-box take on X"). |
