@@ -20,7 +20,18 @@ sys.path.insert(0, str(ROOT / "tools"))
 import skillkit  # noqa: E402
 
 TEXT_FILES = ["reference/rules.md", "reference/relay.md", "reference/developer.md", "reference/evaluator.md",
-              "reference/reporter.md", "reference/kickoff.md", "reference/brain.md"]
+              "reference/reporter.md", "reference/kickoff.md", "reference/brain.md", "SKILL.md"]
+BUILD = ('go -C ${CLAUDE_PLUGIN_ROOT}/skills/source/cli build -ldflags "-X main.skillDir=${CLAUDE_PLUGIN_ROOT}/skills/source" '
+         '-o <run>/bin/monet-source ./cmd/monet-source')
+ARGUMENT_HINT = "kickoff [<file>] [--slug <slug>] | resume [--slug <slug>] | status [--slug <slug>]"
+# R4: the allowed-tools of gang without Workflow.
+ALLOWED_TOOLS = ["Bash", "Read", "Write", "Edit", "Grep", "Glob", "Agent", "Monitor", "AskUserQuestion",
+                 "ScheduleWakeup", "TaskCreate", "TaskUpdate", "TaskStop", "ListAgents", "SendMessage"]
+# R7: the description is fixed copy, and its first sentence is the catalog row.
+DESCRIPTION = ("Use when the user types /monet:source kickoff to start a long research, design, or report run with an "
+               "outside panel of evaluator personas. The run works for hours with no one, and one private Notion page "
+               "is its channel. It is typed only. For one PR, use ship instead, and to land a plan of code, use gang "
+               "instead.")
 ENGINE = re.compile(r"monet-source((?: [a-z]+){1,2})")
 # A persona card (R25): a JSON weight field, or a YAML weight line.
 CARD = re.compile(r'"weight"\s*:\s*"(blocking|advisory)"|^\s*weight:\s*(blocking|advisory)\s*$', re.MULTILINE)
@@ -89,7 +100,7 @@ class SkillText(unittest.TestCase):
 
     def test_reference_files_hold_no_variable(self):
         self.assertEqual(build_lines("a\n  go -C x build ./y\ngo build ./z\nb"), ["go -C x build ./y", "go build ./z"])
-        self.assertLessEqual({f"reference/{p.name}" for p in REF.glob("*.md")}, set(TEXT_FILES))
+        self.assertLessEqual({f"reference/{p.name}" for p in REF.glob("*.md")} | {"SKILL.md"}, set(TEXT_FILES))
         for rel in TEXT_FILES:
             if rel.startswith("reference/"):
                 with self.subTest(file=rel):
@@ -401,6 +412,64 @@ class Brain(unittest.TestCase):
         for name in sorted(names):
             with self.subTest(name=name):
                 self.assertTrue((REF / name).is_file(), name)
+
+
+class Skill(unittest.TestCase):
+    def setUp(self):
+        self.text = read("SKILL.md")
+
+    def test_skill_md_frontmatter(self):
+        meta = skillkit.read_skill(SKILL / "SKILL.md").frontmatter
+        self.assertEqual(sorted(meta), ["allowed-tools", "argument-hint", "description", "disable-model-invocation", "name"])
+        self.assertEqual((meta["name"], meta["argument-hint"], meta["allowed-tools"]), ("source", ARGUMENT_HINT, ALLOWED_TOOLS))
+        self.assertIs(meta["disable-model-invocation"], True)
+        self.assertTrue(meta["description"].startswith("Use when the user types /monet:source kickoff"))
+        self.assertEqual(meta["description"], DESCRIPTION)
+        self.assertEqual(re.findall(r"(?m)^#{1,2} .*", self.text.split("\n---\n", 1)[1]),
+                         ["# Source", "## Overview", "## When to use", "## Arguments", "## Preconditions", "## Paths",
+                          "## Verbs", "## Core rules", "## Constraints"])
+
+    def test_skill_md_build_line(self):
+        self.assertEqual(build_lines(self.text), [BUILD])
+
+    def test_skill_md_paths(self):
+        paths = section(self.text, "Paths")
+        self.assertRegex(paths, r"(?m)^\| `<skill>` \| `\$\{CLAUDE_PLUGIN_ROOT\}/skills/source`")
+        self.assertRegex(paths, r"(?m)^\| `<run>` \| `<home>/\.planning/source/<slug>`")
+        for name in ("<home>", "<slug>"):
+            with self.subTest(name=name):
+                self.assertRegex(paths, rf"(?m)^\| `{name}` \| ")
+        mkdir = paths.find("mkdir -p <run>/bin")
+        self.assertTrue(-1 < mkdir < paths.find(BUILD), (mkdir, paths.find(BUILD)))
+
+    def test_skill_md_arguments(self):
+        args, pre = section(self.text, "Arguments"), section(self.text, "Preconditions")
+        for part, want in ((args, "$ARGUMENTS"), (args, "ask which verb with AskUserQuestion"),
+                           (args, "When a `--slug` value does not match `^[a-z0-9][a-z0-9-]*$`, tell the owner, and stop."),
+                           (pre, "Never run this skill as a subagent."), (pre, "`go` 1.24 or later"), (pre, "`node` 22 or later")):
+            with self.subTest(want=want):
+                self.assertIn(want, part)
+
+    def test_skill_md_verbs(self):
+        verbs = section(self.text, "Verbs")
+        for want in ("${CLAUDE_SKILL_DIR}/reference/kickoff.md", "${CLAUDE_SKILL_DIR}/reference/brain.md", '"Resume"',
+                     "status", "8 at most"):
+            with self.subTest(want=want):
+                self.assertIn(want, verbs)
+        self.assertEqual(re.findall(r"(?m)^\| `([a-z]+) ", verbs), ["kickoff", "resume", "status"])
+
+    def test_skill_md_constraints(self):
+        rules = section(self.text, "Constraints")
+        for want in ("Refer to the owner as the owner, or with they or them.",
+                     "Use model aliases only: `opus`, `sonnet`, `haiku`, `fable`."):
+            with self.subTest(want=want):
+                self.assertIn(want, rules)
+
+    def test_readme_door_row(self):
+        lines = (ROOT / "README.md").read_text().splitlines()
+        row = "| Run a long research or design job with an outside review panel | `/monet:source kickoff` |"
+        self.assertEqual(lines.count(row), 1)
+        self.assertEqual(lines[lines.index(row) - 1], "| Land a whole plan with a fleet of agents | `/monet:gang plan <spec-dir>` |")
 
 
 if __name__ == "__main__":
