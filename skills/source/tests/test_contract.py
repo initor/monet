@@ -19,7 +19,7 @@ STE_CHECK = ROOT / "skills" / "voice" / "scripts" / "ste_check.py"
 sys.path.insert(0, str(ROOT / "tools"))
 import skillkit  # noqa: E402
 
-TEXT_FILES = ["reference/rules.md", "reference/evaluator.md", "reference/reporter.md"]
+TEXT_FILES = ["reference/rules.md", "reference/developer.md", "reference/evaluator.md", "reference/reporter.md"]
 ENGINE = re.compile(r"monet-source((?: [a-z]+){1,2})")
 # A persona card (R25): a JSON weight field, or a YAML weight line.
 CARD = re.compile(r'"weight"\s*:\s*"(blocking|advisory)"|^\s*weight:\s*(blocking|advisory)\s*$', re.MULTILINE)
@@ -126,6 +126,34 @@ class Rules(unittest.TestCase):
         for code in (0, 1, 2, 3, 4, 64, 75):
             with self.subTest(code=code):
                 self.assertEqual(len([row for row in codes.splitlines() if row.startswith(f"| {code} |")]), 1)
+
+
+class Developer(unittest.TestCase):
+    def test_developer_md_headings(self):
+        self.assertEqual(re.findall(r"(?m)^#{1,2} .*", read("reference/developer.md")),
+                         ["# Developer", "## Start", "## Pilot", "## A version", "## Findings",
+                          "## Decisions and walls", "## Heartbeat", "## Relay"])
+
+    def test_developer_md_loop(self):
+        text = read("reference/developer.md")
+        for want in ("dev hello", "watch --role dev", "dev beat", "at most 45 minutes", "`<run>/dev`", "`<run>/notes/`",
+                     "submit --path", "respond", "decision add", "--reason", "wall open",
+                     "<run>/rounds/<n>/findings.md", "RULING", "context --role dev", "`<run>/relay/dev.md`"):
+            with self.subTest(want=want):
+                self.assertIn(want, text)
+
+    def test_developer_md_pilot(self):
+        pilot = section(read("reference/developer.md"), "Pilot")
+        for want in ("pwd -P", "decision add"):
+            with self.subTest(want=want):
+                self.assertIn(want, pilot)
+
+    def test_developer_md_is_step_one(self):
+        text = read("reference/developer.md")
+        self.assertIsNone(re.search(r"\bgang\b", text, re.IGNORECASE))
+        for banned in ("dev handover", "ship wait", "item hold", "submit --sha"):
+            with self.subTest(banned=banned):
+                self.assertNotIn(banned, text)
 
 
 class Evaluator(unittest.TestCase):
