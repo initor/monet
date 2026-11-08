@@ -19,7 +19,7 @@ STE_CHECK = ROOT / "skills" / "voice" / "scripts" / "ste_check.py"
 sys.path.insert(0, str(ROOT / "tools"))
 import skillkit  # noqa: E402
 
-TEXT_FILES = ["reference/rules.md"]
+TEXT_FILES = ["reference/rules.md", "reference/evaluator.md", "reference/reporter.md"]
 ENGINE = re.compile(r"monet-source((?: [a-z]+){1,2})")
 # A persona card (R25): a JSON weight field, or a YAML weight line.
 CARD = re.compile(r'"weight"\s*:\s*"(blocking|advisory)"|^\s*weight:\s*(blocking|advisory)\s*$', re.MULTILINE)
@@ -126,6 +126,39 @@ class Rules(unittest.TestCase):
         for code in (0, 1, 2, 3, 4, 64, 75):
             with self.subTest(code=code):
                 self.assertEqual(len([row for row in codes.splitlines() if row.startswith(f"| {code} |")]), 1)
+
+
+class Evaluator(unittest.TestCase):
+    def test_evaluator_md_writes_one_verdict(self):
+        text = read("reference/evaluator.md")
+        self.assertEqual(re.findall(r"(?m)^#{1,2} .*", text), ["# Evaluator", "## Read", "## Judge", "## Write"])
+        for want in ("Read only your brief, the version files, and the sources that the brief lists.",
+                     "Judge against the goal and the quality bar of the charter, not against the reading of the developer.",
+                     "`accept`", "`block`", "`blocker`", "`major`", "`minor`",
+                     "A `block` needs at least one `blocker` finding.", "Write only the verdict file.",
+                     "Return one line: the path of the verdict file."):
+            with self.subTest(want=want):
+                self.assertIn(want, text)
+
+
+class Reporter(unittest.TestCase):
+    def test_reporter_md_writes_the_page(self):
+        text = read("reference/reporter.md")
+        self.assertEqual(re.findall(r"(?m)^#{1,2} .*", text),
+                         ["# Reporter", "## Read", "## The page", "## The write", "## Delivery"])
+        # The Brain names the packet path in the prompt, so the file names no fixed path (R17).
+        self.assertNotIn("packet.json", text)
+        for want in ("the packet path",
+                     "the executive summary, the items that wait for the owner, the decisions, and a dated log",
+                     "Fetch the page right before the write.", "Use only targeted edits.", "Never replace the whole page",
+                     "Write on no other page.", "STE-lite", "mermaid", "<at> <line>", "wrote <time>",
+                     "no write: <reason>"):
+            with self.subTest(want=want):
+                self.assertIn(want, text)
+        delivery = section(text, "Delivery")
+        for want in ("verdicts", "costs of invariants", "link"):
+            with self.subTest(delivery=want):
+                self.assertIn(want, delivery)
 
 
 if __name__ == "__main__":
