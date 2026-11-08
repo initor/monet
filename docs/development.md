@@ -41,7 +41,7 @@ The README's How it works figure is built, not drawn. `docs/assets/how-it-works.
 
 `make check` needs only `make`, `git`, `python3`, and `claude`.
 
-`make test` runs `make check` first. Then `tools/test-gang.sh` runs `go vet ./...` and `go test ./...` for `skills/gang/cli`. Last, it runs the gang simulator. These steps need Go 1.24 or later and Node 22 or later, as `skills/gang/SKILL.md` requires.
+`make test` runs `make check` first. Then `tools/test-gang.sh` runs `go vet ./...` and `go test ./...` for `skills/gang/cli`. Last, it runs the gang simulator. After that, `tools/test-source.sh` runs `go vet ./...` and `go test ./...` for `skills/source/cli`. These steps need Go 1.24 or later and Node 22 or later, as `skills/gang/SKILL.md` requires.
 
 The privacy scan flags an email address, except for a short list of built-in safe addresses. It also reads extra regexes, one per line, from a file outside the repo. That file is the one that `$MONET_PRIVACY_PATTERNS` names, else `~/.config/monet/privacy-patterns`. So your personal terms never sit in the repo. CI sets neither, so CI runs the built-in patterns only.
 

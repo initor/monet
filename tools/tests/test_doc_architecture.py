@@ -177,7 +177,50 @@ class ArchitectureDoc(unittest.TestCase):
                      "visual-design"):
             with self.subTest(skill=name):
                 self.assertIn(f"`{name}`", line[0])
+        self.assertSentence(body, r"^The `source` skill writes each run to "
+                                  r"`\.planning/source/<slug>/` in the folder where "
+                                  r"the owner starts the kickoff\.$")
         self.assertSentence(body, r"nothing writes inside the plugin dir")
+
+    def test_hook_names_both_writers(self):
+        body = section(doc_text(), "hook")
+        self.assertSentence(body, r"`/monet:gang run` writes that file")
+        self.assertSentence(body, r"^`/monet:source` writes that file in the folder of "
+                                  r"its Brain session and in `<run>/dev`, so that each "
+                                  r"session of a run relays itself\.$")
+
+    def test_readme_links_the_source_design(self):
+        lines = (ROOT / "README.md").read_text(encoding="utf-8").split("\n")
+        line = ("- [Source design](docs/design/source.md): how the source skill "
+                "runs a long job with an outside review panel.")
+        self.assertEqual(lines.count(line), 1)
+        self.assertTrue(lines[lines.index(line) - 1].startswith(
+            "- [Gang design](docs/design/gang.md)"))
+
+    def test_changelog_adds_the_source_item(self):
+        lines = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8").split("\n")
+        item = ("- `/monet:source kickoff [<file>] [--slug <slug>]` starts a long "
+                "research, design, or report run, with a panel of evaluator personas "
+                "that the user gives and a private Notion page as the channel. It is "
+                "typed only, and its engine `monet-source` needs Go 1.24, Node 22, "
+                "`git`, `claude`, and `gh`.")
+        self.assertEqual(lines.count(item), 1)
+        at = lines.index(item)
+        self.assertLess(lines.index("## [Unreleased]"), at)
+        self.assertLess(at, [n for n, s in enumerate(lines) if s.startswith("## [0.6.0]")][0])
+        self.assertEqual([s for s in lines[:at] if s.startswith("### ")][-1], "### Added")
+
+    def test_design_ships_step_one_in_0_7_0(self):
+        text = (ROOT / "docs" / "design" / "source.md").read_text(encoding="utf-8")
+        for needle in ("| D33 | Step 1 ships in monet 0.7.0, with no demo runs. The "
+                       "self-drive of gang moves from 0.7.0 to 0.8.0, and step 2 ships "
+                       "in the minor release after the self-drive. |",
+                       "| 1 | monet 0.7.0 |", "which D33 moves from 0.7.0 to 0.8.0.",
+                       "The self-drive of gang ships in 0.8.0, the next minor release "
+                       "after 0.7.0.", "| 23 | Step 1 ships in monet 0.7.0.",
+                       "until D33 moved it to 0.8.0"):
+            with self.subTest(needle=needle[:40]):
+                self.assertIn(needle, text)
 
     def test_links_the_catalog_and_does_not_repeat_it(self):
         text = doc_text()
