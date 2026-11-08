@@ -19,8 +19,8 @@ STE_CHECK = ROOT / "skills" / "voice" / "scripts" / "ste_check.py"
 sys.path.insert(0, str(ROOT / "tools"))
 import skillkit  # noqa: E402
 
-TEXT_FILES = ["reference/rules.md", "reference/developer.md", "reference/evaluator.md", "reference/reporter.md",
-              "reference/kickoff.md"]
+TEXT_FILES = ["reference/rules.md", "reference/relay.md", "reference/developer.md", "reference/evaluator.md",
+              "reference/reporter.md", "reference/kickoff.md"]
 ENGINE = re.compile(r"monet-source((?: [a-z]+){1,2})")
 # A persona card (R25): a JSON weight field, or a YAML weight line.
 CARD = re.compile(r'"weight"\s*:\s*"(blocking|advisory)"|^\s*weight:\s*(blocking|advisory)\s*$', re.MULTILINE)
@@ -127,6 +127,58 @@ class Rules(unittest.TestCase):
         for code in (0, 1, 2, 3, 4, 64, 75):
             with self.subTest(code=code):
                 self.assertEqual(len([row for row in codes.splitlines() if row.startswith(f"| {code} |")]), 1)
+
+
+class Relay(unittest.TestCase):
+    def setUp(self):
+        self.text = read("reference/relay.md")
+
+    def holds(self, text, wants):
+        self.assertEqual([want for want in wants if want not in text], [])
+
+    def test_relay_md_layout(self):
+        self.assertEqual(re.findall(r"(?m)^#{1,2} .*", self.text),
+                         ["# Relay", "## Hand off", "## If the relay fails", "## After the handoff"])
+        calls = re.findall(r"\S*monet-source", self.text)
+        self.assertGreater(len(calls), 5)
+        self.assertEqual(([c for c in calls if not c.endswith("`<run>/bin/monet-source")], re.findall(r"(?<!monet-source )\b(relay (?:words|prompt|mute)|report(?: done)?|lock (?:acquire|release|renew)|decision add|dev \w+|status|context --role)\b", self.text)), ([], ["lock acquire", "dev takeover"]))
+
+    def test_relay_md_names_its_copies(self):
+        self.holds(self.text, ("`<run>/relay/brain.md`", "`<run>/relay/dev.md`", "two folders above", "<skill>/reference/rules.md",
+                               "`<role>` is `brain` for the Brain and `dev` for the developer.", "Before step 1, run `<run>/bin/monet-source status`. If its `lease <role>` line does not name `<session>`"))
+
+    def test_relay_md_hand_off_order(self):
+        hand = section(self.text, "Hand off")
+        order = ["Wait for each evaluator subagent in flight to return.", "with TaskStop, such as the Monitor.", "TaskStop",
+                 "Note the command of each task other than the Monitor.", "relay words", "note why under State, and go on.",
+                 "<run>/handoff/<role>-<stamp>.md", "date -u +%Y%m%dT%H%M%SZ", "Goal, Done, Next, Blocked, Decisions, Corrections, Gotchas, and State",
+                 "Under State, list each event line that this session did not handle, and each task that step 2 stopped.",
+                 "relay prompt --role <role> --handoff <run>/handoff/<role>-<stamp>.md --holder <session>", "relay prompt --role <role> --handoff", "--mode <mode>`, the mode of this session.",
+                 "fails in another way", "lock release brain", "Run the command that step 6 printed", "Every 30 seconds", "for 10 minutes at most", "10 minutes",
+                 "run `<run>/bin/monet-source status` until its `lease <role>` line names another holder",
+                 'or no other holder shows up, follow "If the relay fails"', "relay mute"]
+        self.holds(hand, order)
+        self.assertEqual(([hand.find(w) for w in order], *map(hand.count, ("Monitor", "stopped", "again"))), (sorted(map(hand.find, order)), 2, 1, 1))
+        self.assertIn("The Brain releases its lease with `<run>/bin/monet-source lock release brain --holder <session>`, "
+                      "because the new Brain starts with `lock acquire brain`.", hand)
+        self.assertEqual(["The developer skips this step." in line for line in hand.splitlines() if "report done" in line], [True])
+
+    def test_relay_md_keeps_dev_lease(self):
+        self.assertIn("The developer keeps the `dev` lease, because the new session takes it over with `dev takeover`.", self.text)
+        self.assertEqual(re.findall(r"lock release \S+", self.text), ["lock release brain"])
+
+    def test_relay_md_failure_steps(self):
+        self.holds(section(self.text, "If the relay fails"), (
+            "The Brain runs `<run>/bin/monet-source lock acquire brain --holder <session>`. "
+            'On exit 4, the new session holds the lease, so go on with step 10 of "Hand off".',
+            "The developer runs `<run>/bin/monet-source status`. If its `lease dev` line names another holder, "
+            'go on with step 10 of "Hand off".', "relay mute", "The Brain writes `relay failed: <reason>` on the page",
+            'The developer runs `<run>/bin/monet-source decision add "relay failed: <reason>"', "Arm the Monitor and the heartbeat "
+            "again, start again each task that step 2 stopped, and keep working. Do not try a relay again in this session."))
+
+    def test_relay_md_forward_step(self):
+        self.holds(section(self.text, "After the handoff"), ("relay words", "claude agents --json", "the session that step 8 started",
+            "Skip a session in between, since it handed off too.", "SendMessage", "Read entry <id> of `<run>/owner-words.md`, and act on it."))
 
 
 class Developer(unittest.TestCase):
