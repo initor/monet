@@ -19,7 +19,8 @@ STE_CHECK = ROOT / "skills" / "voice" / "scripts" / "ste_check.py"
 sys.path.insert(0, str(ROOT / "tools"))
 import skillkit  # noqa: E402
 
-TEXT_FILES = ["reference/rules.md", "reference/developer.md", "reference/evaluator.md", "reference/reporter.md"]
+TEXT_FILES = ["reference/rules.md", "reference/developer.md", "reference/evaluator.md", "reference/reporter.md",
+              "reference/kickoff.md"]
 ENGINE = re.compile(r"monet-source((?: [a-z]+){1,2})")
 # A persona card (R25): a JSON weight field, or a YAML weight line.
 CARD = re.compile(r'"weight"\s*:\s*"(blocking|advisory)"|^\s*weight:\s*(blocking|advisory)\s*$', re.MULTILINE)
@@ -187,6 +188,57 @@ class Reporter(unittest.TestCase):
         for want in ("verdicts", "costs of invariants", "link"):
             with self.subTest(delivery=want):
                 self.assertIn(want, delivery)
+
+
+class Kickoff(unittest.TestCase):
+    def test_kickoff_md_order(self):
+        text = read("reference/kickoff.md")
+        steps = ["init --slug <slug> --holder <session>", "## Questions", "charter lint", "charter render",
+                 "charter seal --words <id>", "persona set <id>", "preflight", "dev start"]
+        firsts = [text.find(step) for step in steps]
+        self.assertNotIn(-1, firsts, dict(zip(steps, firsts)))
+        self.assertEqual(firsts, sorted(firsts), dict(zip(steps, firsts)))
+        for want in ("one question at a time", "relay words", "<run>/personas/<id>.in.md"):
+            with self.subTest(want=want):
+                self.assertIn(want, text)
+
+    def test_kickoff_md_charter_fields(self):
+        charter = section(read("reference/kickoff.md"), "Charter")
+        for field in ("goal", "context", "invariants", "deliverable", "phases", "quality_bar", "personas", "page",
+                      "grants", "id", "description", "weight", "sources", "research", "design"):
+            with self.subTest(field=field):
+                self.assertIn(f"`{field}`", charter)
+        fields, cards = charter.split("Each persona card holds these fields.")
+        rows = ((fields, ("goal", "context", "invariants", "deliverable", "phases", "quality_bar", "personas", "page",
+                          "grants")),
+                (cards, ("id", "description", "weight", "sources")))
+        for part, names in rows:
+            for name in names:
+                with self.subTest(row=name):
+                    self.assertRegex(part, rf"(?m)^\| `{name}` \|")
+        self.assertNotRegex(read("reference/kickoff.md"), r"(?im)^\s*```\s*(json|ya?ml)\b")
+
+    def test_kickoff_md_preflight(self):
+        text = read("reference/kickoff.md")
+        for heading, wants in (("Preflight", ("gh auth status", "[source <slug>] Page ready.", "in one list", "FAIL")),
+                               ("Pilot", ("pwd -P", "10 minutes", "accept-edits"))):
+            for want in wants:
+                with self.subTest(heading=heading, want=want):
+                    self.assertIn(want, section(text, heading))
+
+    def test_kickoff_md_is_step_one(self):
+        text = read("reference/kickoff.md")
+        self.assertEqual(re.findall(r"(?m)^#{1,2} .*", text),
+                         ["# Kickoff", "## Before the questions", "## Questions", "## Charter", "## Briefs",
+                          "## Preflight", "## Pilot", "## Start the run"])
+        self.assertIsNone(re.search(r"\bgang\b", text, re.IGNORECASE))
+        for word in ("main_deploys", "Docker", "`implementation`"):
+            with self.subTest(word=word):
+                self.assertNotIn(word, text)
+        start = section(text, "Start the run")
+        for want in ("the seal, a clean preflight, and a clean pilot", "<skill>/reference/brain.md"):
+            with self.subTest(want=want):
+                self.assertIn(want, start)
 
 
 if __name__ == "__main__":
