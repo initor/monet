@@ -51,11 +51,13 @@ An invariant is a hard constraint, and nobody in the run changes it. The run dec
 1. Run `<run>/bin/monet-source charter lint`.
 2. On exit 2, fix each `charter:` line that it prints, and run it again.
 3. Run `<run>/bin/monet-source charter render --holder <session>`. It writes `<run>/charter.md`.
-4. Show `<run>/charter.md` to the owner, and ask for a yes.
+4. Show `<run>/charter.md` to the owner, and ask the owner to type the yes in the chat. Do not take the yes from AskUserQuestion: `relay words` copies only the messages that the owner types.
 5. When the owner asks for a change, edit `charter.json`, and go back to step 1.
 6. After the yes, run `<run>/bin/monet-source relay words`. It prints the id of each new entry.
-7. Run `<run>/bin/monet-source charter seal --words <id> --holder <session>`, with the id of the yes.
-8. On exit 3, render the charter again, and get a new yes of the owner.
+7. Read the text of that entry in `<run>/owner-words.md`. When it does not confirm `charter.md`, go back to step 4.
+8. Run `<run>/bin/monet-source charter seal --words <id> --holder <session>`, with the id of the yes.
+9. On exit 2 with `came before charter.md was rendered`, the entry is older than the render. Go back to step 4.
+10. On exit 3, render the charter again, and get a new yes of the owner.
 
 ## Briefs
 

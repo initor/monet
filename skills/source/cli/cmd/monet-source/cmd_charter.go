@@ -145,8 +145,27 @@ func charterAmend(c *Ctx, args []string) error {
 	return nil
 }
 
+// wordsAfterRender refuses an entry that the owner typed before charter.md was last written, since
+// such words cannot confirm the charter that the owner saw. An unreadable time also refuses.
+func wordsAfterRender(md string, e words.Entry) error {
+	info, err := os.Stat(md)
+	if err != nil {
+		return exit.New(exit.Conflict, "%v", err)
+	}
+	at, err := time.Parse(time.RFC3339Nano, e.At)
+	if err != nil {
+		return exit.New(exit.Refused, "owner words %s: unreadable time %q", e.ID, e.At)
+	}
+	if !at.After(info.ModTime()) {
+		return exit.New(exit.Refused, "owner words %s at %s came before charter.md was rendered at %s: ask the owner to type the yes in the chat, run relay words, and pass the new id",
+			e.ID, e.At, info.ModTime().UTC().Format(time.RFC3339Nano))
+	}
+	return nil
+}
+
 // confirmCharter renews brain, then needs a clean lint, the entry --words in owner-words.md, a
-// charter.md that ends with the hash of charter.json, and a state that apply takes, in that order.
+// charter.md that ends with the hash of charter.json, an entry typed after that render, and a
+// state that apply takes, in that order.
 // Then it logs one row "charter <name>ed with words <id>". A refusal writes nothing.
 func confirmCharter(c *Ctx, name string, args []string, apply func(s *state.State, seal state.Seal, ch *charter.Charter) error) error {
 	fs := newFlagSet("charter " + name)
@@ -167,7 +186,8 @@ func confirmCharter(c *Ctx, name string, args []string, apply func(s *state.Stat
 	if err != nil {
 		return err
 	}
-	if _, err := words.Get(d.Words(), *id); err != nil {
+	entry, err := words.Get(d.Words(), *id)
+	if err != nil {
 		return exit.New(exit.Refused, "%v", err)
 	}
 	hash := charter.Hash(data)
@@ -177,6 +197,9 @@ func confirmCharter(c *Ctx, name string, args []string, apply func(s *state.Stat
 	}
 	if !strings.HasSuffix(string(md), "<!-- charter sha256="+hash+" -->\n") {
 		return exit.New(exit.Conflict, "charter.json changed after charter.md was rendered: render it and get the yes of the owner again")
+	}
+	if err := wordsAfterRender(d.CharterMD(), entry); err != nil {
+		return err
 	}
 	now := c.Now()
 	if err := state.Update(d, func(s *state.State) error {

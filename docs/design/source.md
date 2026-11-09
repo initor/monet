@@ -120,7 +120,7 @@ Each session starts in its own folder, so each one has its own `.claude/handoff-
 The owner types `/monet:source kickoff [<file>] [--slug <slug>]`. The owner gives the context, the expectations, the invariants already decided, the eventual goal, the persona cards, and the run page (D15, D19).
 
 1. **Questions.** The Brain asks one question at a time, only when the answer changes the direction (D16 point 2). A question that needs research goes to the run.
-2. **Charter.** The Brain writes `charter.json`, and `charter lint` checks it. The owner confirms `charter.md`, and `charter seal` records those words (D16 point 1).
+2. **Charter.** The Brain writes `charter.json`, and `charter lint` checks it. The owner confirms `charter.md`, and `charter seal` records those words (D16 point 1). Seal and amend refuse words that the owner typed before `charter.md` was rendered.
 3. **Preflight.** `preflight` checks each item below. The Brain asks the owner only about the items that fail, in one list (D18, call 3).
 4. **Pilot.** The Brain starts the developer while the owner is present. The developer makes one harmless call per tool that it needs.
 
