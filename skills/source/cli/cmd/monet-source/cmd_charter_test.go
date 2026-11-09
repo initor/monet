@@ -130,10 +130,21 @@ func newSealableRun(t *testing.T) string {
 	if _, e, code := runSource(t, &Ctx{Run: run}, "charter", "render", "--holder", "h1"); code != exit.OK {
 		t.Fatalf("render: code %d, stderr %q", code, e)
 	}
+	backdateRender(t, run)
 	if err := words.Append(store.Dir{Root: run}.Words(), words.Entry{ID: "w1", At: "2026-11-01T12:00:00Z", Text: "Yes, seal it."}); err != nil {
 		t.Fatal(err)
 	}
 	return run
+}
+
+// backdateRender sets the time of charter.md to an hour before testNow, so that the fixture owner
+// words, which are dated testNow or later, come after the render.
+func backdateRender(t *testing.T, run string) {
+	t.Helper()
+	at := testNow.Add(-time.Hour)
+	if err := os.Chtimes(store.Dir{Root: run}.CharterMD(), at, at); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // sealFiles returns state.json and log.tsv, the files that a seal writes.
@@ -164,6 +175,34 @@ func TestSealRefusesChangedCharter(t *testing.T) {
 	_, errOut, code := runSource(t, &Ctx{Run: run}, "charter", "seal", "--words", "w1", "--holder", "h1")
 	if code != exit.Conflict || !strings.Contains(errOut, "changed after charter.md was rendered") || sealFiles(t, run) != before {
 		t.Fatalf("code %d, stderr %q, or the seal wrote", code, errOut)
+	}
+}
+
+// Owner words typed before charter.md was rendered cannot confirm it: seal gives exit 2, names both
+// times, and writes nothing. Words typed after the render seal. This is the kickoff where an early
+// message ("i let u know") sealed the charter, since a yes in a question dialog is not in owner-words.md.
+func TestSealNeedsWordsAfterRender(t *testing.T) {
+	run := newSealableRun(t) // charter.md is dated testNow-1h, and w1 is dated testNow
+	d := store.Dir{Root: run}
+	if err := words.Append(d.Words(), words.Entry{ID: "w0", At: "2026-11-01T10:00:00Z", Text: "i let u know"}); err != nil {
+		t.Fatal(err)
+	}
+	before := sealFiles(t, run)
+	want := "monet-source: owner words w0 at 2026-11-01T10:00:00Z came before charter.md was rendered at 2026-11-01T11:00:00Z: ask the owner to type the yes in the chat, run relay words, and pass the new id\n"
+	for _, sub := range []string{"seal", "amend"} {
+		if _, e, code := runSource(t, &Ctx{Run: run}, "charter", sub, "--words", "w0", "--holder", "h1"); code != exit.Refused || e != want || sealFiles(t, run) != before {
+			t.Fatalf("%s w0: code %d, stderr %q, or it wrote", sub, code, e)
+		}
+	}
+	at := testNow.Add(-time.Hour) // an entry at the same instant as the render is not after it
+	if err := words.Append(d.Words(), words.Entry{ID: "w-same", At: at.Format(time.RFC3339Nano), Text: "yes"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, e, code := runSource(t, &Ctx{Run: run}, "charter", "seal", "--words", "w-same", "--holder", "h1"); code != exit.Refused || !strings.Contains(e, "came before charter.md was rendered") || sealFiles(t, run) != before {
+		t.Fatalf("w-same: code %d, stderr %q, or it wrote", code, e)
+	}
+	if _, e, code := runSource(t, &Ctx{Run: run}, "charter", "seal", "--words", "w1", "--holder", "h1"); code != exit.OK {
+		t.Fatalf("w1 after the render: code %d, stderr %q", code, e)
 	}
 }
 
@@ -291,6 +330,7 @@ func TestAmend(t *testing.T) {
 	if _, e, code := runSource(t, &Ctx{Run: run}, "charter", "render", "--holder", "h1"); err != nil || code != exit.OK || words.Append(d.Words(), words.Entry{ID: "w2", At: "2026-11-01T12:30:00Z", Text: "Amend it."}) != nil {
 		t.Fatalf("render: code %d, stderr %q, read err %v, or the append of w2 failed", code, e, err)
 	}
+	backdateRender(t, run)
 	amended, now := charter.Hash(data), testNow.Add(time.Hour)
 	for _, id := range []string{"w2", "w1"} {
 		if out, e, code := runSource(t, &Ctx{Run: run, Now: func() time.Time { return now }}, "charter", "amend", "--words", id, "--holder", "h1"); code != exit.OK || out != "" || e != "" {

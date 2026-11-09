@@ -103,6 +103,7 @@ func TestAmendDropsChangedBriefs(t *testing.T) {
 		if _, e, code := runSource(t, &Ctx{Run: run}, "charter", "render", "--holder", "h1"); code != exit.OK {
 			t.Fatalf("render: code %d, stderr %q", code, e)
 		}
+		backdateRender(t, run)
 		if out, e, code := runSource(t, &Ctx{Run: run}, "charter", "amend", "--words", "w1", "--holder", "h1"); code != exit.OK || out != "" || e != "" {
 			t.Fatalf("amend %q: code %d, stdout %q, stderr %q", edits, code, out, e)
 		}

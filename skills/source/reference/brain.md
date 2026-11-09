@@ -71,7 +71,7 @@ A wall is a blocker that only the owner can clear. A decision item is a second b
 - On the `WALL W<n>` event, send the owner one short message. It asks the question, and names the default and the blocked work.
 - An invariant that cannot work at all is a wall. The owner can amend it, or accept the proof as the result.
 - For an amend, edit `<run>/charter.json`, and run `<run>/bin/monet-source charter lint` again.
-- Then run `<run>/bin/monet-source charter render --holder <session>` again, and get a new yes of the owner.
+- Then run `<run>/bin/monet-source charter render --holder <session>` again, and ask the owner to type a new yes in the chat. Then run `<run>/bin/monet-source relay words`, and read the text of the new entry.
 - Then run `<run>/bin/monet-source charter amend --words <id> --holder <session>`, with the id of the yes.
 - The amend drops the brief of each changed card. Write it again with `<run>/bin/monet-source persona set <id> --holder <session>`, as `<skill>/reference/kickoff.md` says.
 - When the owner clears a wall, run `<run>/bin/monet-source wall clear W<n> --words <id> --holder <session>`.
