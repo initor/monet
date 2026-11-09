@@ -4,6 +4,8 @@ This file lists the notable changes to monet in each release. The format follows
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-11-09
+
 ### Fixed
 
 - `monet-source charter seal` and `charter amend` refuse owner words that the user typed before `charter.md` was rendered, with exit 2. Before, a kickoff that took the yes from a question dialog sealed the charter with an earlier message. The cause: `relay words` copies only typed messages. The kickoff and amend steps now ask the user to type the yes in the chat, and the Brain reads the entry before the seal.
