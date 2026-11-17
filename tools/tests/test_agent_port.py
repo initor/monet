@@ -38,6 +38,8 @@ TABLE = (
     ('"refresh the roadmap", "regenerate roadmap.html"', "`monet:roadmap`"),
     ('"orchestrate", "run this plan with a fleet", "fleet", "gang"', "`monet:gang`"),
     ('"I\'m at 80% context", "starting a new session", "draft a prompt to pick this up"', "`monet:handoff`"),
+    ('"what\'s in flight", "show the in-flight table", "where are the ETAs", "update the in-flight ledger"',
+     "`monet:inflight`"),
     ('"teach me this", "help me understand what we did", "walk me through this PR/file/change"',
      "`monet:teach`"),
     ('"be more ambitious with X", "think higher, deeper or wider about X", "an out-of-the-box take on X"',
@@ -49,7 +51,7 @@ TABLE = (
 
 ROUTED = {"git-changes", "git-draft-commit", "git-draft-pr", "ship", "voice", "distill-voice",
           "review-code", "pr", "review-local", "paint", "hairline-create", "visual-design", "roadmap",
-          "gang", "handoff", "teach", "think", "source", "web-operator"}
+          "gang", "handoff", "inflight", "teach", "think", "source", "web-operator"}
 
 # Quoted phrases in the dispatch steps that hold I, me, or my, verbatim from the snapshot.
 STEP_PHRASES = (
@@ -130,8 +132,9 @@ class AgentPort(unittest.TestCase):
         self.assertEqual(step(self.body, 16).count("\n   - "), 1)
         self.assertIn("`/monet:source kickoff [<file>] [--slug <slug>]` in a session started in the folder of the run."
                       " It is typed only (`disable-model-invocation`)", step(self.body, 16))
-        self.assertTrue(step(self.body, 17).startswith("17) Safety defaults:\n"))
-        self.assertEqual(re.findall(r"(?m)^(\d+)\) ", self.body), [str(n) for n in range(19)])
+        self.assertIn("apply `monet:inflight`", step(self.body, 17))
+        self.assertTrue(step(self.body, 18).startswith("18) Safety defaults:\n"))
+        self.assertEqual(re.findall(r"(?m)^(\d+)\) ", self.body), [str(n) for n in range(20)])
 
     def test_moved_out_of_import(self):
         self.assertEqual(tracked("import/agents"), set())
