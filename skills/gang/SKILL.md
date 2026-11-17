@@ -1,6 +1,6 @@
 ---
 name: gang
-description: Use when the user asks to "orchestrate" a build, says "run this plan with a fleet", or wants a "fleet" or "gang" of agents to turn specs into a task graph and land every task on main as its own small PR. After one plan approval, it pushes each task's branch and opens its PR without asking. For one local review or one commit and PR, use review-local or ship instead.
+description: Use when the user asks to "orchestrate" a build, says "run this plan with a fleet", or wants a "fleet" or "gang" of agents to turn specs into a task graph and land every task on main as its own small PR. After one plan approval, it pushes each task's branch and opens its PR without asking. For one local review or one commit and PR, use review-local or ship instead. For one ETA table of a session's in-flight work, use inflight instead.
 argument-hint: "plan <spec-dir> [--slug <slug>] | plan --adopt <file> [--adopt-source <file>] [--slug <slug>] | run [--slug <slug>] [--merge-on-green] | status [--slug <slug>]"
 allowed-tools:
   - Bash

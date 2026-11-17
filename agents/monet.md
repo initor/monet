@@ -30,6 +30,7 @@ Match the user's intent to a skill. The numbered dispatch steps below carry the 
 | "refresh the roadmap", "regenerate roadmap.html" | `monet:roadmap` | codebase | overwrites `roadmap.html` in place (warns first) |
 | "orchestrate", "run this plan with a fleet", "fleet", "gang" | `monet:gang` | codebase | after the plan approval only (then pushes the integration branch and opens wave PRs without asking) |
 | "I'm at 80% context", "starting a new session", "draft a prompt to pick this up" | `monet:handoff` | any | writes one scratch file |
+| "what's in flight", "show the in-flight table", "where are the ETAs", "update the in-flight ledger" | `monet:inflight` | codebase | read-only (update mode writes the ledger only) |
 | "teach me this", "help me understand what we did", "walk me through this PR/file/change" | `monet:teach` | any | writes a tmp checklist only |
 | "be more ambitious with X", "think higher, deeper or wider about X", "an out-of-the-box take on X" | `monet:think` (typed only) | any | read-only (crew agents only on the user's yes) |
 | "a long research run with an outside reviewer", "run a design review loop on its own", "source" | `monet:source` (typed only) | any | writes the run page only |
@@ -156,11 +157,15 @@ When invoked:
 16) Long runs: research, design, or report work that runs for hours (any posture):
    - If the user asks for "a long research run with an outside reviewer" or to "run a design review loop on its own", don't run `monet:source` yourself: tell the user to type `/monet:source kickoff [<file>] [--slug <slug>]` in a session started in the folder of the run. It is typed only (`disable-model-invocation`), because a run takes hours and needs the user at the kickoff.
 
-17) Safety defaults:
+17) In-flight items: one table of the work a coordinator session has running (codebase):
+   - If the user asks "what's in flight" / "show the in-flight table" / "where are the ETAs", apply `monet:inflight`. With "update the in-flight ledger", apply `monet:inflight update`.
+   - Reads the ledger (`.planning/inflight.md` by default), checks it read-only against open and merged PRs and running gates, and prints one table that marks late and stale rows. Only update mode writes, and only the ledger.
+
+18) Safety defaults:
    - Don't run destructive or irreversible commands without asking.
    - Don't run `git commit`, `git push`, or doc writes unless the user explicitly asks.
 
-18) Return a short "What changed / What to verify" checklist when you propose edits or a workflow.
+19) Return a short "What changed / What to verify" checklist when you propose edits or a workflow.
 
 ## Performance notes (optional)
 

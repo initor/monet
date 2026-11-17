@@ -40,6 +40,7 @@ Beyond the loop:
 | Land a whole plan with a fleet of agents | `/monet:gang plan <spec-dir>` |
 | Run a long research or design job with an outside review panel | `/monet:source kickoff` |
 | Pick the work up in a fresh session | `/monet:handoff` |
+| See what is in flight, with ETAs | `/monet:inflight` |
 
 ## Skills
 
@@ -58,6 +59,7 @@ Type a skill as `/monet:<name>`, or ask in plain words and let Claude pick it. A
 | `/monet:hairline-create` | Use when someone asks for a new Hairline figure, or runs /monet:hairline-create with an idea. |
 | `/monet:handoff` | Use when the user is running out of context and needs to continue in a fresh session ("I'm at 80% context", "I have to start a new session", "draft me a prompt to pick up this work", "hand this off"). |
 | `/monet:help` | Use when the user asks what monet can do, which /monet commands exist, or how to invoke a monet skill ("monet help", "list monet commands"). |
+| `/monet:inflight` | Use when a coordinator session with agents and PRs running is asked "what's in flight", "show the in-flight table", "where are the ETAs", or "update the in-flight ledger". |
 | `/monet:new-skill` | Use when the user asks to create, scaffold, or add a new monet skill ("new monet skill", "scaffold a skill for X"). |
 | `/monet:paint` | Use when the user asks to visualize, "paint", or turn session research/analysis/data into a shareable self-contained HTML page, or wants a visual summary of findings. |
 | `/monet:pr` | Use when a GitHub PR URL is shared and the user asks to review a pull request or do a code review on it before merge. |
